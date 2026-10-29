@@ -41,11 +41,14 @@ function load(n){const L=STAGES[n%STAGES.length];map=new Uint8Array(W*W);
  setCells(12,24,5);setCells(8,24,0);setCells(0,0,0);setCells(12,0,0);setCells(24,0,0);
  total=10+4*Math.min(n,5);toSpawn=total;killed=0;spawnI=0;spawnT=.5;enemies=[];bullets=[];booms=[];powers=[];baseDead=false;freezeT=0;baseShieldT=0;rapidT=0;speedT=0;strongT=0;spawnPlayer()}
 function spawnPlayer(){player={x:64,y:192,dir:0,want:0,spd:46,pl:1,shield:2.5,anim:0,cols:COL.pl}}
-const cell=(px,py)=>px<0||py<0||px>=CW||py>=CW?-1:map[(py/8|0)*W+(px/8|0)];
+const cell=(px,py)=>{
+ if(px<0||py<0||px>=CW||py>=CW) return -1;
+ return map[(py>>3)*W+(px>>3)];
+};
 const tanks=()=>player?[player,...enemies]:enemies;
 const ov=(ax,ay,o)=>Math.abs(ax-o.x)<16&&Math.abs(ay-o.y)<16;
 function blocked(t,nx,ny){if(nx<0||ny<0||nx>CW-16||ny>CW-16)return true;
- for(let r=ny/8|0;r<=((ny+15.99)/8|0);r++)for(let k=nx/8|0;k<=((nx+15.99)/8|0);k++){const v=map[r*W+k];if(v&&v!=4)return true}
+ for(let r=ny>>3;r<=((ny+15)>>3);r++)for(let k=nx>>3;k<=((nx+15)>>3);k++){const v=map[r*W+k];if(v&&v!=4)return true}
  for(const o of tanks())if(o!==t&&!o.spawn&&ov(nx,ny,o)&&!ov(t.x,t.y,o))return true;return false}
 function move(t,dir,dt){if(dir!==t.dir){if((dir&1)!==(t.dir&1)){const k=dir&1?'y':'x';t[k]=Math.round(t[k]/8)*8}t.dir=dir}
  const spd=t.pl&&speedT>0?t.spd*1.7:t.spd;
@@ -66,30 +69,34 @@ function applyPower(type){
  else if(type==='freeze'){freezeT=6;powerMsg='BEKU'}
 }
 function hitB(b){
- if(b.x<0||b.y<0||b.x>=CW||b.y>=CW){kill(b);boom(b.x,b.y,0);return}
- const px=b.dir&1?0:1,py=1-px;
- let hitBrick=false, hitSteel=false, hitBase=false;
- for(const o of[-3,0,3]){
-  const v=cell(b.x+px*o,b.y+py*o);
-  if(v==1) hitBrick=true;
-  if(v==2) hitSteel=true;
-  if(v==5&&!baseDead&&baseShieldT<=0) hitBase=true;
+ if(b.x<0||b.y<0||b.x>=CW||b.y>=CW){kill(b);boom(b.x,b.y,0);return true}
+ const cx = b.x>>3, cy = b.y>>3;
+ const v = map[cy*W+cx];
+ if(v==2){ // steel / marble
+  if(b.strong) map[cy*W+cx]=0;
+  kill(b); boom(b.x,b.y,0); if(b.own.pl)beep(SFX.hit); return true;
  }
- if(hitSteel){
-  if(b.strong){
-   for(const o of[-4,0,3]){const qx=b.x+px*o,qy=b.y+py*o;if(cell(qx,qy)==2)map[(qy/8|0)*W+(qx/8|0)]=0}
+ if(v==1){ // brick
+  map[cy*W+cx]=0;
+  kill(b); boom(b.x,b.y,0); if(b.own.pl)beep(SFX.hit); return true;
+ }
+ if(v==5 && !baseDead && baseShieldT<=0){
+  baseHit(); kill(b); boom(b.x,b.y,0); return true;
+ }
+ // bullet vs bullet
+ for(const o of bullets) if(o!==b && !o.dead && !!o.own.pl!==!!b.own.pl && Math.abs(o.x-b.x)<5 && Math.abs(o.y-b.y)<5){kill(o);kill(b);return true}
+ // bullet vs tank
+ for(const t of tanks()){
+  if(t===b.own || t.spawn) continue;
+  if(b.x>=t.x && b.x<=t.x+16 && b.y>=t.y && b.y<=t.y+16){
+   if(b.own.pl){
+    kill(b); enemies=enemies.filter(e=>e!==t); killed++; score+=t.pts; boom(t.x+8,t.y+8,1); beep(SFX.boom); spawnPower(t.x,t.y); return true;
+   }
+   if(t.pl){ kill(b); if(t.shield<=0) playerHit(); return true; }
   }
-  kill(b); boom(b.x,b.y,0); if(b.own.pl)beep(SFX.hit); return;
  }
- if(hitBrick||hitBase){
-  if(hitBase) baseHit();
-  for(const o of[-4,0,3]){const qx=b.x+px*o,qy=b.y+py*o;if(cell(qx,qy)==1)map[(qy/8|0)*W+(qx/8|0)]=0}
-  kill(b); boom(b.x,b.y,0); if(b.own.pl)beep(SFX.hit); return;
- }
- for(const o of bullets)if(o!==b&&!o.dead&&!!o.own.pl!==!!b.own.pl&&Math.abs(o.x-b.x)<4&&Math.abs(o.y-b.y)<4){kill(o);kill(b);return}
- for(const t of tanks()){if(t===b.own||t.spawn||b.x<t.x||b.x>t.x+16||b.y<t.y||b.y>t.y+16)continue;
-  if(b.own.pl){kill(b);enemies=enemies.filter(e=>e!==t);killed++;score+=t.pts;boom(t.x+8,t.y+8,1);beep(SFX.boom);spawnPower(t.x,t.y);return}
-  if(t.pl){kill(b);if(t.shield<=0)playerHit();return}}}
+ return false;
+}
 function playerHit(){boom(player.x+8,player.y+8,1);beep(SFX.boom);lives--;if(lives<=0){player=null;gameOver('Semua tank hancur')}else spawnPlayer()}
 function baseHit(){baseDead=true;boom(104,200,1);beep(SFX.boom);gameOver('Benteng hancur!')}
 function pick(e){if(Math.random()<.45){const tg=player&&Math.random()<.4?player:{x:96,y:192};const dx=tg.x-e.x,dy=tg.y-e.y;return Math.abs(dx)>Math.abs(dy)?(dx>0?1:3):(dy>0?2:0)}return[0,1,2,2,3,1,3,2][Math.random()*8|0]}
@@ -110,7 +117,16 @@ function update(dt){
  for(const e of enemies){if(e.spawn>0){e.spawn=Math.max(0,e.spawn-dt);continue}if(freezeT>0)continue;e.turnT-=dt;e.fireT-=dt;
   if(!move(e,e.want,dt)||e.turnT<=0){e.want=pick(e);e.turnT=1+Math.random()*2.5}
   if(e.fireT<=0){shoot(e);e.fireT=.7+Math.random()*1.5}}
- for(const b of bullets){if(b.dead)continue;const n=Math.ceil(b.spd*dt/2),st=b.spd*dt/n;for(let i=0;i<n&&!b.dead&&state=='play';i++){b.x+=DX[b.dir]*st;b.y+=DY[b.dir]*st;hitB(b)}}
+ for(const b of bullets){
+  if(b.dead) continue;
+  const steps = Math.max(1, Math.ceil(b.spd*dt / 4));
+  const st = (b.spd*dt) / steps;
+  for(let i=0;i<steps && !b.dead;i++){
+   b.x += DX[b.dir]*st;
+   b.y += DY[b.dir]*st;
+   hitB(b);
+  }
+ }
  bullets=bullets.filter(b=>!b.dead);
  powers.forEach(p=>p.t+=dt);
  if(state=='play'&&killed>=total&&!enemies.length){state='clear';msgT=2.5;beep(SFX.clear);score+=500}}
