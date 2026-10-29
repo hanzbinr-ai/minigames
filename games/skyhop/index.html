@@ -9,7 +9,7 @@ h1{margin:6px 0;font-size:18px;color:#f2b179;text-shadow:3px 3px 0 #000}#info{ma
 </style></head><body>
 <a class="btn alt tool back" href="../../">◀ PORTAL</a>
 <h1>SKY HOP</h1>
-<div id="hint">Tap sekali = naik sedikit.<br>Tap cepat / double = naik 150% lebih tinggi.<br>Setelah skor 120: jaring (lambat) & angin (cepat).</div>
+<div id="hint">Tap sekali = naik sedikit.<br>Tap cepat / double = naik 125% lebih tinggi.<br>Setelah skor 120: jaring (lambat) & angin (cepat).</div>
 <div id="info">SKOR <b id="s">0</b> · TOP <b id="b" style="color:#f8b800">0</b></div>
 <div id="box"><canvas id="c" width="400" height="400"></canvas></div>
 <div id="over"><h2 style="color:#e40058;text-shadow:3px 3px 0 #000;margin:0;font-size:24px">GAME OVER</h2><div>SKOR <b id="fs" style="color:#f8b800">0</b></div>
@@ -31,7 +31,7 @@ function flap(){
   if(!running){running=true; loop();}
   const now=performance.now();
   const isDouble=now-lastTap<280;
-  birdV=isDouble?-4.2:-2.8;
+  birdV=isDouble?-3.5:-2.8;
   wing=12;
   lastTap=now;
   beep(isDouble?720:520,0.06);
