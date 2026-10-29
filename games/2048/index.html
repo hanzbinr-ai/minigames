@@ -1,0 +1,33 @@
+<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>2048 · Mini Game</title><meta name="theme-color" content="#12161f"><link rel="manifest" href="../../manifest.webmanifest"><link rel="icon" href="../../icons/icon-192.png"><link rel="stylesheet" href="../../style.css">
+<style>
+body{display:flex;flex-direction:column;align-items:center;touch-action:none;padding-top:50px}
+h1{margin:6px 0;font-size:16px;color:#f2b179;text-shadow:3px 3px 0 #000}#info{margin:8px 0 12px;font-size:10px}#box{position:relative;width:min(calc(100vw - 32px),400px)}
+canvas{display:block;width:100%;height:auto;aspect-ratio:1;background:#bbada0;border:4px solid #000;box-shadow:0 0 0 4px #fcfcfc,8px 8px 0 4px #000}
+#pad{display:none;grid-template-columns:repeat(3,64px);gap:6px;margin-top:12px}#pad button{height:56px;font:inherit;font-size:16px;border:4px solid #000;background:#7c7c7c;color:#000;box-shadow:3px 3px 0 #000}#pad button:active{transform:translate(3px,3px);box-shadow:none}
+body.touch #pad{display:grid}
+</style></head><body>
+<a class="btn alt tool back" href="../../">◀ PORTAL</a>
+<h1>2048</h1><div id="info">SKOR <b id="s">0</b> · TOP <b id="b" style="color:#f8b800">0</b></div>
+<div id="box"><canvas id="c" width="400" height="400"></canvas></div>
+<div id="pad"><span></span><button data-d="up">▲</button><span></span><button data-d="left">◄</button><button id="new">↺</button><button data-d="right">►</button><span></span><button data-d="down">▼</button></div>
+<script>
+const N=4,c=document.getElementById('c'),x=c.getContext('2d');
+let grid=[],score=0,best=+localStorage.best2048||0;b.textContent=best;
+const colors={0:'#cdc1b4',2:'#eee4da',4:'#ede0c8',8:'#f2b179',16:'#f59563',32:'#f67c5f',64:'#f65e3b',128:'#edcf72',256:'#edcc61',512:'#edc850',1024:'#edc53f',2048:'#edc22e'};
+function init(){grid=Array.from({length:N},()=>Array(N).fill(0));score=0;s.textContent=0;add();add();draw()}
+function add(){const empty=[];for(let r=0;r<N;r++)for(let c=0;c<N;c++)if(!grid[r][c])empty.push([r,c]);if(!empty.length)return;const[r,c]=empty[Math.random()*empty.length|0];grid[r][c]=Math.random()<.9?2:4}
+function draw(){x.fillStyle='#bbada0';x.fillRect(0,0,400,400);const size=90,gap=10;for(let r=0;r<N;r++)for(let c=0;c<N;c++){const v=grid[r][c],px=gap+c*(size+gap),py=gap+r*(size+gap);x.fillStyle=colors[v]||'#3c3a32';x.fillRect(px,py,size,size);if(v){x.fillStyle=v>4?'#f9f6f2':'#776e65';x.font='bold 32px monospace';x.textAlign='center';x.textBaseline='middle';x.fillText(v,px+size/2,py+size/2)}}}
+function move(dir){let moved=false;const rot=dir==='up'?3:dir==='right'?2:dir==='down'?1:0;
+ for(let i=0;i<rot;i++)grid=grid[0].map((_,i)=>grid.map(r=>r[i]).reverse());
+ for(let r=0;r<N;r++){let row=grid[r].filter(v=>v);for(let i=0;i<row.length-1;i++)if(row[i]===row[i+1]){row[i]*=2;score+=row[i];row.splice(i+1,1);moved=true}while(row.length<N)row.push(0);if(row.join()!==grid[r].join())moved=true;grid[r]=row}
+ for(let i=0;i<rot;i++)grid=grid[0].map((_,i)=>grid.map(r=>r[N-1-i]));
+ if(moved){s.textContent=score;if(score>best){best=score;localStorage.best2048=best;b.textContent=best}add();draw()}}
+addEventListener('keydown',e=>{const m={ArrowLeft:'left',ArrowRight:'right',ArrowUp:'up',ArrowDown:'down'};if(m[e.key]){e.preventDefault();move(m[e.key])}});
+document.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>move(b.dataset.d));
+new.onclick=init;
+let sx,sy;document.addEventListener('touchstart',e=>{sx=e.touches[0].clientX;sy=e.touches[0].clientY},{passive:true});
+document.addEventListener('touchend',e=>{const dx=e.changedTouches[0].clientX-sx,dy=e.changedTouches[0].clientY-sy;if(Math.abs(dx)+Math.abs(dy)<30)return;Math.abs(dx)>Math.abs(dy)?move(dx>0?'right':'left'):move(dy>0?'down':'up')});
+if('ontouchstart' in window)document.body.classList.add('touch');
+init();
+</script></body></html>
