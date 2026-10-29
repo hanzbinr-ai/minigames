@@ -31,7 +31,7 @@ function flap(){
   if(!running){running=true; loop();}
   const now=performance.now();
   const isDouble=now-lastTap<280;
-  birdV=isDouble?-5.2:-2.8;
+  birdV=isDouble?-3.1:-2.8;
   wing=12;
   lastTap=now;
   beep(isDouble?720:520,0.06);
