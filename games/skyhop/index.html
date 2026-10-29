@@ -19,7 +19,7 @@ h1{margin:6px 0;font-size:18px;color:#f2b179;text-shadow:3px 3px 0 #000}#info{ma
 const c=document.getElementById('c'),x=c.getContext('2d');
 let AC;
 function beep(freq,dur){try{AC=AC||new (window.AudioContext||window.webkitAudioContext)();const o=AC.createOscillator(),g=AC.createGain();o.frequency.value=freq;g.gain.setValueAtTime(0.07,AC.currentTime);g.gain.exponentialRampToValueAtTime(0.001,AC.currentTime+dur);o.connect(g).connect(AC.destination);o.start();o.stop(AC.currentTime+dur);}catch(e){}}
-let birdY=200,birdV=0,pipes=[],stars=[],effects=[],score=0,best=+localStorage.skyhopBest||0,running=false,frame=0,wing=0,lastTap=0,speedMod=1,lastTime=0;
+let birdY=200,birdV=0,pipes=[],stars=[],effects=[],score=0,best=+localStorage.skyhopBest||0,running=false,frame=0,wing=0,lastTap=0,speedMod=1;
 document.getElementById('b').textContent=best;
 function reset(){
   birdY=200; birdV=0; pipes=[{x:450,gapY:180,gapH:200}]; stars=[]; effects=[]; score=0; lastTap=0; speedMod=1;
@@ -28,7 +28,7 @@ function reset(){
   running=false; frame=0; wing=0; draw();
 }
 function flap(){
-  if(!running){running=true; lastTime=performance.now(); loop(lastTime);}
+  if(!running){running=true; loop();}
   const now=performance.now();
   const isDouble=now-lastTap<280;
   birdV=isDouble?-3.5:-2.8;
@@ -40,13 +40,11 @@ function getGap(){
   if(score>=120) return 95;
   return Math.max(95, 200 - Math.floor(score)*0.9);
 }
-function loop(now){
+function loop(){
   if(!running) return;
-  const dt = Math.min(0.05, (now - lastTime) / 1000 * 60);
-  lastTime = now;
-  birdV+=0.08*dt; birdY+=birdV*dt;
+  birdV+=0.08; birdY+=birdV;
   if(birdV>2.8) birdV=2.8;
-  const spd=0.75*speedMod*dt;
+  const spd=0.75*speedMod;
   pipes.forEach(p=>p.x-=spd);
   stars.forEach(s=>s.x-=spd);
   effects.forEach(e=>e.x-=spd);
@@ -82,7 +80,7 @@ function loop(now){
     document.getElementById('over').classList.add('show');
     return;
   }
-  score+=0.025*dt;
+  score+=0.025;
   document.getElementById('s').textContent=Math.floor(score);
   draw();
   requestAnimationFrame(loop);
