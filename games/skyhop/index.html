@@ -17,6 +17,8 @@ h1{margin:6px 0;font-size:18px;color:#f2b179;text-shadow:3px 3px 0 #000}#info{ma
 <a class="btn alt" href="../../">◀ Kembali ke Portal</a></div>
 <script>
 const c=document.getElementById('c'),x=c.getContext('2d');
+let AC,mute=false;
+function beep(freq,dur,type='square'){if(mute)return;try{AC=AC||new AudioContext();const o=AC.createOscillator(),g=AC.createGain();o.type=type;o.frequency.value=freq;g.gain.setValueAtTime(0.08,AC.currentTime);g.gain.exponentialRampToValueAtTime(0.001,AC.currentTime+dur);o.connect(g).connect(AC.destination);o.start();o.stop(AC.currentTime+dur);}catch(e){}}
 let birdY=200,birdV=0,pipes=[],stars=[],score=0,best=+localStorage.skyhopBest||0,running=false,frame=0,wing=0,lastTap=0;
 document.getElementById('b').textContent=best;
 function reset(){
@@ -32,6 +34,7 @@ function flap(){
   birdV=isDouble?-5.2:-2.8;
   wing=12;
   lastTap=now;
+  beep(isDouble?720:520,0.06);
 }
 function getGap(){
   const base=200 - Math.min(120, Math.floor(score)*1.2);
@@ -53,11 +56,12 @@ function loop(){
   if(wing>0) wing--;
   frame++;
   stars.forEach(s=>{
-    if(Math.hypot(s.x-74,s.y-birdY)<24){ score+=10; s.x=-100; }
+    if(Math.hypot(s.x-74,s.y-birdY)<24){ score+=10; s.x=-100; beep(880,0.08); }
   });
   const bx=70,by=birdY;
   if(by<12||by>385||pipes.some(p=>p.x<bx+20&&p.x>bx-40&&(by<p.gapY-p.gapH/2||by>p.gapY+p.gapH/2))){
     running=false;
+    beep(220,0.3,'sawtooth');
     document.getElementById('fs').textContent=Math.floor(score);
     if(score>best){best=Math.floor(score);localStorage.skyhopBest=best;document.getElementById('b').textContent=best;}
     document.getElementById('over').classList.add('show');
@@ -87,20 +91,28 @@ function drawBird(y){
   x.restore();
 }
 function drawMetalPipe(x0,y0,w,h){
-  // main body
-  x.fillStyle='#7f8c8d';
+  if(h<=0) return;
+  // base metal
+  x.fillStyle='#5d6d7e';
   x.fillRect(x0,y0,w,h);
-  // highlight
-  x.fillStyle='#bdc3c7';
-  x.fillRect(x0+4,y0,8,h);
-  // darker edge
-  x.fillStyle='#566573';
-  x.fillRect(x0+w-6,y0,6,h);
-  // bolts
-  x.fillStyle='#34495e';
-  for(let i=20;i<h;i+=40){
-    x.beginPath(); x.arc(x0+12,y0+i,3,0,Math.PI*2); x.fill();
-    x.beginPath(); x.arc(x0+w-12,y0+i,3,0,Math.PI*2); x.fill();
+  // bright highlight stripe
+  x.fillStyle='#d5dbdb';
+  x.fillRect(x0+6,y0,10,h);
+  // mid shine
+  x.fillStyle='#aeb6bf';
+  x.fillRect(x0+18,y0,8,h);
+  // dark shadow edge
+  x.fillStyle='#2c3e50';
+  x.fillRect(x0+w-8,y0,8,h);
+  // rivets
+  x.fillStyle='#1a252f';
+  for(let i=25;i<h;i+=45){
+    x.beginPath(); x.arc(x0+14,y0+i,3.5,0,Math.PI*2); x.fill();
+    x.beginPath(); x.arc(x0+w-14,y0+i,3.5,0,Math.PI*2); x.fill();
+    x.fillStyle='#ecf0f1';
+    x.beginPath(); x.arc(x0+14,y0+i-1,1.5,0,Math.PI*2); x.fill();
+    x.beginPath(); x.arc(x0+w-14,y0+i-1,1.5,0,Math.PI*2); x.fill();
+    x.fillStyle='#1a252f';
   }
 }
 function draw(){
@@ -125,13 +137,13 @@ function draw(){
     const half=p.gapH/2;
     drawMetalPipe(p.x,0,52,p.gapY-half);
     drawMetalPipe(p.x,p.gapY+half,52,400-(p.gapY+half));
-    // metal rim
-    x.fillStyle='#95a5a6';
-    x.fillRect(p.x-4,p.gapY-half-8,60,10);
-    x.fillRect(p.x-4,p.gapY+half,60,10);
-    x.fillStyle='#566573';
-    x.fillRect(p.x-2,p.gapY-half-6,56,6);
-    x.fillRect(p.x-2,p.gapY+half+2,56,6);
+    // metal flange
+    x.fillStyle='#85929e';
+    x.fillRect(p.x-6,p.gapY-half-10,64,12);
+    x.fillRect(p.x-6,p.gapY+half,64,12);
+    x.fillStyle='#2c3e50';
+    x.fillRect(p.x-4,p.gapY-half-7,60,6);
+    x.fillRect(p.x-4,p.gapY+half+3,60,6);
   });
 }
 addEventListener('keydown',e=>{if(e.key===' '||e.key==='ArrowUp'){e.preventDefault();flap();}});
