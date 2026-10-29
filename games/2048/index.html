@@ -1,4 +1,4 @@
-<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>2048 · Mini Game</title><meta name="theme-color" content="#12161f"><link rel="manifest" href="../../manifest.webmanifest"><link rel="icon" href="../../icons/icon-192.png"><link rel="stylesheet" href="../../style.css">
 <style>
 body{display:flex;flex-direction:column;align-items:center;touch-action:none;padding-top:50px;font-family:monospace}
@@ -11,11 +11,11 @@ body.touch #pad{display:grid}
 </style></head><body>
 <a class="btn alt tool back" href="../../">◀ PORTAL</a>
 <h1>2048</h1>
-<div id="hint">Geser semua tile ke satu arah (panah keyboard / swipe / tombol).<br>Gabungkan angka yang sama untuk mendapatkan skor.<br>Tujuan: buat tile <b>2048</b>.</div>
-<div id="info">SKOR <b id="s">0</b> · TOP <b id="b" style="color:#f8b800">0</b></div>
+<div id="hint">Slide all tiles in one direction (arrow keys / swipe / buttons).<br>Merge matching numbers to score.<br>Goal: create a <b>2048</b> tile.</div>
+<div id="info">SCORE <b id="s">0</b> · TOP <b id="b" style="color:#f8b800">0</b></div>
 <div id="box"><canvas id="c" width="400" height="400"></canvas></div>
 <div id="pad"><span></span><button data-d="up">▲</button><span></span><button data-d="left">◄</button><button id="new">↺</button><button data-d="right">►</button><span></span><button data-d="down">▼</button></div>
-<div id="over"><h2 style="color:#e40058;text-shadow:3px 3px 0 #000;margin:0;font-size:24px">GAME OVER</h2><button class="btn" id="again">Main Lagi</button></div>
+<div id="over"><h2 style="color:#e40058;text-shadow:3px 3px 0 #000;margin:0;font-size:24px">GAME OVER</h2><button class="btn" id="again">Play Again</button></div>
 <script>
 const N=4;
 const c=document.getElementById('c');
