@@ -9,7 +9,7 @@ h1{margin:6px 0;font-size:18px;color:#f2b179;text-shadow:3px 3px 0 #000}#info{ma
 </style></head><body>
 <a class="btn alt tool back" href="../../">◀ PORTAL</a>
 <h1>SKY HOP</h1>
-<div id="hint">Tap sekali = naik sedikit.<br>Tap cepat / double = naik lebih tinggi.<br>Ambil bintang untuk glide.</div>
+<div id="hint">Tap sekali = naik sedikit.<br>Tap cepat / double = naik lebih tinggi.<br>Ambil bintang untuk +10 skor.</div>
 <div id="info">SKOR <b id="s">0</b> · TOP <b id="b" style="color:#f8b800">0</b></div>
 <div id="box"><canvas id="c" width="400" height="400"></canvas></div>
 <div id="over"><h2 style="color:#e40058;text-shadow:3px 3px 0 #000;margin:0;font-size:24px">GAME OVER</h2><div>SKOR <b id="fs" style="color:#f8b800">0</b></div>
@@ -17,10 +17,10 @@ h1{margin:6px 0;font-size:18px;color:#f2b179;text-shadow:3px 3px 0 #000}#info{ma
 <a class="btn alt" href="../../">◀ Kembali ke Portal</a></div>
 <script>
 const c=document.getElementById('c'),x=c.getContext('2d');
-let birdY=200,birdV=0,pipes=[],stars=[],score=0,best=+localStorage.skyhopBest||0,running=false,frame=0,wing=0,glide=0,lastTap=0;
+let birdY=200,birdV=0,pipes=[],stars=[],score=0,best=+localStorage.skyhopBest||0,running=false,frame=0,wing=0,lastTap=0;
 document.getElementById('b').textContent=best;
 function reset(){
-  birdY=200; birdV=0; pipes=[{x:450,gapY:180,gapH:200}]; stars=[]; score=0; glide=0; lastTap=0;
+  birdY=200; birdV=0; pipes=[{x:450,gapY:180,gapH:200}]; stars=[]; score=0; lastTap=0;
   document.getElementById('s').textContent=0;
   document.getElementById('over').classList.remove('show');
   running=false; frame=0; wing=0; draw();
@@ -39,23 +39,21 @@ function getGap(){
 }
 function loop(){
   if(!running) return;
-  const grav=glide>0?0.045:0.08;
-  birdV+=grav; birdY+=birdV;
-  if(birdV> (glide>0?1.8:2.8)) birdV=glide>0?1.8:2.8;
-  if(glide>0) glide--;
+  birdV+=0.08; birdY+=birdV;
+  if(birdV>2.8) birdV=2.8;
   pipes.forEach(p=>p.x-=0.75);
   stars.forEach(s=>s.x-=0.75);
   if(pipes[pipes.length-1].x<140){
     const gapH=getGap();
     pipes.push({x:450,gapY:80+Math.random()*(240-gapH),gapH});
-    if(Math.random()<0.4) stars.push({x:450,y:50+Math.random()*300});
+    if(Math.random()<0.45) stars.push({x:450,y:50+Math.random()*300});
   }
   if(pipes[0].x<-70) pipes.shift();
   stars=stars.filter(s=>s.x>-20);
   if(wing>0) wing--;
   frame++;
   stars.forEach(s=>{
-    if(Math.hypot(s.x-74,s.y-birdY)<24){ glide=220; s.x=-100; }
+    if(Math.hypot(s.x-74,s.y-birdY)<24){ score+=10; s.x=-100; }
   });
   const bx=70,by=birdY;
   if(by<12||by>385||pipes.some(p=>p.x<bx+20&&p.x>bx-40&&(by<p.gapY-p.gapH/2||by>p.gapY+p.gapH/2))){
@@ -75,18 +73,35 @@ function drawBird(y){
   x.save();
   x.translate(74,y);
   x.rotate(angle);
-  x.fillStyle=glide>0?'#a8e6cf':'#f7dc6f';
+  x.fillStyle='#f7dc6f';
   x.beginPath(); x.ellipse(0,0,18,13,0,0,Math.PI*2); x.fill();
-  x.fillStyle=glide>0?'#7dcea0':'#f4d03f';
+  x.fillStyle='#f4d03f';
   x.beginPath(); x.ellipse(2,1,14,9,0,0,Math.PI*2); x.fill();
   const w=wing>0?-14:Math.sin(frame*0.25)*8;
-  x.fillStyle=glide>0?'#58d68d':'#e67e22';
+  x.fillStyle='#e67e22';
   x.beginPath(); x.ellipse(-6,3,12,7,w*0.08,0,Math.PI*2); x.fill();
   x.fillStyle='#e74c3c';
   x.beginPath(); x.moveTo(15,-3); x.lineTo(26,0); x.lineTo(15,3); x.fill();
   x.fillStyle='#fff'; x.beginPath(); x.arc(7,-5,5,0,Math.PI*2); x.fill();
   x.fillStyle='#000'; x.beginPath(); x.arc(8,-5,2.5,0,Math.PI*2); x.fill();
   x.restore();
+}
+function drawMetalPipe(x0,y0,w,h){
+  // main body
+  x.fillStyle='#7f8c8d';
+  x.fillRect(x0,y0,w,h);
+  // highlight
+  x.fillStyle='#bdc3c7';
+  x.fillRect(x0+4,y0,8,h);
+  // darker edge
+  x.fillStyle='#566573';
+  x.fillRect(x0+w-6,y0,6,h);
+  // bolts
+  x.fillStyle='#34495e';
+  for(let i=20;i<h;i+=40){
+    x.beginPath(); x.arc(x0+12,y0+i,3,0,Math.PI*2); x.fill();
+    x.beginPath(); x.arc(x0+w-12,y0+i,3,0,Math.PI*2); x.fill();
+  }
 }
 function draw(){
   x.fillStyle='#70c5ce'; x.fillRect(0,0,400,400);
@@ -108,17 +123,16 @@ function draw(){
   drawBird(birdY);
   pipes.forEach(p=>{
     const half=p.gapH/2;
-    x.fillStyle='#2ecc71';
-    x.fillRect(p.x,0,52,p.gapY-half);
-    x.fillRect(p.x,p.gapY+half,52,400);
-    x.fillStyle='#27ae60';
-    x.fillRect(p.x-3,p.gapY-half-8,58,10);
-    x.fillRect(p.x-3,p.gapY+half,58,10);
+    drawMetalPipe(p.x,0,52,p.gapY-half);
+    drawMetalPipe(p.x,p.gapY+half,52,400-(p.gapY+half));
+    // metal rim
+    x.fillStyle='#95a5a6';
+    x.fillRect(p.x-4,p.gapY-half-8,60,10);
+    x.fillRect(p.x-4,p.gapY+half,60,10);
+    x.fillStyle='#566573';
+    x.fillRect(p.x-2,p.gapY-half-6,56,6);
+    x.fillRect(p.x-2,p.gapY+half+2,56,6);
   });
-  if(glide>0){
-    x.fillStyle='#fff'; x.font='12px monospace'; x.textAlign='center';
-    x.fillText('GLIDE',200,30);
-  }
 }
 addEventListener('keydown',e=>{if(e.key===' '||e.key==='ArrowUp'){e.preventDefault();flap();}});
 c.onclick=document.body.onclick=flap;
