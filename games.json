@@ -1,5 +1,15 @@
 [
  {
+  "id": "skyhop",
+  "title": "Sky Hop",
+  "desc": "Tap untuk terbang, hindari rintangan. Semakin jauh semakin tinggi skor.",
+  "version": "1.0.0",
+  "added": "2026-10-29",
+  "updated": "2026-10-29",
+  "path": "games/skyhop/",
+  "icon": "🐦"
+ },
+ {
   "id": "2048",
   "title": "2048",
   "desc": "Gabungkan angka yang sama sampai dapat 2048. Dopamine dari merge besar.",
