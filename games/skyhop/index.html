@@ -17,13 +17,13 @@ h1{margin:6px 0;font-size:18px;color:#f2b179;text-shadow:3px 3px 0 #000}#info{ma
 <a class="btn alt" href="../../">◀ Kembali ke Portal</a></div>
 <script>
 const c=document.getElementById('c'),x=c.getContext('2d');
-let AC,mute=false;
-function beep(freq,dur,type='square'){if(mute)return;try{AC=AC||new AudioContext();const o=AC.createOscillator(),g=AC.createGain();o.type=type;o.frequency.value=freq;g.gain.setValueAtTime(0.08,AC.currentTime);g.gain.exponentialRampToValueAtTime(0.001,AC.currentTime+dur);o.connect(g).connect(AC.destination);o.start();o.stop(AC.currentTime+dur);}catch(e){}}
+let AC;
+function beep(freq,dur){try{AC=AC||new (window.AudioContext||window.webkitAudioContext)();const o=AC.createOscillator(),g=AC.createGain();o.frequency.value=freq;g.gain.setValueAtTime(0.07,AC.currentTime);g.gain.exponentialRampToValueAtTime(0.001,AC.currentTime+dur);o.connect(g).connect(AC.destination);o.start();o.stop(AC.currentTime+dur);}catch(e){}}
 let birdY=200,birdV=0,pipes=[],stars=[],effects=[],score=0,best=+localStorage.skyhopBest||0,running=false,frame=0,wing=0,lastTap=0,speedMod=1;
 document.getElementById('b').textContent=best;
 function reset(){
   birdY=200; birdV=0; pipes=[{x:450,gapY:180,gapH:200}]; stars=[]; effects=[]; score=0; lastTap=0; speedMod=1;
-  document.getElementById('s').textContent=0;
+  document.getElementById('s').textContent='0';
   document.getElementById('over').classList.remove('show');
   running=false; frame=0; wing=0; draw();
 }
@@ -38,8 +38,7 @@ function flap(){
 }
 function getGap(){
   if(score>=120) return 95;
-  const base=200 - Math.min(105, Math.floor(score)*0.9);
-  return Math.max(95, base);
+  return Math.max(95, 200 - Math.floor(score)*0.9);
 }
 function loop(){
   if(!running) return;
@@ -49,35 +48,33 @@ function loop(){
   pipes.forEach(p=>p.x-=spd);
   stars.forEach(s=>s.x-=spd);
   effects.forEach(e=>e.x-=spd);
-  if(pipes[pipes.length-1].x<140){
+  if(pipes.length && pipes[pipes.length-1].x<140){
     const gapH=getGap();
     pipes.push({x:450,gapY:80+Math.random()*(240-gapH),gapH});
     if(Math.random()<0.45) stars.push({x:450,y:50+Math.random()*300});
-    if(score>=120 && Math.random()<0.3){
+    if(score>=120 && Math.random()<0.28){
       effects.push({x:450,type:Math.random()<0.5?'net':'wind',y:60+Math.random()*280});
     }
   }
-  if(pipes[0].x<-70) pipes.shift();
+  if(pipes.length && pipes[0].x<-70) pipes.shift();
   stars=stars.filter(s=>s.x>-20);
   effects=effects.filter(e=>e.x>-30);
   if(wing>0) wing--;
   frame++;
-  // collect star
   stars.forEach(s=>{
-    if(Math.hypot(s.x-74,s.y-birdY)<24){ score+=10; s.x=-100; beep(880,0.08); }
+    const dx=s.x-74, dy=s.y-birdY;
+    if(dx*dx+dy*dy<576){ score+=10; s.x=-100; beep(880,0.08); }
   });
-  // effects
   speedMod=1;
   effects.forEach(e=>{
-    if(Math.abs(e.x-74)<30 && Math.abs(e.y-birdY)<40){
-      if(e.type==='net') speedMod=0.45;
-      if(e.type==='wind') speedMod=1.7;
+    if(Math.abs(e.x-74)<35 && Math.abs(e.y-birdY)<45){
+      speedMod = e.type==='net' ? 0.5 : 1.65;
     }
   });
-  const bx=70,by=birdY;
-  if(by<12||by>385||pipes.some(p=>p.x<bx+20&&p.x>bx-40&&(by<p.gapY-p.gapH/2||by>p.gapY+p.gapH/2))){
+  const by=birdY;
+  if(by<12||by>385||pipes.some(p=>p.x<90&&p.x>30&&(by<p.gapY-p.gapH/2||by>p.gapY+p.gapH/2))){
     running=false;
-    beep(220,0.3,'sawtooth');
+    beep(220,0.3);
     document.getElementById('fs').textContent=Math.floor(score);
     if(score>best){best=Math.floor(score);localStorage.skyhopBest=best;document.getElementById('b').textContent=best;}
     document.getElementById('over').classList.add('show');
@@ -108,22 +105,14 @@ function drawBird(y){
 }
 function drawMetalPipe(x0,y0,w,h){
   if(h<=0) return;
-  x.fillStyle='#5d6d7e';
-  x.fillRect(x0,y0,w,h);
-  x.fillStyle='#d5dbdb';
-  x.fillRect(x0+6,y0,10,h);
-  x.fillStyle='#aeb6bf';
-  x.fillRect(x0+18,y0,8,h);
-  x.fillStyle='#2c3e50';
-  x.fillRect(x0+w-8,y0,8,h);
+  x.fillStyle='#5d6d7e'; x.fillRect(x0,y0,w,h);
+  x.fillStyle='#d5dbdb'; x.fillRect(x0+6,y0,10,h);
+  x.fillStyle='#aeb6bf'; x.fillRect(x0+18,y0,8,h);
+  x.fillStyle='#2c3e50'; x.fillRect(x0+w-8,y0,8,h);
   x.fillStyle='#1a252f';
   for(let i=25;i<h;i+=45){
     x.beginPath(); x.arc(x0+14,y0+i,3.5,0,Math.PI*2); x.fill();
     x.beginPath(); x.arc(x0+w-14,y0+i,3.5,0,Math.PI*2); x.fill();
-    x.fillStyle='#ecf0f1';
-    x.beginPath(); x.arc(x0+14,y0+i-1,1.5,0,Math.PI*2); x.fill();
-    x.beginPath(); x.arc(x0+w-14,y0+i-1,1.5,0,Math.PI*2); x.fill();
-    x.fillStyle='#1a252f';
   }
 }
 function draw(){
@@ -133,18 +122,16 @@ function draw(){
   x.beginPath(); x.arc(290,35,20,0,Math.PI*2); x.arc(310,40,24,0,Math.PI*2); x.fill();
   x.fillStyle='#ded895'; x.fillRect(0,372,400,28);
   x.fillStyle='#5ee270'; x.fillRect(0,362,400,10);
-  // effects
   effects.forEach(e=>{
     if(e.type==='net'){
-      x.strokeStyle='rgba(200,200,200,0.7)'; x.lineWidth=2;
+      x.strokeStyle='rgba(200,200,200,0.75)'; x.lineWidth=2;
       for(let i=-20;i<=20;i+=10){
         x.beginPath(); x.moveTo(e.x+i,e.y-25); x.lineTo(e.x+i,e.y+25); x.stroke();
         x.beginPath(); x.moveTo(e.x-25,e.y+i); x.lineTo(e.x+25,e.y+i); x.stroke();
       }
     } else {
-      x.fillStyle='rgba(174,214,241,0.6)';
-      x.beginPath(); x.moveTo(e.x,e.y); x.lineTo(e.x-20,e.y-8); x.lineTo(e.x-20,e.y+8); x.fill();
-      x.beginPath(); x.moveTo(e.x-25,e.y); x.lineTo(e.x-40,e.y-6); x.lineTo(e.x-40,e.y+6); x.fill();
+      x.fillStyle='rgba(174,214,241,0.7)';
+      x.beginPath(); x.moveTo(e.x,e.y); x.lineTo(e.x-22,e.y-7); x.lineTo(e.x-22,e.y+7); x.fill();
     }
   });
   stars.forEach(s=>{
@@ -165,12 +152,9 @@ function draw(){
     x.fillStyle='#85929e';
     x.fillRect(p.x-6,p.gapY-half-10,64,12);
     x.fillRect(p.x-6,p.gapY+half,64,12);
-    x.fillStyle='#2c3e50';
-    x.fillRect(p.x-4,p.gapY-half-7,60,6);
-    x.fillRect(p.x-4,p.gapY+half+3,60,6);
   });
-  if(speedMod<0.8){ x.fillStyle='#fff'; x.font='11px monospace'; x.textAlign='center'; x.fillText('JARING',200,28); }
-  if(speedMod>1.3){ x.fillStyle='#fff'; x.font='11px monospace'; x.textAlign='center'; x.fillText('ANGIN',200,28); }
+  if(speedMod<0.8){ x.fillStyle='#fff'; x.font='11px monospace'; x.textAlign='center'; x.fillText('JARING',200,26); }
+  if(speedMod>1.3){ x.fillStyle='#fff'; x.font='11px monospace'; x.textAlign='center'; x.fillText('ANGIN',200,26); }
 }
 addEventListener('keydown',e=>{if(e.key===' '||e.key==='ArrowUp'){e.preventDefault();flap();}});
 c.onclick=document.body.onclick=flap;
