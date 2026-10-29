@@ -1,4 +1,4 @@
-const V='mg-v3-retro',SHELL=['fonts/PressStart2P.woff2','./','index.html','style.css','ads.js','games.json','manifest.webmanifest','icons/icon-192.png','icons/icon-512.png'];
+const V='mg-v4-tank',SHELL=['games/snake/','games/tank/','fonts/PressStart2P.woff2','./','index.html','style.css','ads.js','games.json','manifest.webmanifest','icons/icon-192.png','icons/icon-512.png'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(V).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(n=>n!==V).map(n=>caches.delete(n)))).then(()=>self.clients.claim()))});
 self.addEventListener('fetch',e=>{const r=e.request,u=new URL(r.url);if(r.method!=='GET'||u.origin!==location.origin)return;
