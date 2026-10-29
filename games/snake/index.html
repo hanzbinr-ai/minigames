@@ -1,4 +1,4 @@
-<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Snake · Mini Game</title><meta name="theme-color" content="#12161f"><link rel="manifest" href="../../manifest.webmanifest"><link rel="icon" href="../../icons/icon-192.png"><link rel="stylesheet" href="../../style.css">
 <style>
 body{display:flex;flex-direction:column;align-items:center;touch-action:none;-webkit-user-select:none;user-select:none;padding-top:50px}
@@ -9,11 +9,11 @@ body.touch #pad{display:grid}
 #over.show{display:flex}#adw{width:min(90vw,320px)}
 </style></head><body>
 <a class="btn alt tool back" href="../../">◀ PORTAL</a><button class="btn tool mute" id="mu">♪ ON</button>
-<h1>SNAKE</h1><div id="hint" style="font-size:8px;color:#bcbcbc;max-width:94vw;text-align:center"></div><div id="info">SKOR <b id="s">0</b> · TOP <b id="b" style="color:#f8b800">0</b></div>
+<h1>SNAKE</h1><div id="hint" style="font-size:8px;color:#bcbcbc;max-width:94vw;text-align:center"></div><div id="info">SCORE <b id="s">0</b> · TOP <b id="b" style="color:#f8b800">0</b></div>
 <div id="box"><canvas id="c" width="400" height="400"></canvas></div>
-<div id="pad"><span></span><button data-d="0,-1">▲</button><span></span><button data-d="-1,0">◀</button><button id="p">⏯</button><button data-d="1,0">▶</button><span></span><button data-d="0,1">▼</button></div>
-<div id="over"><h2 style="margin:0;font-size:22px;color:#e40058;text-shadow:4px 4px 0 #000">GAME OVER</h2><div>SKOR <b id="fs" style="color:#f8b800">0</b></div>
-<button class="btn" id="cont">▶ Tonton iklan untuk lanjut</button><button class="btn alt" id="again">↻ Main lagi</button><div id="adw"></div></div>
+<div id="pad"><span></span><button data-d="0,-1">▲</button><span></span><button data-d="-1,0">◄</button><button id="p">⏯</button><button data-d="1,0">►</button><span></span><button data-d="0,1">▼</button></div>
+<div id="over"><h2 style="margin:0;font-size:22px;color:#e40058;text-shadow:4px 4px 0 #000">GAME OVER</h2><div>SCORE <b id="fs" style="color:#f8b800">0</b></div>
+<button class="btn" id="cont">▶ Watch ad to continue</button><button class="btn alt" id="again">↺ Play again</button><div id="adw"></div></div>
 <script src="../../ads.js"></script>
 <script>
 let AC,mute=localStorage.mute==='1';const MU=()=>mu.textContent=mute?'♪ OFF':'♪ ON';MU();mu.onclick=()=>{mute=!mute;localStorage.mute=mute?'1':'0';MU();mu.blur()};
@@ -31,7 +31,6 @@ function step(){if(dead||paused||wait)return;dir=next;const h={x:snake[0].x+dir.
 if(h.x<0||h.y<0||h.x>=N||h.y>=N||snake.some(p=>p.x==h.x&&p.y==h.y))return die();
 prev=snake.map(p=>({...p}));snake.unshift(h);if(h.x==food.x&&h.y==food.y){score++;s.textContent=score;navigator.vibrate&&navigator.vibrate(20);beep(SFX.eat);place()}else snake.pop()}
 again.onclick=reset;
-// Lanjut: panjang ular & skor tetap, tunggu arah baru (sekali per permainan)
 cont.onclick=()=>Ads.rewarded(ok=>{if(!ok)return;used=true;dead=false;wait=true;prev=snake;over.classList.remove('show')});
 function draw(f){x.fillStyle='#0f380f';x.fillRect(0,0,400,400);x.fillStyle='#174a17';for(let i=0;i<N;i++)for(let j=(i&1);j<N;j+=2)x.fillRect(i*S,j*S,S,S);
 const sq=(px,py,c,k)=>{x.fillStyle='#000';x.fillRect(px,py,S,S);x.fillStyle=c;x.fillRect(px+k,py+k,S-2*k,S-2*k)};
@@ -41,15 +40,15 @@ for(let i=pts.length-1;i>=0;i--)sq(pts[i][0],pts[i][1],i?'#58d854':'#b8f818',2);
 const h=pts[0];x.fillStyle='#000';x.fillRect(h[0]+5,h[1]+6,3,3);x.fillRect(h[0]+12,h[1]+6,3,3);
 if(paused||wait){x.fillStyle='#000b';x.fillRect(0,0,400,400);x.fillStyle='#f8b800';x.font='14px PS2P,monospace';x.textAlign='center';
 if(wait&&(performance.now()/500|0)%2==0)x.fillText('PRESS START',200,190);if(paused)x.fillText('PAUSE',200,190);
-x.fillStyle='#fcfcfc';x.font='9px PS2P,monospace';if(wait)x.fillText('tekan arah untuk mulai',200,220)}}
+x.fillStyle='#fcfcfc';x.font='9px PS2P,monospace';if(wait)x.fillText('press a direction to start',200,220)}}
 const K={ArrowUp:[0,-1],ArrowDown:[0,1],ArrowLeft:[-1,0],ArrowRight:[1,0],w:[0,-1],s:[0,1],a:[-1,0],d:[1,0]};
 addEventListener('keydown',e=>{if(document.querySelector('.modal'))return;if(K[e.key]){e.preventDefault();turn(...K[e.key])}else if(e.key==' '){e.preventDefault();dead?reset():paused=!paused}else if(e.key=='Enter'&&dead)reset()});
 document.querySelectorAll('[data-d]').forEach(t=>t.onclick=()=>turn(...t.dataset.d.split(',').map(Number)));p.onclick=()=>paused=!paused;
 let sx,sy;document.addEventListener('touchstart',e=>{sx=e.touches[0].clientX;sy=e.touches[0].clientY});
 document.addEventListener('touchend',e=>{const dx=e.changedTouches[0].clientX-sx,dy=e.changedTouches[0].clientY-sy;if(Math.abs(dx)+Math.abs(dy)<20)return;Math.abs(dx)>Math.abs(dy)?turn(Math.sign(dx),0):turn(0,Math.sign(dy))});
 const touch='ontouchstart' in window||navigator.maxTouchPoints>0;if(touch)document.body.classList.add('touch');
-const H=m=>hint.textContent=m;H(touch?'Geser layar atau pakai tombol untuk bergerak':'Pakai panah / WASD · Spasi untuk jeda');
-let gpPrev='';addEventListener('gamepadconnected',()=>H('🎮 Gamepad tersambung · D-pad/analog untuk bergerak, Start untuk jeda'));
+const H=m=>hint.textContent=m;H(touch?'Swipe screen or use buttons to move':'Use arrows / WASD · Space to pause');
+let gpPrev='';addEventListener('gamepadconnected',()=>H('🎮 Gamepad connected · D-pad/analog to move, Start to pause'));
 function pollPad(){const g=[...(navigator.getGamepads?navigator.getGamepads():[])].find(Boolean);if(!g)return;
 const bt=i=>g.buttons[i]&&g.buttons[i].pressed,ax=g.axes[0]||0,ay=g.axes[1]||0;let d='';
 if(bt(12)||ay<-.5)d='0,-1';else if(bt(13)||ay>.5)d='0,1';else if(bt(14)||ax<-.5)d='-1,0';else if(bt(15)||ax>.5)d='1,0';else if(bt(9))d='p';
