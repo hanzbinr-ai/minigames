@@ -2,7 +2,7 @@
  {
   "id": "skyhop",
   "title": "Sky Hop",
-  "desc": "Tap untuk terbang, hindari rintangan. Semakin jauh semakin tinggi skor.",
+  "desc": "Tap to fly, avoid obstacles. The farther you go, the higher the score.",
   "version": "1.0.0",
   "added": "2026-10-29",
   "updated": "2026-10-29",
@@ -12,7 +12,7 @@
  {
   "id": "2048",
   "title": "2048",
-  "desc": "Gabungkan angka yang sama sampai dapat 2048. Dopamine dari merge besar.",
+  "desc": "Merge matching numbers until you reach 2048. Big merges feel great.",
   "version": "1.0.0",
   "added": "2026-10-29",
   "updated": "2026-10-29",
@@ -21,8 +21,8 @@
  },
  {
   "id": "tank",
-  "title": "Tank Benteng",
-  "desc": "Lindungi benteng berbendera dari serbuan tank musuh!",
+  "title": "Tank Fortress",
+  "desc": "Protect the flagged fortress from enemy tanks!",
   "version": "1.0.0",
   "added": "2026-10-29",
   "updated": "2026-10-29",
@@ -32,7 +32,7 @@
  {
   "id": "snake",
   "title": "Snake",
-  "desc": "Makan apel, jangan tabrak dinding atau badan sendiri.",
+  "desc": "Eat apples, don't hit the walls or yourself.",
   "version": "1.2.0",
   "added": "2026-10-29",
   "updated": "2026-10-29",
