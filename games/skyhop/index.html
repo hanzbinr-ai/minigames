@@ -9,7 +9,8 @@ h1{margin:6px 0;font-size:18px;color:#f2b179;text-shadow:3px 3px 0 #000}#info{ma
 </style></head><body>
 <a class="btn alt tool back" href="../../">◀ PORTAL</a>
 <h1>SKY HOP</h1>
-<div id="hint">Tap sekali = naik sedikit.<br>Tap cepat / double = naik lebih tinggi.<br>Ambil bintang untuk +10 skor.</div>
+<div id="hint">Tap sekali = naik sedikit.<br>Tap cepat / double = naik lebih tinggi.
+<br>Ambil bintang untuk +10 skor.</div>
 <div id="info">SKOR <b id="s">0</b> · TOP <b id="b" style="color:#f8b800">0</b></div>
 <div id="box"><canvas id="c" width="400" height="400"></canvas></div>
 <div id="over"><h2 style="color:#e40058;text-shadow:3px 3px 0 #000;margin:0;font-size:24px">GAME OVER</h2><div>SKOR <b id="fs" style="color:#f8b800">0</b></div>
@@ -31,7 +32,7 @@ function flap(){
   if(!running){running=true; loop();}
   const now=performance.now();
   const isDouble=now-lastTap<280;
-  birdV=isDouble?-3.1:-2.8;
+  birdV=isDouble?-1.55:-2.8;
   wing=12;
   lastTap=now;
   beep(isDouble?720:520,0.06);
@@ -82,7 +83,7 @@ function drawBird(y){
   x.fillStyle='#f4d03f';
   x.beginPath(); x.ellipse(2,1,14,9,0,0,Math.PI*2); x.fill();
   const w=wing>0?-14:Math.sin(frame*0.25)*8;
-  x.fillStyle='#e67e22';
+  x.fillStyle('#e67e22';
   x.beginPath(); x.ellipse(-6,3,12,7,w*0.08,0,Math.PI*2); x.fill();
   x.fillStyle='#e74c3c';
   x.beginPath(); x.moveTo(15,-3); x.lineTo(26,0); x.lineTo(15,3); x.fill();
@@ -92,19 +93,14 @@ function drawBird(y){
 }
 function drawMetalPipe(x0,y0,w,h){
   if(h<=0) return;
-  // base metal
   x.fillStyle='#5d6d7e';
   x.fillRect(x0,y0,w,h);
-  // bright highlight stripe
   x.fillStyle='#d5dbdb';
   x.fillRect(x0+6,y0,10,h);
-  // mid shine
   x.fillStyle='#aeb6bf';
   x.fillRect(x0+18,y0,8,h);
-  // dark shadow edge
   x.fillStyle='#2c3e50';
   x.fillRect(x0+w-8,y0,8,h);
-  // rivets
   x.fillStyle='#1a252f';
   for(let i=25;i<h;i+=45){
     x.beginPath(); x.arc(x0+14,y0+i,3.5,0,Math.PI*2); x.fill();
@@ -137,7 +133,6 @@ function draw(){
     const half=p.gapH/2;
     drawMetalPipe(p.x,0,52,p.gapY-half);
     drawMetalPipe(p.x,p.gapY+half,52,400-(p.gapY+half));
-    // metal flange
     x.fillStyle='#85929e';
     x.fillRect(p.x-6,p.gapY-half-10,64,12);
     x.fillRect(p.x-6,p.gapY+half,64,12);
