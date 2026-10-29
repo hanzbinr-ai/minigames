@@ -1,4 +1,4 @@
-<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Sky Hop · Mini Game</title><meta name="theme-color" content="#12161f"><link rel="manifest" href="../../manifest.webmanifest"><link rel="icon" href="../../icons/icon-192.png"><link rel="stylesheet" href="../../style.css">
 <style>
 body{display:flex;flex-direction:column;align-items:center;touch-action:none;padding-top:50px;font-family:monospace}
@@ -9,12 +9,12 @@ h1{margin:6px 0;font-size:18px;color:#f2b179;text-shadow:3px 3px 0 #000}#info{ma
 </style></head><body>
 <a class="btn alt tool back" href="../../">◀ PORTAL</a>
 <h1>SKY HOP</h1>
-<div id="hint">Tap sekali = naik sedikit.<br>Tap cepat / double = naik 125% lebih tinggi.<br>Setelah skor 120: jaring (lambat) & angin (cepat).</div>
-<div id="info">SKOR <b id="s">0</b> · TOP <b id="b" style="color:#f8b800">0</b></div>
+<div id="hint">Single tap = small rise.<br>Quick / double tap = 125% higher rise.<br>After score 120: nets (slow) & wind (fast).</div>
+<div id="info">SCORE <b id="s">0</b> · TOP <b id="b" style="color:#f8b800">0</b></div>
 <div id="box"><canvas id="c" width="400" height="400"></canvas></div>
-<div id="over"><h2 style="color:#e40058;text-shadow:3px 3px 0 #000;margin:0;font-size:24px">GAME OVER</h2><div>SKOR <b id="fs" style="color:#f8b800">0</b></div>
-<button class="btn" id="again">Main Lagi</button>
-<a class="btn alt" href="../../">◀ Kembali ke Portal</a></div>
+<div id="over"><h2 style="color:#e40058;text-shadow:3px 3px 0 #000;margin:0;font-size:24px">GAME OVER</h2><div>SCORE <b id="fs" style="color:#f8b800">0</b></div>
+<button class="btn" id="again">Play Again</button>
+<a class="btn alt" href="../../">◀ Back to Portal</a></div>
 <script>
 const c=document.getElementById('c'),x=c.getContext('2d');
 let AC;
@@ -153,8 +153,8 @@ function draw(){
     x.fillRect(p.x-6,p.gapY-half-10,64,12);
     x.fillRect(p.x-6,p.gapY+half,64,12);
   });
-  if(speedMod<0.8){ x.fillStyle='#fff'; x.font='11px monospace'; x.textAlign='center'; x.fillText('JARING',200,26); }
-  if(speedMod>1.3){ x.fillStyle='#fff'; x.font='11px monospace'; x.textAlign='center'; x.fillText('ANGIN',200,26); }
+  if(speedMod<0.8){ x.fillStyle='#fff'; x.font='11px monospace'; x.textAlign='center'; x.fillText('NET',200,26); }
+  if(speedMod>1.3){ x.fillStyle='#fff'; x.font='11px monospace'; x.textAlign='center'; x.fillText('WIND',200,26); }
 }
 addEventListener('keydown',e=>{if(e.key===' '||e.key==='ArrowUp'){e.preventDefault();flap();}});
 c.onclick=document.body.onclick=flap;
