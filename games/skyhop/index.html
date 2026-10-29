@@ -4,90 +4,126 @@
 body{display:flex;flex-direction:column;align-items:center;touch-action:none;padding-top:50px;font-family:monospace}
 h1{margin:6px 0;font-size:18px;color:#f2b179;text-shadow:3px 3px 0 #000}#info{margin:8px 0;font-size:12px}#hint{font-size:11px;color:#ccc;max-width:360px;text-align:center;margin-bottom:8px;line-height:1.4}
 #box{position:relative;width:min(calc(100vw - 32px),400px)}canvas{display:block;width:100%;height:auto;aspect-ratio:1;background:#70c5ce;border:6px solid #000;box-shadow:0 0 0 4px #fcfcfc,8px 8px 0 4px #000}
-#over{display:none;position:fixed;inset:0;background:#000c;align-items:center;justify-content:center;flex-direction:column;gap:16px;z-index:20}
-#over.show{display:flex}
+#over{display:none;position:fixed;inset:0;background:#000c;align-items:center;justify-content:center;flex-direction:column;gap:12px;z-index:20}
+#over.show{display:flex}#over .btn{margin:4px}
 </style></head><body>
 <a class="btn alt tool back" href="../../">◀ PORTAL</a>
 <h1>SKY HOP</h1>
-<div id="hint">Tap / klik / spasi untuk terbang.<br>Hindari pipa. Semakin jauh semakin tinggi skor.</div>
+<div id="hint">Tap / klik / spasi untuk terbang.<br>Ambil bintang untuk glide (jatuh lebih pelan).<br>Lubang mulai besar, semakin sulit seiring skor.</div>
 <div id="info">SKOR <b id="s">0</b> · TOP <b id="b" style="color:#f8b800">0</b></div>
 <div id="box"><canvas id="c" width="400" height="400"></canvas></div>
-<div id="over"><h2 style="color:#e40058;text-shadow:3px 3px 0 #000;margin:0;font-size:24px">GAME OVER</h2><div>SKOR <b id="fs" style="color:#f8b800">0</b></div><button class="btn" id="again">Main Lagi</button></div>
+<div id="over"><h2 style="color:#e40058;text-shadow:3px 3px 0 #000;margin:0;font-size:24px">GAME OVER</h2><div>SKOR <b id="fs" style="color:#f8b800">0</b></div>
+<button class="btn" id="again">Main Lagi</button>
+<a class="btn alt" href="../../">◀ Kembali ke Portal</a></div>
 <script>
 const c=document.getElementById('c'),x=c.getContext('2d');
-let birdY=200,birdV=0,pipes=[],score=0,best=+localStorage.skyhopBest||0,running=false,frame=0,wing=0;
+let birdY=200,birdV=0,pipes=[],stars=[],score=0,best=+localStorage.skyhopBest||0,running=false,frame=0,wing=0,glide=0;
 document.getElementById('b').textContent=best;
 function reset(){
-  birdY=200; birdV=0; pipes=[{x:400,gapY:160}]; score=0;
+  birdY=200; birdV=0; pipes=[{x:420,gapY:170,gapH:160}]; stars=[]; score=0; glide=0;
   document.getElementById('s').textContent=0;
   document.getElementById('over').classList.remove('show');
   running=false; frame=0; wing=0; draw();
 }
-function flap(){ if(!running){running=true; loop();} birdV=-4.0; wing=8; }
+function flap(){ if(!running){running=true; loop();} birdV=-4.0; wing=10; }
+function getGap(){
+  // start large (~160), shrink down to ~70 as score rises
+  const base=160 - Math.min(90, Math.floor(score)*1.8);
+  return Math.max(70, base);
+}
 function loop(){
   if(!running) return;
-  birdV+=0.16; birdY+=birdV;
-  if(birdV>4.2) birdV=4.2;
+  const grav=glide>0?0.08:0.16;
+  birdV+=grav; birdY+=birdV;
+  if(birdV> (glide>0?2.8:4.2)) birdV=glide>0?2.8:4.2;
+  if(glide>0) glide--;
   pipes.forEach(p=>p.x-=0.75);
-  if(pipes[pipes.length-1].x<160) pipes.push({x:400,gapY:110+Math.random()*100});
-  if(pipes[0].x<-60) pipes.shift();
+  stars.forEach(s=>s.x-=0.75);
+  if(pipes[pipes.length-1].x<150){
+    const gapH=getGap();
+    pipes.push({x:420,gapY:90+Math.random()*(220-gapH),gapH});
+    if(Math.random()<0.35) stars.push({x:420,y:60+Math.random()*280});
+  }
+  if(pipes[0].x<-70) pipes.shift();
+  stars=stars.filter(s=>s.x>-20);
   if(wing>0) wing--;
   frame++;
+  // collect star
+  stars.forEach(s=>{
+    if(Math.hypot(s.x-74,s.y-birdY)<22){ glide=180; s.x=-100; }
+  });
   // collision
   const bx=70,by=birdY;
-  if(by<10||by>380||pipes.some(p=>p.x<bx+22&&p.x>bx-38&&(by<p.gapY-36||by>p.gapY+36))){
+  if(by<12||by>385||pipes.some(p=>p.x<bx+20&&p.x>bx-40&&(by<p.gapY-p.gapH/2||by>p.gapY+p.gapH/2))){
     running=false;
     document.getElementById('fs').textContent=Math.floor(score);
     if(score>best){best=Math.floor(score);localStorage.skyhopBest=best;document.getElementById('b').textContent=best;}
     document.getElementById('over').classList.add('show');
     return;
   }
-  score+=0.03;
+  score+=0.028;
   document.getElementById('s').textContent=Math.floor(score);
   draw();
   requestAnimationFrame(loop);
 }
 function drawBird(y){
-  const angle=Math.max(-0.6,Math.min(0.8,birdV*0.15));
+  const angle=Math.max(-0.5,Math.min(0.7,birdV*0.12));
   x.save();
   x.translate(74,y);
   x.rotate(angle);
   // body
-  x.fillStyle='#f7dc6f';
-  x.beginPath(); x.ellipse(0,0,16,12,0,0,Math.PI*2); x.fill();
-  // wing (animated)
-  const w=wing>0? -8 : Math.sin(frame*0.3)*6;
-  x.fillStyle='#e67e22';
-  x.beginPath(); x.ellipse(-4,2,10,6,w*0.1,0,Math.PI*2); x.fill();
+  x.fillStyle=glide>0?'#a8e6cf':'#f7dc6f';
+  x.beginPath(); x.ellipse(0,0,18,13,0,0,Math.PI*2); x.fill();
+  x.fillStyle=glide>0?'#7dcea0':'#f4d03f';
+  x.beginPath(); x.ellipse(2,1,14,9,0,0,Math.PI*2); x.fill();
+  // wing
+  const w=wing>0?-12:Math.sin(frame*0.25)*8;
+  x.fillStyle=glide>0?'#58d68d':'#e67e22';
+  x.beginPath(); x.ellipse(-6,3,12,7,w*0.08,0,Math.PI*2); x.fill();
   // beak
   x.fillStyle='#e74c3c';
-  x.beginPath(); x.moveTo(14,-2); x.lineTo(22,0); x.lineTo(14,2); x.fill();
+  x.beginPath(); x.moveTo(15,-3); x.lineTo(26,0); x.lineTo(15,3); x.fill();
   // eye
-  x.fillStyle='#fff'; x.beginPath(); x.arc(6,-4,4,0,Math.PI*2); x.fill();
-  x.fillStyle='#000'; x.beginPath(); x.arc(7,-4,2,0,Math.PI*2); x.fill();
+  x.fillStyle='#fff'; x.beginPath(); x.arc(7,-5,5,0,Math.PI*2); x.fill();
+  x.fillStyle='#000'; x.beginPath(); x.arc(8,-5,2.5,0,Math.PI*2); x.fill();
   x.restore();
 }
 function draw(){
   x.fillStyle='#70c5ce'; x.fillRect(0,0,400,400);
   // clouds
-  x.fillStyle='rgba(255,255,255,0.6)';
-  x.beginPath(); x.arc(80,60,20,0,Math.PI*2); x.arc(100,55,25,0,Math.PI*2); x.fill();
-  x.beginPath(); x.arc(280,40,18,0,Math.PI*2); x.arc(300,45,22,0,Math.PI*2); x.fill();
+  x.fillStyle='rgba(255,255,255,0.55)';
+  x.beginPath(); x.arc(90,50,22,0,Math.PI*2); x.arc(112,46,28,0,Math.PI*2); x.fill();
+  x.beginPath(); x.arc(290,35,20,0,Math.PI*2); x.arc(310,40,24,0,Math.PI*2); x.fill();
   // ground
-  x.fillStyle='#ded895'; x.fillRect(0,370,400,30);
-  x.fillStyle='#5ee270'; x.fillRect(0,360,400,10);
+  x.fillStyle='#ded895'; x.fillRect(0,372,400,28);
+  x.fillStyle='#5ee270'; x.fillRect(0,362,400,10);
+  // stars (powerup)
+  stars.forEach(s=>{
+    x.fillStyle='#f1c40f';
+    x.beginPath();
+    for(let i=0;i<5;i++){
+      const a=i*1.256+frame*0.05;
+      const r=i%2?10:5;
+      x.lineTo(s.x+Math.cos(a)*r,s.y+Math.sin(a)*r);
+    }
+    x.fill();
+  });
   // bird
   drawBird(birdY);
   // pipes
-  x.fillStyle='#2ecc71';
   pipes.forEach(p=>{
-    x.fillRect(p.x,0,50,p.gapY-40);
-    x.fillRect(p.x,p.gapY+40,50,400);
-    x.fillStyle='#27ae60';
-    x.fillRect(p.x-2,p.gapY-50,54,10);
-    x.fillRect(p.x-2,p.gapY+40,54,10);
+    const half=p.gapH/2;
     x.fillStyle='#2ecc71';
+    x.fillRect(p.x,0,52,p.gapY-half);
+    x.fillRect(p.x,p.gapY+half,52,400);
+    x.fillStyle='#27ae60';
+    x.fillRect(p.x-3,p.gapY-half-8,58,10);
+    x.fillRect(p.x-3,p.gapY+half,58,10);
   });
+  if(glide>0){
+    x.fillStyle='#fff'; x.font='12px monospace'; x.textAlign='center';
+    x.fillText('GLIDE',200,30);
+  }
 }
 addEventListener('keydown',e=>{if(e.key===' '||e.key==='ArrowUp'){e.preventDefault();flap();}});
 c.onclick=document.body.onclick=flap;
