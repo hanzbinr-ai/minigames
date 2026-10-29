@@ -9,7 +9,7 @@ h1{margin:6px 0;font-size:18px;color:#f2b179;text-shadow:3px 3px 0 #000}#info{ma
 </style></head><body>
 <a class="btn alt tool back" href="../../">◀ PORTAL</a>
 <h1>SKY HOP</h1>
-<div id="hint">Tap / klik / spasi untuk terbang.<br>Ambil bintang untuk glide (jatuh lebih pelan).<br>Lubang mulai besar, semakin sulit seiring skor.</div>
+<div id="hint">Tap / klik / spasi untuk terbang.<br>Ambil bintang untuk glide (jatuh lebih pelan).<br>Awal mudah, semakin lama semakin sulit.</div>
 <div id="info">SKOR <b id="s">0</b> · TOP <b id="b" style="color:#f8b800">0</b></div>
 <div id="box"><canvas id="c" width="400" height="400"></canvas></div>
 <div id="over"><h2 style="color:#e40058;text-shadow:3px 3px 0 #000;margin:0;font-size:24px">GAME OVER</h2><div>SKOR <b id="fs" style="color:#f8b800">0</b></div>
@@ -20,29 +20,29 @@ const c=document.getElementById('c'),x=c.getContext('2d');
 let birdY=200,birdV=0,pipes=[],stars=[],score=0,best=+localStorage.skyhopBest||0,running=false,frame=0,wing=0,glide=0;
 document.getElementById('b').textContent=best;
 function reset(){
-  birdY=200; birdV=0; pipes=[{x:420,gapY:170,gapH:160}]; stars=[]; score=0; glide=0;
+  birdY=200; birdV=0; pipes=[{x:450,gapY:180,gapH:200}]; stars=[]; score=0; glide=0;
   document.getElementById('s').textContent=0;
   document.getElementById('over').classList.remove('show');
   running=false; frame=0; wing=0; draw();
 }
-function flap(){ if(!running){running=true; loop();} birdV=-4.0; wing=10; }
+function flap(){ if(!running){running=true; loop();} birdV=-3.6; wing=10; }
 function getGap(){
-  // start large (~160), shrink down to ~70 as score rises
-  const base=160 - Math.min(90, Math.floor(score)*1.8);
-  return Math.max(70, base);
+  // start very large (~200), shrink slowly to ~80
+  const base=200 - Math.min(120, Math.floor(score)*1.2);
+  return Math.max(80, base);
 }
 function loop(){
   if(!running) return;
-  const grav=glide>0?0.08:0.16;
+  const grav=glide>0?0.06:0.11;
   birdV+=grav; birdY+=birdV;
-  if(birdV> (glide>0?2.8:4.2)) birdV=glide>0?2.8:4.2;
+  if(birdV> (glide>0?2.2:3.4)) birdV=glide>0?2.2:3.4;
   if(glide>0) glide--;
   pipes.forEach(p=>p.x-=0.75);
   stars.forEach(s=>s.x-=0.75);
-  if(pipes[pipes.length-1].x<150){
+  if(pipes[pipes.length-1].x<140){
     const gapH=getGap();
-    pipes.push({x:420,gapY:90+Math.random()*(220-gapH),gapH});
-    if(Math.random()<0.35) stars.push({x:420,y:60+Math.random()*280});
+    pipes.push({x:450,gapY:80+Math.random()*(240-gapH),gapH});
+    if(Math.random()<0.4) stars.push({x:450,y:50+Math.random()*300});
   }
   if(pipes[0].x<-70) pipes.shift();
   stars=stars.filter(s=>s.x>-20);
@@ -50,7 +50,7 @@ function loop(){
   frame++;
   // collect star
   stars.forEach(s=>{
-    if(Math.hypot(s.x-74,s.y-birdY)<22){ glide=180; s.x=-100; }
+    if(Math.hypot(s.x-74,s.y-birdY)<24){ glide=200; s.x=-100; }
   });
   // collision
   const bx=70,by=birdY;
@@ -61,7 +61,7 @@ function loop(){
     document.getElementById('over').classList.add('show');
     return;
   }
-  score+=0.028;
+  score+=0.025;
   document.getElementById('s').textContent=Math.floor(score);
   draw();
   requestAnimationFrame(loop);
