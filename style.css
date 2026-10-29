@@ -1,0 +1,18 @@
+*{box-sizing:border-box}body{margin:0;background:#12161f;color:#e8ecf3;font-family:system-ui,sans-serif}
+a{color:inherit;text-decoration:none}
+.top{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid #222a38}.top h1{font-size:20px;margin:0}
+.wrap{max-width:960px;margin:0 auto;padding:16px 16px 110px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.card{background:#1b2230;border:1px solid #273044;border-radius:14px;padding:14px;position:relative;transition:transform .15s}.card:hover{transform:translateY(-2px);border-color:#3b82f6}
+.card .ic{font-size:44px;text-align:center;background:#232c3d;border-radius:10px;padding:14px 0;margin-bottom:10px}
+.card h3{margin:0 0 4px;font-size:16px}.card p{margin:0;font-size:13px;opacity:.7}.card small{opacity:.5;font-size:11px}
+.badge{position:absolute;top:8px;right:8px;font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;background:#22c55e;color:#04210f}.badge.up{background:#3b82f6;color:#fff}
+.btn{display:inline-block;border:0;border-radius:10px;padding:10px 16px;font-size:15px;font-weight:600;cursor:pointer;background:#3b82f6;color:#fff}.btn.alt{background:#2a3446}
+.back{position:fixed;top:10px;left:10px;z-index:20;padding:8px 12px;font-size:14px}
+#offline{display:none;position:fixed;top:0;left:0;right:0;z-index:50;background:#b45309;color:#fff;text-align:center;font-size:13px;padding:4px}
+body.offline #offline{display:block}body.offline .ad{display:none!important}
+.ad{background:#3a3f4a;color:#aab;border:1px dashed #667;display:flex;align-items:center;justify-content:center;font-size:12px;letter-spacing:1px;border-radius:6px}
+.ad-bottom{position:fixed;left:0;right:0;bottom:0;height:60px;margin:0 auto;max-width:728px;z-index:10;border-radius:6px 6px 0 0}
+.ad-inline{height:60px;margin:12px 0;width:100%}
+.modal{position:fixed;inset:0;background:#000c;z-index:60;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px}
+.modal .ad{width:min(90vw,400px);height:min(60vh,320px);font-size:16px}

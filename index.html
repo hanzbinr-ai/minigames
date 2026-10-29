@@ -1,0 +1,15 @@
+<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mini Game Portal</title><meta name="theme-color" content="#12161f"><link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png"><link rel="stylesheet" href="style.css"></head><body>
+<header class="top"><img src="icons/icon-192.png" width="32" height="32" alt=""><h1>Mini Game</h1><span style="margin-left:auto;font-size:12px;opacity:.6">Gratis · bisa offline</span></header>
+<main class="wrap"><p style="opacity:.75;margin-top:0">Pilih game, langsung main tanpa download. Game baru tiap beberapa hari!</p><div class="grid" id="g"></div></main>
+<script src="ads.js"></script><script>
+const DAY=864e5,rec=d=>Date.now()-new Date(d)<7*DAY;
+fetch('games.json').then(r=>r.json()).then(list=>{
+ list.sort((a,b)=>b.updated.localeCompare(a.updated));
+ g.innerHTML=list.map(x=>{const nb=rec(x.added),ub=!nb&&rec(x.updated);
+  return `<a class="card" href="${x.path}">${nb?'<span class="badge">Baru</span>':ub?'<span class="badge up">Update</span>':''}
+  <div class="ic">${x.icon}</div><h3>${x.title}</h3><p>${x.desc}</p><small>v${x.version} · ${new Date(x.updated).toLocaleDateString('id-ID')}</small></a>`}).join('');
+}).catch(()=>g.textContent='Gagal memuat daftar game.');
+Ads.bottomBanner();
+</script></body></html>
