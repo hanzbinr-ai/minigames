@@ -18,36 +18,28 @@ canvas{display:block;width:min(94vw,62vh,520px);aspect-ratio:1;background:#000;b
 <a class="btn alt tool back" href="../../">◀ PORTAL</a><button class="btn tool mute" id="mu">♪ ON</button>
 <h1>TANK BENTENG</h1><div id="hud"></div>
 <canvas id="c" width="208" height="208"></canvas>
-<div id="hint">Panah/WASD gerak · Spasi/J tembak · P jeda · Lindungi benteng berbendera!</div>
-<div id="ctl"><div id="pad"><span></span><button data-d="0">▲</button><span></span><button data-d="3">◀</button><span></span><button data-d="1">▶</button><span></span><button data-d="2">▼</button><span></span></div>
+<div id="hint">Panah/WASD gerak · Spasi/J tembak · P jeda · Ambil power-up!</div>
+<div id="ctl"><div id="pad"><span></span><button data-d="0">▲</button><span></span><button data-d="3">◄</button><span></span><button data-d="1">►</button><span></span><button data-d="2">▼</button><span></span></div>
 <button id="pb">JEDA</button><button id="fire">TEMBAK</button></div>
 <div id="over"><h2 style="margin:0;font-size:22px;color:#e40058;text-shadow:4px 4px 0 #000">GAME OVER</h2><div id="why" style="font-size:9px;color:#bcbcbc"></div><div>SKOR <b id="fs" style="color:#f8b800">0</b></div>
-<button class="btn" id="cont">▶ Tonton iklan untuk lanjut</button><button class="btn alt" id="again">↻ Main lagi</button><div id="adw"></div></div>
+<button class="btn" id="cont">▶ Tonton iklan untuk lanjut</button><button class="btn alt" id="again">↺ Main lagi</button><div id="adw"></div></div>
 <script src="../../ads.js"></script>
 <script>
-// ---- suara 8-bit (mute dibagi dengan game lain lewat localStorage.mute)
 let AC,mute=localStorage.mute==='1';const MU=()=>mu.textContent=mute?'♪ OFF':'♪ ON';MU();mu.onclick=()=>{mute=!mute;localStorage.mute=mute?'1':'0';MU();mu.blur()};
 function beep(seq,type){if(mute)return;try{AC=AC||new AudioContext();let t=AC.currentTime;for(const[f,d]of seq){const o=AC.createOscillator(),g=AC.createGain();o.type=type||'square';o.frequency.value=f;g.gain.setValueAtTime(.07,t);g.gain.exponentialRampToValueAtTime(.001,t+d);o.connect(g).connect(AC.destination);o.start(t);o.stop(t+d);t+=d}}catch(e){}}
-const SFX={start:[[392,.08],[523,.08],[659,.08],[784,.15]],shot:[[660,.03],[330,.04]],hit:[[150,.06]],boom:[[200,.06],[120,.08],[70,.15]],die:[[440,.12],[330,.12],[220,.12],[110,.3]],clear:[[523,.1],[659,.1],[784,.1],[1046,.25]]};
-
-// ---- peta: 13x13 ubin, tiap ubin = 2x2 sel (8px). B=bata S=baja W=air G=semak
-const STAGES=[[
-'.............','.B.B.B.B.B.B.','.B.B.B.B.B.B.','.B.B.BSB.B.B.','.B.B.....B.B.','.....B.B.....','S.BB.....BB.S',
-'.....B.B.....','.B.B.BBB.B.B.','.B.B.B.B.B.B.','.B.B.....B.B.','.B.B.....B.B.','.............'],[
-'...S...S.....','.B.S...S.BBB.','.B...B...B...','.GGG.B.WWW.B.','.GGG.B.WWW.B.','.....S.......','BB.GG...GG.BB',
-'.....BBB.....','.WW.B...B.WW.','.WW.B.S.B.WW.','...GB...BG...','.B.........B.','.............'],[
-'....S...S....','.SS.BBBBB.SS.','.S.........S.','...GGG.GGG...','.B.GBG.GBG.B.','.B.........B.','WW.S.BBB.S.WW',
-'.B.........B.','.B.BB.S.BB.B.','...B.....B...','.G.B.....B.G.','.G.........G.','.............']];
+const SFX={start:[[392,.08],[523,.08],[659,.08],[784,.15]],shot:[[660,.03],[330,.04]],hit:[[150,.06]],boom:[[200,.06],[120,.08],[70,.15]],die:[[440,.12],[330,.12],[220,.12],[110,.3]],clear:[[523,.1],[659,.1],[784,.1],[1046,.25]],power:[[880,.06],[1046,.08]]};
+const STAGES=[['.............','.B.B.B.B.B.B.','.B.B.B.B.B.B.','.B.B.BSB.B.B.','.B.B.....B.B.','.....B.B.....','S.BB.....BB.S','.....B.B.....','.B.B.BBB.B.B.','.B.B.B.B.B.B.','.B.B.....B.B.','.B.B.....B.B.','.............'],['...S...S.....','.B.S...S.BBB.','.B...B...B...','.GGG.B.WWW.B.','.GGG.B.WWW.B.','.....S.......','BB.GG...GG.BB','.....BBB.....','.WW.B...B.WW.','.WW.B.S.B.WW.','...GB...BG...','.B.........B.','.............'],['....S...S....','.SS.BBBBB.SS.','.S.........S.','...GGG.GGG...','.B.GBG.GBG.B.','.B.........B.','WW.S.BBB.S.WW','.B.........B.','.B.BB.S.BB.B.','...B.....B...','.G.B.....B.G.','.G.........G.','.............']];
 const W=26,CW=208,DX=[0,1,0,-1],DY=[-1,0,1,0],c=document.getElementById('c'),x=c.getContext('2d');
 const COL={pl:['#f8b800','#ac7c00','#fce0a8'],a:['#bcbcbc','#5c5c5c','#fcfcfc'],b:['#e40058','#880014','#f8a8c8']};
-let map,stage=0,score=0,best=+localStorage.tankBest||0,lives=3,player,enemies=[],bullets=[],booms=[],toSpawn,spawnT,spawnI,killed,total,state='wait',used=false,msgT=0,baseDead,hudS='';
-
+const POWER_TYPES=['shield','rapid','speed','base','bomb','life','strong','freeze'];
+let map,stage=0,score=0,best=+localStorage.tankBest||0,lives=3,player,enemies=[],bullets=[],booms=[],powers=[],toSpawn,spawnT,spawnI,killed,total,state='wait',used=false,msgT=0,baseDead,hudS='';
+let powerMsg='',powerMsgT=0,freezeT=0,baseShieldT=0,rapidT=0,speedT=0,strongT=0;
 function setCells(cx,cy,v){for(let i=0;i<4;i++)map[(cy+(i>>1))*W+cx+(i&1)]=v}
 function load(n){const L=STAGES[n%STAGES.length];map=new Uint8Array(W*W);
  for(let r=0;r<13;r++)for(let k=0;k<13;k++)setCells(k*2,r*2,{B:1,S:2,W:3,G:4}[L[r][k]]||0);
- for(let r=23;r<26;r++)for(let k=11;k<15;k++)map[r*W+k]=1;   // tembok bata di sekitar benteng
+ for(let r=23;r<26;r++)for(let k=11;k<15;k++)map[r*W+k]=1;
  setCells(12,24,5);setCells(8,24,0);setCells(0,0,0);setCells(12,0,0);setCells(24,0,0);
- total=10+4*Math.min(n,5);toSpawn=total;killed=0;spawnI=0;spawnT=.5;enemies=[];bullets=[];booms=[];baseDead=false;spawnPlayer()}
+ total=10+4*Math.min(n,5);toSpawn=total;killed=0;spawnI=0;spawnT=.5;enemies=[];bullets=[];booms=[];powers=[];baseDead=false;freezeT=0;baseShieldT=0;rapidT=0;speedT=0;strongT=0;spawnPlayer()}
 function spawnPlayer(){player={x:64,y:192,dir:0,want:0,spd:46,pl:1,shield:2.5,anim:0,cols:COL.pl}}
 const cell=(px,py)=>px<0||py<0||px>=CW||py>=CW?-1:map[(py/8|0)*W+(px/8|0)];
 const tanks=()=>player?[player,...enemies]:enemies;
@@ -56,39 +48,57 @@ function blocked(t,nx,ny){if(nx<0||ny<0||nx>CW-16||ny>CW-16)return true;
  for(let r=ny/8|0;r<=((ny+15.99)/8|0);r++)for(let k=nx/8|0;k<=((nx+15.99)/8|0);k++){const v=map[r*W+k];if(v&&v!=4)return true}
  for(const o of tanks())if(o!==t&&!o.spawn&&ov(nx,ny,o)&&!ov(t.x,t.y,o))return true;return false}
 function move(t,dir,dt){if(dir!==t.dir){if((dir&1)!==(t.dir&1)){const k=dir&1?'y':'x';t[k]=Math.round(t[k]/8)*8}t.dir=dir}
- const s=t.spd*dt,nx=t.x+DX[dir]*s,ny=t.y+DY[dir]*s;if(blocked(t,nx,ny))return false;t.x=nx;t.y=ny;t.anim+=s;return true}
-function shoot(t){if(t.bullet)return;const b={x:t.x+8+DX[t.dir]*7,y:t.y+8+DY[t.dir]*7,dir:t.dir,spd:t.pl?170:105,own:t};t.bullet=b;bullets.push(b);if(t.pl)beep(SFX.shot)}
+ const spd=t.pl&&speedT>0?t.spd*1.7:t.spd;
+ const s=spd*dt,nx=t.x+DX[dir]*s,ny=t.y+DY[dir]*s;if(blocked(t,nx,ny))return false;t.x=nx;t.y=ny;t.anim+=s;return true}
+function shoot(t){if(t.bullet&&!(t.pl&&rapidT>0))return;const b={x:t.x+8+DX[t.dir]*7,y:t.y+8+DY[t.dir]*7,dir:t.dir,spd:t.pl?170:105,own:t,strong:t.pl&&strongT>0};t.bullet=b;bullets.push(b);if(t.pl)beep(SFX.shot)}
 function kill(b){b.dead=true;b.own.bullet=null}
 const boom=(bx,by,big)=>booms.push({x:bx,y:by,t:0,big});
+function spawnPower(x,y){if(Math.random()<0.35){powers.push({x,y,type:POWER_TYPES[Math.random()*POWER_TYPES.length|0],t:0})}}
+function applyPower(type){
+ beep(SFX.power); powerMsgT=1.5;
+ if(type==='shield'){player.shield=Math.max(player.shield,7);powerMsg='PERISAI'}
+ else if(type==='rapid'){rapidT=8;powerMsg='TEMBAK CEPAT'}
+ else if(type==='speed'){speedT=8;powerMsg='CEPAT'}
+ else if(type==='base'){baseShieldT=10;powerMsg='BENTENG AMAN'}
+ else if(type==='bomb'){enemies.forEach(e=>{boom(e.x+8,e.y+8,1);score+=e.pts;killed++});enemies=[];powerMsg='BOM!'}
+ else if(type==='life'){lives++;powerMsg='+NYAWA'}
+ else if(type==='strong'){strongT=8;powerMsg='PELURU KUAT'}
+ else if(type==='freeze'){freezeT=6;powerMsg='BEKU'}
+}
 function hitB(b){
  if(b.x<0||b.y<0||b.x>=CW||b.y>=CW){kill(b);boom(b.x,b.y,0);return}
  const px=b.dir&1?0:1,py=1-px;let hit=false;
- for(const o of[-3,0,3]){const v=cell(b.x+px*o,b.y+py*o);if(v==1||v==2)hit=true;if(v==5&&!baseDead){hit=true;baseHit()}}
- if(hit){for(const o of[-4,0,3]){const qx=b.x+px*o,qy=b.y+py*o;if(cell(qx,qy)==1)map[(qy/8|0)*W+(qx/8|0)]=0}
+ for(const o of[-3,0,3]){const v=cell(b.x+px*o,b.y+py*o);if(v==1||(v==2&&b.strong))hit=true;if(v==5&&!baseDead&&baseShieldT<=0){hit=true;baseHit()}}
+ if(hit){for(const o of[-4,0,3]){const qx=b.x+px*o,qy=b.y+py*o;const v=cell(qx,qy);if(v==1||(v==2&&b.strong))map[(qy/8|0)*W+(qx/8|0)]=0}
   kill(b);boom(b.x,b.y,0);if(b.own.pl)beep(SFX.hit);return}
  for(const o of bullets)if(o!==b&&!o.dead&&!!o.own.pl!==!!b.own.pl&&Math.abs(o.x-b.x)<4&&Math.abs(o.y-b.y)<4){kill(o);kill(b);return}
  for(const t of tanks()){if(t===b.own||t.spawn||b.x<t.x||b.x>t.x+16||b.y<t.y||b.y>t.y+16)continue;
-  if(b.own.pl){kill(b);enemies=enemies.filter(e=>e!==t);killed++;score+=t.pts;boom(t.x+8,t.y+8,1);beep(SFX.boom);return}
+  if(b.own.pl){kill(b);enemies=enemies.filter(e=>e!==t);killed++;score+=t.pts;boom(t.x+8,t.y+8,1);beep(SFX.boom);spawnPower(t.x,t.y);return}
   if(t.pl){kill(b);if(t.shield<=0)playerHit();return}}}
 function playerHit(){boom(player.x+8,player.y+8,1);beep(SFX.boom);lives--;if(lives<=0){player=null;gameOver('Semua tank hancur')}else spawnPlayer()}
 function baseHit(){baseDead=true;boom(104,200,1);beep(SFX.boom);gameOver('Benteng hancur!')}
-function pick(e){if(Math.random()<.45){const tg=player&&Math.random()<.4?player:{x:96,y:192};const dx=tg.x-e.x,dy=tg.y-e.y;
- return Math.abs(dx)>Math.abs(dy)?(dx>0?1:3):(dy>0?2:0)}return[0,1,2,2,3,1,3,2][Math.random()*8|0]}
+function pick(e){if(Math.random()<.45){const tg=player&&Math.random()<.4?player:{x:96,y:192};const dx=tg.x-e.x,dy=tg.y-e.y;return Math.abs(dx)>Math.abs(dy)?(dx>0?1:3):(dy>0?2:0)}return[0,1,2,2,3,1,3,2][Math.random()*8|0]}
 function update(dt){
  for(const bm of booms)bm.t+=dt;booms=booms.filter(bm=>bm.t<.4);
+ if(powerMsgT>0)powerMsgT-=dt;
  if(state=='intro'||state=='clear'){msgT-=dt;if(msgT<=0){if(state=='clear'){stage++;load(stage);state='intro';msgT=1.5}else state='play'}return}
  if(state!='play')return;
- if(player){player.shield-=dt;const d=inDir();if(d!=null)move(player,d,dt);if(inFire())shoot(player)}
+ if(freezeT>0)freezeT-=dt;
+ if(baseShieldT>0)baseShieldT-=dt;
+ if(rapidT>0)rapidT-=dt;
+ if(speedT>0)speedT-=dt;
+ if(strongT>0)strongT-=dt;
+ if(player){player.shield-=dt;const d=inDir();if(d!=null)move(player,d,dt);if(inFire())shoot(player);
+  for(let i=powers.length-1;i>=0;i--){const p=powers[i];if(Math.abs(player.x-p.x)<14&&Math.abs(player.y-p.y)<14){applyPower(p.type);powers.splice(i,1)}}}
  spawnT-=dt;if(spawnT<=0&&toSpawn>0&&enemies.length<4){const sx=[96,0,192][spawnI%3];
   if(!tanks().some(o=>ov(sx,0,o))){const f=spawnI%4==3;enemies.push({x:sx,y:0,dir:2,want:2,spd:f?52:30,pts:f?200:100,cols:f?COL.b:COL.a,anim:0,spawn:.7,turnT:1,fireT:1+Math.random()});toSpawn--;spawnI++;spawnT=2.2}else spawnI++}
- for(const e of enemies){if(e.spawn>0){e.spawn=Math.max(0,e.spawn-dt);continue}e.turnT-=dt;e.fireT-=dt;
+ for(const e of enemies){if(e.spawn>0){e.spawn=Math.max(0,e.spawn-dt);continue}if(freezeT>0)continue;e.turnT-=dt;e.fireT-=dt;
   if(!move(e,e.want,dt)||e.turnT<=0){e.want=pick(e);e.turnT=1+Math.random()*2.5}
   if(e.fireT<=0){shoot(e);e.fireT=.7+Math.random()*1.5}}
  for(const b of bullets){if(b.dead)continue;const n=Math.ceil(b.spd*dt/2),st=b.spd*dt/n;for(let i=0;i<n&&!b.dead&&state=='play';i++){b.x+=DX[b.dir]*st;b.y+=DY[b.dir]*st;hitB(b)}}
  bullets=bullets.filter(b=>!b.dead);
+ powers.forEach(p=>p.t+=dt);
  if(state=='play'&&killed>=total&&!enemies.length){state='clear';msgT=2.5;beep(SFX.clear);score+=500}}
-
-// ---- gambar (semua pixel art dibuat di kode)
 function R(c_,a,b,w,h){x.fillStyle=c_;x.fillRect(a,b,w,h)}
 function drawMap(bush){const ph=performance.now()/400|0;
  for(let r=0;r<W;r++)for(let k=0;k<W;k++){const v=map[r*W+k],X=k*8,Y=r*8;
@@ -97,24 +107,30 @@ function drawMap(bush){const ph=performance.now()/400|0;
   else if(v==2){R('#5c5c5c',X,Y,8,8);R('#fcfcfc',X,Y,7,1);R('#fcfcfc',X,Y,1,7);R('#bcbcbc',X+2,Y+2,4,4)}
   else if(v==3){R('#0058f8',X,Y,8,8);const o=((k+r+ph)%4)*2;R('#3cbcfc',X+o,Y+2,2,1);R('#3cbcfc',X+(o+4)%8,Y+5,2,1)}}}
 function drawBase(){const X=96,Y=192;if(baseDead){R('#503000',X+1,Y+9,14,7);R('#7c7c7c',X+3,Y+10,4,3);R('#7c7c7c',X+9,Y+12,5,3);return}
+ if(baseShieldT>0&&(performance.now()/100|0)%2){x.strokeStyle='#58d854';x.strokeRect(X-2,Y-2,20,20)}
  R('#bcbcbc',X+2,Y+8,12,8);for(let i=0;i<3;i++)R('#7c7c7c',X+2+i*5,Y+6,3,2);R('#000',X+6,Y+11,4,5);R('#fcfcfc',X+7,Y,1,8);R('#58d854',X+8,Y,6,4);R('#fcfcfc',X+10,Y+1,2,2)}
 function drawTank(t){if(t.spawn>0){if((t.spawn*12|0)%2){R('#fcfcfc',t.x+6,t.y+1,4,14);R('#fcfcfc',t.x+1,t.y+6,14,4)}return}
  if(t.pl&&t.shield>0&&(performance.now()/90|0)%2){x.strokeStyle='#3cbcfc';x.lineWidth=1;x.strokeRect(Math.round(t.x)-.5,Math.round(t.y)-.5,17,17)}
  x.save();x.translate(Math.round(t.x)+8,Math.round(t.y)+8);x.rotate(t.dir*Math.PI/2);const[m,d,l]=t.cols,a=(t.anim|0)%3;
  R(d,-8,-7,4,15);R(d,4,-7,4,15);for(let i=-7+a;i<8;i+=3){R(l,-8,i,4,1);R(l,4,i,4,1)}
  R(m,-4,-4,8,10);R(l,-3,-1,6,5);R(d,-1,1,2,2);R(m,-1,-8,2,8);R(l,-1,-8,1,3);x.restore()}
+function drawPower(p){
+ const blink=(p.t*8|0)%2; if(!blink) return;
+ const col={shield:'#3cbcfc',rapid:'#f8b800',speed:'#58d854',base:'#58d854',bomb:'#e40058',life:'#f8b800',strong:'#fcfcfc',freeze:'#3cbcfc'}[p.type]||'#fcfcfc';
+ R(col,p.x+2,p.y+2,12,12); R('#000',p.x+4,p.y+4,8,8);
+}
 function txt(s,y,col,sz){x.fillStyle=col;x.font=(sz||8)+'px PS2P,monospace';x.textAlign='center';x.fillText(s,104,y)}
 function draw(){R('#000',0,0,CW,CW);drawMap(0);drawBase();tanks().forEach(drawTank);
- for(const b of bullets)R('#fcfcfc',Math.round(b.x)-1,Math.round(b.y)-1,3,3);drawMap(1);
+ powers.forEach(drawPower);
+ for(const b of bullets)R(b.strong?'#f8b800':'#fcfcfc',Math.round(b.x)-1,Math.round(b.y)-1,3,3);drawMap(1);
  for(const bm of booms){const s=Math.max(2,(bm.big?16:7)*Math.sin(bm.t/.4*Math.PI))|0;R('#fcfcfc',bm.x-s/2|0,bm.y-s/2|0,s,s);R('#e40058',bm.x-s/3|0,bm.y-s/3|0,s*2/3|0,s*2/3|0);R('#f8b800',bm.x-s/6|0,bm.y-s/6|0,s/3|0,s/3|0)}
  const blink=(performance.now()/450|0)%2;
  if(state=='wait'){R('#000b',0,0,CW,CW);txt('STAGE '+(stage+1),90,'#fcfcfc',10);if(blink)txt('PRESS START',120,'#f8b800');txt('lindungi benteng',145,'#bcbcbc',6)}
  else if(state=='intro'){R('#000b',0,70,CW,50);txt('STAGE '+(stage+1),100,'#fcfcfc',10)}
  else if(state=='pause'){R('#000b',0,0,CW,CW);if(blink)txt('PAUSE',105,'#f8b800',10)}
  else if(state=='clear'){R('#000b',0,70,CW,60);txt('STAGE CLEAR!',98,'#58d854',10);txt('+500',118,'#f8b800')}
+ if(powerMsgT>0) txt(powerMsg,30,'#f8b800',8);
  const h=`STAGE <b>${stage+1}</b> · MUSUH <b>${total-killed}</b> · ♥<b>${Math.max(lives,0)}</b><br>SKOR <b>${score}</b> · TOP <b>${Math.max(best,score)}</b>`;if(h!=hudS)hud.innerHTML=hudS=h}
-
-// ---- input: keyboard, sentuh (multi-touch), gamepad
 const keys=[],KM={ArrowUp:0,w:0,ArrowRight:1,d:1,ArrowDown:2,s:2,ArrowLeft:3,a:3};let kFire=false,padDir=null,tFire=false,gpDir=null,gpFire=false,gpPrev={};
 const inDir=()=>padDir??gpDir??(keys.length?keys[keys.length-1]:null),inFire=()=>kFire||tFire||gpFire;
 function start(){if(state=='wait'){state='play';beep(SFX.start)}}
@@ -134,15 +150,12 @@ addEventListener('gamepadconnected',()=>hint.textContent='🎮 Gamepad: D-pad/an
 function pollPad(){const g=[...(navigator.getGamepads?navigator.getGamepads():[])].find(Boolean);if(!g)return;const bt=i=>!!(g.buttons[i]&&g.buttons[i].pressed),ax=g.axes[0]||0,ay=g.axes[1]||0;
  gpDir=bt(12)||ay<-.5?0:bt(13)||ay>.5?2:bt(14)||ax<-.5?3:bt(15)||ax>.5?1:null;gpFire=bt(0)||bt(1);
  if(gpDir!=null||gpFire)start();if(bt(9)&&!gpPrev[9])state=='over'?restart():pause();gpPrev[9]=bt(9)}
-
-// ---- game over, lanjut (iklan berhadiah), main lagi
 function gameOver(why_){if(state=='over')return;state='over';beep(SFX.die);if(score>best){best=score;localStorage.tankBest=best}
  why.textContent=why_;fs.textContent=score;cont.style.display=used||!navigator.onLine?'none':'';adw.innerHTML='';Ads.inlineBanner(adw);over.classList.add('show');Ads.gameOver()}
 function restart(){stage=0;score=0;lives=3;used=false;load(0);state='wait';over.classList.remove('show')}
 again.onclick=restart;
 cont.onclick=()=>Ads.rewarded(ok=>{if(!ok)return;used=true;lives=Math.max(lives,0)+1;if(baseDead){baseDead=false;setCells(12,24,5)}
  bullets.forEach(kill);bullets=[];if(!player)spawnPlayer();else player.shield=2.5;over.classList.remove('show');state='intro';msgT=1});
-// hook untuk tes otomatis
 window.TB={get s(){return{state,stage,lives,score,killed,total,enemies:enemies.map(e=>[e.x|0,e.y|0,e.spawn>0]),player:player&&[player.x,player.y,player.dir],bullets:bullets.length,bricks:map.filter(v=>v==1).length}},
  clearStage(){killed=total;toSpawn=0;enemies=[]},hitBase:()=>baseHit()};
 let last=performance.now();function loop(now){pollPad();update(Math.min(.05,(now-last)/1000));last=now;draw();requestAnimationFrame(loop)}
