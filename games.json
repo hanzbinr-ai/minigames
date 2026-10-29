@@ -1,5 +1,15 @@
 [
  {
+  "id": "2048",
+  "title": "2048",
+  "desc": "Gabungkan angka yang sama sampai dapat 2048. Dopamine dari merge besar.",
+  "version": "1.0.0",
+  "added": "2026-10-29",
+  "updated": "2026-10-29",
+  "path": "games/2048/",
+  "icon": "💯"
+ },
+ {
   "id": "tank",
   "title": "Tank Benteng",
   "desc": "Lindungi benteng berbendera dari serbuan tank musuh!",
