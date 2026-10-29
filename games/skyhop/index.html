@@ -23,12 +23,14 @@ function reset(){
   document.getElementById('over').classList.remove('show');
   running=false; frame=0; draw();
 }
-function flap(){ if(!running){running=true; loop();} birdV=-5.2; }
+function flap(){ if(!running){running=true; loop();} birdV=-4.2; }
 function loop(){
   if(!running) return;
-  birdV+=0.26; birdY+=birdV;
-  pipes.forEach(p=>p.x-=1.7);
-  if(pipes[pipes.length-1].x<200) pipes.push({x:400,gapY:90+Math.random()*140});
+  birdV+=0.16; birdY+=birdV;
+  // soft terminal velocity so it doesn't plummet
+  if(birdV>4.5) birdV=4.5;
+  pipes.forEach(p=>p.x-=1.5);
+  if(pipes[pipes.length-1].x<180) pipes.push({x:400,gapY:100+Math.random()*120});
   if(pipes[0].x<-60) pipes.shift();
   // collision
   const bx=70,by=birdY;
@@ -39,7 +41,7 @@ function loop(){
     document.getElementById('over').classList.add('show');
     return;
   }
-  score+=0.04;
+  score+=0.035;
   document.getElementById('s').textContent=Math.floor(score);
   draw();
   requestAnimationFrame(loop);
