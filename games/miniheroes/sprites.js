@@ -79,23 +79,40 @@ const SPR = (() => {
   const RESC = {gold: ['#f8b800', '#fce4a0'], wood: ['#a0522d', '#d88850'], ore: ['#7c7c7c', '#bcbcbc'], gems: ['#d858f8', '#fcb8fc']};
   const pile = res => memo('pile' + res, () => outline(mk(T, T, p => {
     const [a, b] = RESC[res];
-    if (res === 'wood') { for (let i = 0; i < 3; i++) { p(2 + i, 10 - i * 3, 11, 3, a); p(2 + i, 10 - i * 3, 2, 3, b); p(12 + i, 10 - i * 3, 1, 3, '#6c3c1c'); } }
-    else if (res === 'gems') { p(4, 8, 4, 5, a); p(5, 7, 2, 1, b); p(9, 6, 4, 7, a); p(10, 5, 2, 1, b); p(10, 7, 1, 3, b); p(6, 11, 6, 3, '#9c38c0'); }
-    else { p(3, 10, 10, 4, a); p(4, 7, 8, 3, a); p(6, 5, 4, 2, a); p(5, 8, 2, 1, b); p(8, 6, 1, 1, b); p(10, 11, 2, 1, b); }
+    if (res === 'gold') { // stacked coins + one loose coin
+      for (let i = 0; i < 4; i++) { p(2, 11 - i * 2, 8, 2, i % 2 ? '#d89000' : a); p(3, 11 - i * 2, 2, 1, b); }
+      p(2, 3, 8, 2, a); p(4, 3, 4, 1, '#fffbe0'); p(10, 9, 5, 5, a); p(11, 10, 3, 3, '#d89000'); p(12, 11, 1, 1, '#fffbe0');
+    } else if (res === 'wood') { // two logs with ring ends
+      for (const [y, x] of [[9, 1], [4, 3]]) { p(x, y, 10, 5, '#8b4a20'); p(x, y, 10, 1, '#c07038'); p(x + 9, y, 4, 5, '#e8b878'); p(x + 10, y + 1, 2, 3, '#c08040'); p(x + 11, y + 2, 1, 1, '#6c3c1c'); }
+    } else if (res === 'ore') { // grey stone blocks with facets
+      p(1, 8, 7, 6, '#8c8c8c'); p(1, 8, 7, 2, '#c8c8c8'); p(6, 9, 2, 5, '#5c5c5c');
+      p(8, 6, 7, 8, '#9c9c9c'); p(8, 6, 7, 2, '#e0e0e0'); p(13, 7, 2, 7, '#6c6c6c'); p(4, 3, 6, 5, '#7c7c7c'); p(4, 3, 6, 1, '#bcbcbc'); p(9, 4, 1, 4, '#5c5c5c');
+    } else { // cut gems
+      const gem = (x, y, c, h) => { p(x + 2, y, 3, 1, h); p(x + 1, y + 1, 5, 2, c); p(x + 2, y + 1, 1, 1, '#fff'); p(x + 2, y + 3, 3, 1, c); p(x + 3, y + 4, 1, 1, c); };
+      gem(1, 7, a, b); gem(8, 6, '#3cbcfc', '#a8e4fc'); gem(5, 2, '#e40058', '#fc9cb8'); gem(9, 11, '#58d854', '#b8f8b8');
+    }
   })));
   const chest = () => memo('chest', () => outline(mk(T, T, p => { p(2, 6, 12, 8, '#8b4513'); p(2, 6, 12, 3, '#a85c24'); p(2, 9, 12, 1, '#f8b800'); p(7, 8, 2, 3, '#f8b800'); p(2, 6, 1, 8, '#f8b800'); p(13, 6, 1, 8, '#f8b800'); })));
   const artifact = f => memo('art' + f, () => mk(T, T, p => {
     const c = ['#fcfcfc', '#fce4a0', '#f8b800'][f % 3]; p(7, 2, 2, 12, '#f8b800'); p(3, 7, 10, 2, '#f8b800'); p(6, 6, 4, 4, '#fcfcfc');
     p(7 + (f % 2 ? 4 : -4), 3 + (f % 2 ? 0 : 8), 1, 1, c); p(7 + (f % 2 ? -5 : 5), 12 - (f % 2 ? 0 : 8), 1, 1, c); p(7, 7, 2, 2, '#e40058');
   }));
-  const mine = (kind, owner, f) => memo('mine' + kind + owner + f, () => mk(T + 4, T + 6, (p, g) => {
-    const base = outline(mk(T + 4, T + 6, q => {
-      if (kind === 'wood') { q(2, 10, 15, 9, '#8b5a2b'); for (let i = 0; i < 4; i++) q(2 + i * 4, 10, 1, 9, '#5a3a1a'); q(1, 8, 17, 3, '#6c3c1c'); q(7, 13, 5, 6, '#2a1a0a'); q(15, 4, 3, 4, '#bcbcbc'); }
-      else { q(1, 9, 17, 10, '#6c6c6c'); q(3, 7, 13, 3, '#8c8c8c'); q(6, 12, 7, 7, '#1a1a1a'); q(6, 11, 7, 1, '#8b5a2b'); q(6, 11, 1, 8, '#8b5a2b'); q(12, 11, 1, 8, '#8b5a2b'); q(3, 16, 3, 3, RESC[kind][0]); q(4, 16, 1, 1, RESC[kind][1]); }
+  const mine = (kind, owner, f) => memo('mine' + kind + owner + f, () => mk(T + 8, T + 10, (p, g) => {
+    g.imageSmoothingEnabled = false;
+    const base = outline(mk(T + 8, T + 10, q => {
+      if (kind === 'wood') { // sawmill: plank hut + saw blade
+        q(3, 12, 16, 12, '#8b5a2b'); for (let i = 0; i < 4; i++) q(3 + i * 4, 12, 1, 12, '#5a3a1a'); q(1, 9, 20, 4, '#6c3c1c'); q(8, 17, 5, 7, '#2a1a0a');
+        const sx = 19, sy = 18; q(sx - 3, sy - 3, 7, 7, '#d0d0d0'); q(sx - 1, sy - 1, 3, 3, '#5c5c5c'); for (const [dx, dy] of [[0, -4], [4, 0], [0, 4], [-4, 0]]) q(sx + dx, sy + dy, 1, 1, '#ffffff');
+      } else { // mine entrance in a rock with a cart full of its resource
+        q(1, 10, 20, 14, '#6c6c6c'); q(3, 7, 15, 4, '#8c8c8c'); q(7, 14, 8, 10, '#141414'); q(7, 13, 8, 1, '#8b5a2b'); q(7, 13, 1, 11, '#8b5a2b'); q(14, 13, 1, 11, '#8b5a2b');
+        q(15, 20, 8, 4, '#5a3a1a'); q(16, 23, 2, 2, '#303030'); q(21, 23, 2, 2, '#303030'); q(15, 18, 8, 2, RESC[kind][0]); q(17, 17, 2, 1, RESC[kind][1]);
+      }
     }));
     g.drawImage(base, 0, 0);
+    // signboard with the produced resource
+    p(0, 0, 13, 12, '#000'); p(1, 1, 11, 10, '#e8d8b0'); p(6, 12, 1, 3, '#5a3a1a'); g.drawImage(pile(kind), 0, 0, T, T, 1, 0, 11, 11);
     const fc = owner === 'player' ? '#3cbcfc' : owner === 'ai' ? '#e40058' : '#a8a8a8';
-    p(15, 0, 1, 9, '#202020'); p(16, 1, 4, 3, fc); p(16 + (f % 2), 4, 3, 1, fc);
+    p(17, 0, 1, 10, '#202020'); p(18, 1, 5, 3, fc); p(18 + (f % 2), 4, 4, 1, fc);
   }));
 
   // ---------- units (24x24, facing right). frames: 0,1 idle, 2 attack ----------

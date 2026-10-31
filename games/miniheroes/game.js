@@ -233,7 +233,7 @@ function tapMap(tx, ty) {
   let path = null;
   if (o && o.kind === 'monster') { const a = bestAdjacent(dj, o); path = a && pathTo(dj, a[0], a[1]); }
   else path = pathTo(dj, tx, ty);
-  describeTile(tx, ty);
+  describeTile(tx, ty); if (UI.lastTap) showTip(tx, ty, UI.lastTap[0], UI.lastTap[1]);
   if (!path || !path.length) { SFX.bad(); UI.preview = null; return; }
   UI.preview = {tx, ty, path, cost: path.map(([x, y]) => dj.dist[y * MW + x])};
   const total = UI.preview.cost[UI.preview.cost.length - 1];
@@ -273,8 +273,8 @@ function arrive(h) {
 }
 function take(h, o) {
   const me = h.owner === 'player', drop = () => G.objs.splice(G.objs.indexOf(o), 1);
-  if (o.kind === 'res') { G.res[h.owner][o.res] += o.amt; drop(); if (me) { msg('Found ' + o.amt + ' ' + o.res); SFX.pick(); } }
-  else if (o.kind === 'art') { h.arts.push(o.art); drop(); if (me) { msg(h.name + ' found ' + ARTIFACTS[o.art].name + '!'); SFX.lvl(); } }
+  if (o.kind === 'res') { G.res[h.owner][o.res] += o.amt; drop(); if (me) { msg('Found ' + o.amt + ' ' + o.res); celebrate(o.res, '+' + o.amt + ' ' + o.res.toUpperCase() + '!', 'Picked up'); } }
+  else if (o.kind === 'art') { h.arts.push(o.art); drop(); if (me) { msg(h.name + ' found ' + ARTIFACTS[o.art].name + '!'); celebrate('art', ARTIFACTS[o.art].name.toUpperCase() + '!', '+' + ARTIFACTS[o.art].val + ' ' + ARTIFACTS[o.art].stat); } }
   else if (o.kind === 'chest') {
     drop();
     if (me) { SFX.pick(); showPanel(() => `<h2>TREASURE CHEST</h2><p>Keep the gold or give it away for experience?</p>
@@ -282,7 +282,7 @@ function take(h, o) {
     else if (h.lvl < 4) gainXp(h, 750); else G.res.ai.gold += 1000;
   } else if (o.kind === 'mine' && o.owner !== h.owner) {
     o.owner = h.owner;
-    if (me) { msg(MINES[o.mine].name + ' captured!'); SFX.pick(); reveal(o.x, o.y, 2); } else if (G.fog[o.y][o.x]) msg('Enemy captured a ' + MINES[o.mine].name + '!');
+    if (me) { msg(MINES[o.mine].name + ' captured!'); celebrate(MINES[o.mine].res, MINES[o.mine].name.toUpperCase() + ' CAPTURED!', '+' + MINES[o.mine].amt + ' ' + MINES[o.mine].res + '/day'); reveal(o.x, o.y, 2); } else if (G.fog[o.y][o.x]) msg('Enemy captured a ' + MINES[o.mine].name + '!');
   }
 }
 function visitTown(h, t) {
@@ -395,7 +395,9 @@ function recruit(t, u, n) {
 function hire(t) {
   if (!t.built.includes('tavern') || heroAt(t.x, t.y) || G.res[t.owner].gold < HIRE_COST) return null;
   const names = t.owner === 'player' ? HERO_NAMES : AI_NAMES, used = G.heroes.map(h => h.name);
-  const h = mkHero(t.owner, names.find(n => !used.includes(n)) || 'Hero', t.x, t.y, [{type: FACTIONS[t.faction].units[0], count: 15}]);
+  const fi = (G.fled || []).findIndex(f => f.owner === t.owner);
+  const h = fi >= 0 ? Object.assign(G.fled.splice(fi, 1)[0], {x: t.x, y: t.y, id: G.nid++, army: [{type: FACTIONS[t.faction].units[0], count: 15}]}) : mkHero(t.owner, names.find(n => !used.includes(n)) || 'Hero', t.x, t.y, [{type: FACTIONS[t.faction].units[0], count: 15}]);
+  h.mp = maxMp(h);
   if (pol(t.owner, 'muster')) { const us = FACTIONS[t.faction].units; addUnits(h.army, us[0], 10); addUnits(h.army, us[1], 4); }
   if (ktal(t.owner, 'veterans')) h.att++;
   G.res[t.owner].gold -= HIRE_COST; G.heroes.push(h); visitTown(h, t);
@@ -742,7 +744,7 @@ function resolveRound() {
   const fin = B.units.map(u => [u, u.count, u.alive]);
   later(2.0, () => { fin.forEach(([u, c, a]) => { u.shown = c; if (!a && u.deadAt == null) u.deadAt = B.clock; }); msg(B.log); });
   if (!lAlive || !rAlive || B.round > 30) { later(2.8, () => endBattle(lAlive && !rAlive)); return; }
-  later(2.5, () => { B.phase = 'plan'; B.sel = firstUnplanned(); msg('Round ' + B.round + ' - PLAN. ' + B.log); });
+  later(2.5, () => { if (aiShouldRetreat()) { doRetreat('R'); return; } B.phase = 'plan'; B.sel = firstUnplanned(); msg('Round ' + B.round + ' - PLAN. ' + B.log); });
 }
 function endBattle(playerWon) {
   const ctx = B.ctx, killed = side => B.units.filter(u => u.side !== side).reduce((s, u) => s + Math.max(0, u.start * UNITS[u.type].hp - u.tot), 0);
@@ -874,15 +876,16 @@ function renderPre() {
   const h = heroOf('L'), T = B.tac.L, E = B.tac.R, iv = intelOf('L'), known = knownTactics(h), foes = B.units.filter(u => u.side === 'R' && u.alive);
   const sig = JSON.stringify([T, E.tactic, E.terrain.length, iv, h && h.mana, UI.preSel, UI.preTerr, B.units.map(u => [u.x, u.y, u.hidden])]);
   if (sig === el.dataset.sig) return; el.dataset.sig = sig;
-  const tb = k => { const t = TACTICS[k], ok = known.includes(k); return btn((ok ? '' : 'LOCKED ') + t.name, ok ? 'ptac' : 'nop', k, T.tactic === k ? 'y' : 'alt', !ok); };
+  const tb = k => { const t = TACTICS[k], ok = known.includes(k); return btn((ok ? '' : 'LOCKED ') + t.name, ok ? 'ptac' : 'nop', k, T.tactic === k ? 'y' : 'alt', !ok).replace('<button ', `<button title="${t.name}: ${t.desc}${t.beats.length ? '. Blunts ' + t.beats.map(b => TACTICS[b].name).join(', ') : ''}" `); };
   let s = `<h2>PRE-BATTLE${B.siege ? ' - SIEGE' : ''}</h2>
     <h3>1. SCOUT - INTEL ${iv}</h3><p>${INTEL_DESC[iv]}.<br>${foes.map(u => (iv ? u.count : sizeWord(u.count)) + ' ' + u.type).join(', ')}${iv >= 2 ? `<br><b class="hl">Enemy tactic: ${E.tactic ? TACTICS[E.tactic].name : 'none'}</b><br><b class="hl">Enemy terrain: ${E.terrain.map(t => TERRAIN_SPELLS[t.k].name).join(', ') || 'none'}</b>${KG(B.sides.R.owner) ? `<br><b class="hl">Enemy kingdom: ${KG(B.sides.R.owner).slots.map(k => POLICIES[k].name).join(', ') || 'no policies'}</b>` : ''}` : '<br>Enemy tactic: ???'}</p>
     ${h && iv < 2 && !T.reveal ? `<div class="bar">${btn('REVEAL (' + revealCost(h) + ' mana)', 'preveal', '', 'p', h.mana < revealCost(h))}</div>` : ''}
-    <h3>2. FORMATION</h3><div class="bar">${FORMATIONS.map(f => btn(f.toUpperCase(), 'pform', f, T.form === f ? 'y' : 'alt')).join('')}</div><p>Tap or drag your stacks inside the blue zone to fine-tune.</p>
+    <h3>2. FORMATION</h3>${FORMATIONS.map(f => `<div class="it form">${formDiagram(f)}<div class="t"><b>${f.toUpperCase()}</b>${T.form === f ? ' <b class="ok">CHOSEN</b>' : ''}<small>${FORM_INFO[f].d} ${FORM_INFO[f].good}</small></div>${btn(T.form === f ? 'SET' : 'USE', 'pform', f, T.form === f ? 'y' : 'alt')}</div>`).join('')}<p><span class="dz"></span> <b>Your deploy zone</b> (tap unit, then tap tile; or drag). <i class="fdia"><i class="m"></i></i> melee <i class="fdia"><i class="r"></i></i> shooter</p>
     <h3>3. TACTIC (whole battle)</h3>${Object.keys(DOCTRINES).map(d => `<div class="bar"><b style="color:${DOCTRINES[d].col};width:64px">${DOCTRINES[d].name.toUpperCase()}</b>${Object.keys(TACTICS).filter(k => TACTICS[k].doc === d).map(tb).join('')}</div>`).join('')}
     <p>${T.tactic ? TACTICS[T.tactic].name + ': ' + TACTICS[T.tactic].desc + (TACTICS[T.tactic].beats.length ? '. Blunts ' + TACTICS[T.tactic].beats.map(k => TACTICS[k].name).join(', ') : '') : 'No tactic chosen.'}</p>`;
   if (T.tactic === 'ambush') s += `<p>Hidden (max 2): ${B.units.filter(u => u.side === 'L' && u.alive).map(u => btn((u.hidden ? 'HIDDEN ' : '') + u.type, 'phide', u.id, u.hidden ? 'p' : 'alt')).join('')}</p>`;
-  s += `<h3>4. TERRAIN SPELLS ${h ? '(mana ' + h.mana + ')' : ''}</h3>${h ? `<div class="bar">${Object.keys(TERRAIN_SPELLS).map(k => btn(TERRAIN_SPELLS[k].name + ' ' + terrCost(h, k), 'pterr', k, UI.preTerr === k ? 'y' : 'p', h.mana < terrCost(h, k))).join('')}${T.terrain.length ? btn('CLEAR', 'pclear', '', 'alt') : ''}</div>
+  s += `<h3>4. TERRAIN SPELLS ${h ? '(mana ' + h.mana + ')' : ''}</h3>${h ? `<div class="bar">${Object.keys(TERRAIN_SPELLS).map(k => btn(TERRAIN_SPELLS[k].name + ' ' + terrCost(h, k), 'pterr', k, UI.preTerr === k ? 'y' : 'p', h.mana < terrCost(h, k)).replace('<button ', `<button title="${TERRAIN_SPELLS[k].name}: ${TERRAIN_SPELLS[k].desc}" `)).join('')}${T.terrain.length ? btn('CLEAR', 'pclear', '', 'alt') : ''}</div>
+    <details class="hlp"><summary>? What do tactics and terrain spells do</summary>${Object.keys(TACTICS).map(k => `<div><b>${TACTICS[k].name}</b> (${DOCTRINES[TACTICS[k].doc].name}): ${TACTICS[k].desc}${TACTICS[k].beats.length ? '. Blunts ' + TACTICS[k].beats.map(b => TACTICS[b].name).join(', ') : ''}</div>`).join('')}${Object.keys(TERRAIN_SPELLS).map(k => `<div><b>${TERRAIN_SPELLS[k].name}</b> (terrain): ${TERRAIN_SPELLS[k].desc}</div>`).join('')}</details>
     <p>${UI.preTerr ? 'Tap the field to place ' + TERRAIN_SPELLS[UI.preTerr].name + ': ' + TERRAIN_SPELLS[UI.preTerr].desc : 'Placed: ' + (T.terrain.map(t => TERRAIN_SPELLS[t.k].name).join(', ') || 'none') + '. Lasts the whole battle.'}</p>` : '<p>No hero - no spells.</p>'}
     <div class="bar fbar"><button class="btn g" data-a="pfight" style="flex:1">FIGHT!</button></div>`;
   el.innerHTML = s;
@@ -950,6 +953,131 @@ function openKingdom() {
   }, {full: true, kingdom: true});
 }
 
+// ---------- RETREAT / SURRENDER / BRIBE (plan phase only) ----------
+const RES_VALUE = {wood: 250, ore: 250, gems: 500}; // gold-equivalent per unit (= market buy price)
+const stackValue = us => us.reduce((s, u) => s + u.count * (UNITS[u.type].cost || 50), 0);
+function surrenderPrice() { // vs enemy hero: half your remaining army value; vs neutrals (bribe): their remaining value
+  const neutral = !!B.sides.R.monster, L = B.units.filter(u => u.alive && u.side === 'L'), R = B.units.filter(u => u.alive && u.side === 'R');
+  return Math.max(100, Math.round((neutral ? stackValue(R) : stackValue(L) * 0.5) / 50) * 50);
+}
+// payment plans: gold only, resources only (wood/ore/gems at RES_VALUE), or a mix (all gold you can, rest in resources)
+function payPlans(owner, price) {
+  const R = G.res[owner], resPart = need => { const pay = {wood: 0, ore: 0, gems: 0}; let left = need;
+    for (const r of ['gems', 'ore', 'wood']) { const n = Math.min(R[r], Math.floor(left / RES_VALUE[r])); pay[r] = n; left -= n * RES_VALUE[r]; }
+    for (const r of ['wood', 'ore', 'gems']) if (left > 0 && R[r] > pay[r]) { pay[r]++; left -= RES_VALUE[r]; }
+    return left > 0 ? null : pay; };
+  const res = resPart(price), g = Math.min(R.gold, price), mixR = resPart(price - g);
+  return {gold: R.gold >= price ? {gold: price} : null, res: res ? res : null, mix: mixR && g < price && g > 0 ? Object.assign({gold: g}, mixR) : null};
+}
+const planText = p => Object.keys(p).filter(k => p[k]).map(k => p[k] + ' ' + k).join(' + ');
+function fleeInfo() {
+  const h = heroOf('L'), neutral = !!B.sides.R.monster, siegeDef = B.siege && B.siege.def === 'L';
+  const home = h && G.towns.filter(t => t.owner === 'player' && t !== B.ctx.def.town && !heroAt(t.x, t.y)).sort((a, b) => Math.hypot(a.x - h.x, a.y - h.y) - Math.hypot(b.x - h.x, b.y - h.y))[0];
+  return {h, neutral, home, canRetreat: !!h, canSurrender: !!h && !siegeDef && (neutral || !!home), why: !h ? 'No hero to flee with' : siegeDef ? 'Cannot surrender a town under siege' : !neutral && !home ? 'No free town to flee to' : ''};
+}
+function openFlee() {
+  if (!B || B.phase !== 'plan') return;
+  const f = fleeInfo(), price = surrenderPrice(), plans = payPlans('player', price);
+  showPanel(() => `<h2>LEAVE THE BATTLE?</h2>
+    <h3>RETREAT</h3><p>${f.h ? f.h.name + ' flees. <span class="no">Your whole army is lost.</span> The hero (level, skills and talents kept) can be rehired at any of your Taverns.' : 'No hero.'}</p>
+    <div class="bar">${btn('CONFIRM RETREAT', 'retreat', '', 'y', !f.canRetreat)}</div>
+    <h3>${f.neutral ? 'BRIBE THE NEUTRALS' : 'SURRENDER'}</h3><p>${f.neutral ? 'Pay them to leave the map. Your army stays fully intact; no experience.' : 'Pay the enemy. Your army stays fully intact and ' + (f.h ? f.h.name : 'the hero') + ' goes to ' + (f.home ? f.home.name : 'a town') + '.'}<br>
+    Price: <b class="hl">${price} gold</b> (or resources: wood/ore ${RES_VALUE.wood}g each, gems ${RES_VALUE.gems}g each).${f.why && !f.canSurrender ? '<br><span class="no">' + f.why + '</span>' : ''}</p>
+    ${[['gold', 'PAY GOLD'], ['res', 'PAY RESOURCES'], ['mix', 'PAY MIX']].map(([k, l]) => `<div class="it"><div class="t">${l}<small>${plans[k] ? planText(plans[k]) : '<span class="no">Cannot afford</span>'}</small></div>${btn('PAY', 'surrender', k, 'g', !plans[k] || !f.canSurrender)}</div>`).join('')}
+    <div class="bar" style="margin-top:8px">${btn('CANCEL', 'close', '', 'alt')}</div>`);
+}
+function syncArmies() { for (const side of ['L', 'R']) B.sides[side].arrs.forEach((arr, k) => { arr.length = 0; B.units.filter(u => u.alive && u.side === side && u.src === k).forEach(u => addUnits(arr, u.type, u.count)); }); }
+function leaveBattle() { B = null; UI.mode = UI.ret; $('pre').style.display = 'none'; syncBars(); }
+function doRetreat(side) {
+  const ctx = B.ctx, h = heroOf(side), playerSide = side === 'L';
+  B.units.filter(u => u.side === side).forEach(u => { u.alive = false; u.tot = 0; u.count = 0; });
+  const killed = s => B.units.filter(u => u.side !== s).reduce((a, u) => a + Math.max(0, u.start * UNITS[u.type].hp - u.tot), 0);
+  const otherSideKey = otherSide(side), xpW = killed(otherSideKey);
+  syncArmies();
+  const winnerIsAtt = (B.attSide === otherSideKey);
+  if (h) { G.fled = G.fled || []; G.fled.push(Object.assign(JSON.parse(JSON.stringify(h)), {army: []})); }
+  leaveBattle();
+  if (playerSide) { SFX.lose(); msg(h.name + ' retreated! The army is lost. Rehire ' + h.name + ' at a Tavern.'); finishFight(ctx, winnerIsAtt, winnerIsAtt ? xpW : 0, winnerIsAtt ? 0 : xpW); }
+  else { SFX.win(); showPanel(() => `<h2 style="color:var(--green)">THE ENEMY RETREATS!</h2><p>${h.name} fled the battlefield and left the army behind.</p><div class="bar"><button class="btn g" data-a="close">OK</button></div>`, {onClose: () => finishFight(ctx, winnerIsAtt, winnerIsAtt ? xpW : 0, winnerIsAtt ? 0 : xpW)}); }
+}
+function doSurrender(kind) {
+  const f = fleeInfo(); if (!f.canSurrender) return false;
+  const plan = payPlans('player', surrenderPrice())[kind]; if (!plan) return false;
+  for (const r in plan) G.res.player[r] -= plan[r];
+  const ctx = B.ctx; syncArmies(); leaveBattle(); SFX.pick();
+  if (f.neutral) { G.objs.splice(G.objs.indexOf(ctx.def.monster), 1); msg('Bribed! The neutrals leave. Paid ' + planText(plan) + '.'); if (ctx.after && G.heroes.includes(ctx.att.hero)) ctx.after(); }
+  else { f.h.x = f.home.x; f.h.y = f.home.y; UI.rpos[f.h.id] = null; delete UI.rpos[f.h.id]; f.h.mp = 0; revealAll(); msg('Surrendered. Paid ' + planText(plan) + '. ' + f.h.name + ' returns to ' + f.home.name + ' with the army.'); }
+  G.lastSurrender = {kind, plan}; return true;
+}
+function aiShouldRetreat() { // AI hero flees when hopeless (keeps the hero, loses the army)
+  if (!B || !heroOf('R') || B.sides.R.owner !== 'ai' || B.round < 2) return false;
+  const pw = s => armyPower(B.units.filter(u => u.alive && u.side === s).map(u => ({type: u.type, count: u.count})), heroOf(s));
+  return pw('R') < pw('L') * 0.2;
+}
+// ---------- tooltips for map objects (hover on desktop, tap on phone) ----------
+const PLURAL = {Wolf: 'Wolves', Goblin: 'Goblins', Troll: 'Trolls'};
+const band = n => n < 5 ? '1-4' : n < 10 ? '5-9' : n < 20 ? '10-19' : n < 50 ? '20-49' : n < 100 ? '50-99' : '100+';
+function threatOf(army) {
+  const me = curHero(), mine = me ? armyPower(me.army, me) : 1, r = armyPower(army) / Math.max(1, mine);
+  return r < 0.5 ? {t: 'EASY', c: '#58d854'} : r < 1.3 ? {t: 'EVEN', c: '#f8b800'} : {t: 'DEADLY', c: '#e40058'};
+}
+const ownerName = o => o === 'player' ? 'You' : o === 'ai' ? 'Enemy' : 'Nobody';
+function tipFor(x, y) {
+  if (!inMap(x, y) || !G.fog[y][x]) return null;
+  const o = objAt(x, y), t = townAt(x, y), h = heroAt(x, y);
+  if (t) return {title: t.name, lines: ['Owner: ' + ownerName(t.owner), FACTIONS[t.faction].name + ' town']};
+  if (h) return {title: h.name + ' (hero)', lines: ['Owner: ' + ownerName(h.owner), h.owner === 'player' ? armyText(h.army) : 'Army: ' + h.army.map(s => band(s.count) + ' ' + s.type).join(', ')]};
+  if (!o) return null;
+  if (o.kind === 'mine') { const m = MINES[o.mine]; return {title: m.name, icon: o.mine, lines: ['Produces +' + m.amt + ' ' + m.res + ' per day', 'Owner: ' + ownerName(o.owner)]}; }
+  if (o.kind === 'res') return {title: o.amt + ' ' + o.res.toUpperCase(), icon: o.res, lines: ['Walk here to pick it up']};
+  if (o.kind === 'chest') return {title: 'Treasure chest', lines: ['1000 gold or 750 experience']};
+  if (o.kind === 'art') return {title: ARTIFACTS[o.art].name, lines: ['Artifact: +' + ARTIFACTS[o.art].val + ' ' + ARTIFACTS[o.art].stat]};
+  if (o.kind === 'monster') { const s = o.army[0], th = threatOf(o.army), sw = sizeWord(s.count).replace(/^A /, ''); return {title: sw[0].toUpperCase() + sw.slice(1) + ' ' + (PLURAL[s.type] || s.type + 's') + ' (' + band(s.count) + ')', lines: ['Neutral · ' + SKILL_DESC[UNITS[s.type].skill]], threat: th}; }
+}
+function showTip(x, y, cx, cy) {
+  const el = $('tip'), tp = tipFor(x, y); if (!tp) { el.style.display = 'none'; return; }
+  el.innerHTML = `<b>${tp.icon ? `<img src="${resImg(MINES[tp.icon] ? MINES[tp.icon].res : tp.icon)}" alt="">` : ''}${tp.title}</b>${tp.lines.map(l => '<div>' + l + '</div>').join('')}${tp.threat ? `<div class="thr" style="background:${tp.threat.c}">THREAT: ${tp.threat.t}</div>` : ''}`;
+  el.style.display = 'block'; const r = $('view').getBoundingClientRect(), w = el.offsetWidth, hh = el.offsetHeight;
+  el.style.left = Math.max(4, Math.min(r.width - w - 4, cx - r.left - w / 2)) + 'px'; el.style.top = Math.max(4, cy - r.top - hh - 18) + 'px';
+  UI.tipT = 2.2;
+}
+// ---------- center-screen celebrations (non-blocking queue, ~1.5s each) ----------
+const CELE_COL = {gold: ['#f8b800', '#fce4a0'], wood: ['#a0522d', '#d88850'], ore: ['#9c9c9c', '#e0e0e0'], gems: ['#d858f8', '#fcb8fc'], art: ['#fcfcfc', '#f8b800'], xp: ['#3cbcfc', '#a8e4fc']};
+const JINGLE = {gold: [784, 988, 1175, 1568], wood: [392, 523, 659], ore: [330, 440, 554, 659], gems: [880, 1109, 1319, 1760], art: [523, 659, 784, 1047, 1319], xp: [440, 554, 659, 880]};
+function celebrate(kind, text, sub) { UI.celeQ = UI.celeQ || []; UI.celeQ.push({kind, text, sub}); if (!UI.cele) nextCele(); }
+function nextCele() {
+  const el = $('cele'), c = UI.celeQ.shift(); if (!c) { UI.cele = null; el.style.display = 'none'; return; }
+  UI.cele = {t: 0, c}; UI.celeLog = (UI.celeLog || []).concat(c.text);
+  const [a, b] = CELE_COL[c.kind] || CELE_COL.gold, icon = RES.includes(c.kind) ? `<img src="${resImg(c.kind)}" alt="">` : '';
+  let parts = ''; for (let i = 0; i < 18; i++) { const ang = i / 18 * Math.PI * 2, d = 70 + (i % 3) * 30; parts += `<i class="${c.kind === 'gold' ? 'coin' : 'spk'}" style="--dx:${Math.round(Math.cos(ang) * d)}px;--dy:${Math.round(Math.sin(ang) * d)}px;background:${i % 2 ? a : b};animation-delay:${(i % 4) * 0.05}s"></i>`; }
+  el.innerHTML = `<div class="cbox" style="--a:${a}">${icon}<b>${c.text}</b>${c.sub ? '<small>' + c.sub + '</small>' : ''}</div>${parts}`;
+  el.style.display = 'flex'; el.classList.remove('go'); void el.offsetWidth; el.classList.add('go');
+  tune(JINGLE[c.kind] || JINGLE.gold, 70);
+}
+function celeTick(dt) { if (UI.cele && (UI.cele.t += dt) >= 1.5) nextCele(); if (UI.tipT > 0 && (UI.tipT -= dt) <= 0) $('tip').style.display = 'none'; }
+// ---------- marketplace bulk trade ----------
+const MKT = {wood: {buy: 250, sell: 50}, ore: {buy: 250, sell: 50}, gems: {buy: 500, sell: 100}};
+const mktMax = (r, m) => m === 'buy' ? Math.floor(G.res.player.gold / MKT[r].buy) : G.res.player[r];
+function mktState(r) { UI.mkt = UI.mkt || {}; return UI.mkt[r] || (UI.mkt[r] = {m: 'buy', q: 1}); }
+function mktClamp(r) { const s = mktState(r), mx = mktMax(r, s.m); s.q = Math.max(0, Math.min(mx, s.q | 0)); if (s.q === 0 && mx > 0) s.q = 1; return s; }
+function tradeBulk(r) { const s = mktClamp(r), R = G.res.player, n = s.q; if (!n) return 0;
+  if (s.m === 'buy') { R.gold -= n * MKT[r].buy; R[r] += n; } else { R[r] -= n; R.gold += n * MKT[r].sell; } return n; }
+function marketHtml() {
+  return `<h3>MARKETPLACE</h3>` + ['wood', 'ore', 'gems'].map(r => { const s = mktClamp(r), R = G.res.player, mx = mktMax(r, s.m), M = MKT[r], buy = s.m === 'buy';
+    const after = buy ? `${R.gold - s.q * M.buy} gold, ${R[r] + s.q} ${r}` : `${R.gold + s.q * M.sell} gold, ${R[r] - s.q} ${r}`;
+    return `<div class="mkt"><div class="bar"><img src="${resImg(r)}" alt=""><b>${r.toUpperCase()}</b> (have ${R[r]}) ${btn('BUY', 'mmode', r + ':buy', buy ? 'y' : 'alt')}${btn('SELL', 'mmode', r + ':sell', buy ? 'alt' : 'y')}<small>Rate: buy 1 = ${M.buy}g · sell 1 = ${M.sell}g</small></div>
+      <div class="bar">${btn('-', 'mq', r + ':-1')}<input type="range" min="0" max="${mx}" value="${s.q}" data-r="${r}" class="mrange"${mx ? '' : ' disabled'}>${btn('+', 'mq', r + ':1')}${btn('x1', 'mset', r + ':1')}${btn('x5', 'mset', r + ':5')}${btn('x10', 'mset', r + ':10')}${btn('MAX', 'mset', r + ':max')}</div>
+      <div class="bar"><span class="mprev">${buy ? 'Buy' : 'Sell'} <b class="hl">${s.q}</b> ${r} ${buy ? 'for ' : 'for +'}<b class="hl">${s.q * (buy ? M.buy : M.sell)}</b> gold → you will have ${after}</span>${btn(buy ? 'BUY ' + s.q : 'SELL ' + s.q, 'mdo', r, 'g', !s.q)}</div></div>`; }).join('');
+}
+const resBar = () => { const inc = income('player'); return `<div class="tres">${RES.map(k => `<span><img src="${resImg(k)}" alt="${k}"><b>${G.res.player[k]}</b><small>+${inc[k]}/day</small></span>`).join('')}</div>`; };
+// formation presets explained
+const FORM_INFO = {
+  line:   {d: 'Melee in front, shooters behind, spread over all rows.', good: 'Good all-round; covers every lane.', g: ['.M', 'RM', '.M', 'RM', '.M']},
+  wedge:  {d: 'One strong melee tip in the middle, the rest close behind.', good: 'Good for rushing enemy shooters.', g: ['..', 'M.', 'RM', 'M.', '..']},
+  turtle: {d: 'Tight block: melee walls around shooters in the center.', good: 'Good vs fast melee; allies stay adjacent (Shield Wall).', g: ['M.', 'RM', 'RM', 'RM', 'M.']},
+};
+const formDiagram = f => `<span class="fdia">${FORM_INFO[f].g.map(row => row.split('').map(c => `<i class="${c === 'M' ? 'm' : c === 'R' ? 'r' : ''}"></i>`).join('')).join('<br>')}</span>`;
+
 // ---------- floating text & battle timeline (all driven by elapsed seconds) ----------
 function fx(u, text, col, delay = 0) { UI.fx.push({x: u.x, y: u.y, text, col, t: -delay, life: 1.1}); }
 function later(at, fn) { B.ev.push({at, fn}); B.ev.sort((a, b) => a.at - b.at); }
@@ -1011,8 +1139,9 @@ function drawObj(g, o) {
   if (o.kind === 'res') { g.drawImage(SPR.pile(o.res), X, Y); if (o.res !== 'wood' && f % 9 === 0) spark(g, X + 4 + o.id % 8, Y + 7); }
   else if (o.kind === 'chest') { g.drawImage(SPR.chest(), X, Y); if (f % 7 === 0) spark(g, X + 12, Y + 5); }
   else if (o.kind === 'art') g.drawImage(SPR.artifact(f % 3), X, Y - Math.round(Math.sin(clock * 3 + o.id) * 1.5));
-  else if (o.kind === 'mine') g.drawImage(SPR.mine(o.mine, o.owner, Math.floor(clock * 4) % 2), X - 2, Y - 6);
-  else if (o.kind === 'monster' && o.army.length) g.drawImage(SPR.unit(o.army[0].type, Math.floor(clock * 2 + o.id * 0.37) % 2, true), X - 4, Y - 9);
+  else if (o.kind === 'mine') g.drawImage(SPR.mine(o.mine, o.owner, Math.floor(clock * 4) % 2), X - 4, Y - 10);
+  else if (o.kind === 'monster' && o.army.length) { const th = threatOf(o.army); g.fillStyle = th.c + '90'; g.fillRect(X + 1, Y + 12, 14, 3); g.fillRect(X + 3, Y + 15, 10, 1); g.fillStyle = '#000'; g.fillRect(X + 9, Y - 12, 9, 6); g.fillStyle = th.c; g.fillRect(X + 10, Y - 11, 7, 4); g.fillStyle = '#000'; g.fillRect(X + 12, Y - 10, 3, 2); }
+  if (o.kind === 'monster' && o.army.length) g.drawImage(SPR.unit(o.army[0].type, Math.floor(clock * 2 + o.id * 0.37) % 2, true), X - 4, Y - 9);
 }
 function renderWorld() {
   ensureLayers();
@@ -1081,6 +1210,7 @@ function drawBattle(g) {
   if (B.phase === 'pre') {
     const a = 0.16 + 0.08 * Math.sin(clock * 4); g.fillStyle = `rgba(60,188,252,${a})`;
     for (const x of deployCols('L')) for (let y = 0; y < BH; y++) if (inDeploy('L', x, y)) g.fillRect(BOX + x * CW + 1, BOY + y * CW + 1, CW - 1, CW - 1);
+    g.fillStyle = '#000a'; g.fillRect(BOX, BOY + BH * CW - 9, CW * 2, 9); smallTxt(g, 'YOUR DEPLOY', BOX + CW, BOY + BH * CW - 2, '#3cbcfc', 'center');
     if (UI.preTerr) { g.fillStyle = '#d858f820'; g.fillRect(BOX, BOY, BW * CW, BH * CW); }
     const su = UI.preSel && uById(UI.preSel); if (su) { g.strokeStyle = '#f8b800'; g.lineWidth = 1; g.strokeRect(BOX + su.x * CW + 0.5, BOY + su.y * CW + 0.5, CW - 1, CW - 1); }
   }
@@ -1236,7 +1366,7 @@ function loop(now) {
     if (CAM.target) { const k = 1 - Math.exp(-dt * 6); CAM.x += (CAM.target.x - CAM.x) * k; CAM.y += (CAM.target.y - CAM.y) * k; clampCam(); if (Math.abs(CAM.target.x - CAM.x) + Math.abs(CAM.target.y - CAM.y) < 0.5) CAM.target = null; }
   }
   if (UI.mode === 'title' || !G) renderTitle(); else if (UI.mode === 'battle' && B) renderBattleScreen(); else renderMapScreen();
-  renderPre(); tutTick(); renderMini(dt); updateHud(); syncBars();
+  celeTick(dt); renderPre(); tutTick(); renderMini(dt); updateHud(); syncBars();
   requestAnimationFrame(loop);
 }
 
@@ -1257,7 +1387,7 @@ function openTown(t) {
   if (!t) return;
   showPanel(() => {
     const own = t.owner === 'player', h = heroAt(t.x, t.y), units = FACTIONS[t.faction].units, inc = income('player');
-    const head = `<div class="thead"><h2>${t.name.toUpperCase()}</h2>${btn('CLOSE', 'close', '', 'g')}</div><canvas class="tview" id="tview"></canvas>`;
+    const head = `<div class="thead"><h2>${t.name.toUpperCase()}</h2>${btn('CLOSE', 'close', '', 'g')}</div>${resBar()}<canvas class="tview" id="tview"></canvas>`;
     if (!own) return head + `<div class="cols"><p>Enemy town. Garrison: ${armyText(t.garrison)}</p>${canSeeEnemyKingdom() && KG(t.owner) ? `<p>Scouts report kingdom policies: ${KG(t.owner).slots.map(k => POLICIES[k].name).join(', ') || 'none'}</p>` : '<p>Learn Scouting to see their kingdom policies.</p>'}</div>`;
     let s = head + `<div class="cols"><div><p>Income per day: ${costText(inc) || '0'}${t.builtToday ? '<br><span class="no">Already built today</span>' : ''}</p><h3>BUILD</h3>`;
     for (const k in BUILDINGS) {
@@ -1275,9 +1405,9 @@ function openTown(t) {
     if (h) h.army.forEach((a, i) => s += `<div class="it"><img src="${unitImg(a.type)}" alt=""><div class="t">${h.name}: ${a.count} ${a.type}</div>${btn('TO GARRISON', 'togar', i, 'alt', t.garrison.length >= MAX_STACKS && !t.garrison.some(g => g.type === a.type) || h.army.length < 2)}</div>`);
     t.garrison.forEach((a, i) => s += `<div class="it"><img src="${unitImg(a.type)}" alt=""><div class="t">Garrison: ${a.count} ${a.type}</div>${btn('TO HERO', 'tohero', i, 'alt', !h)}</div>`);
     if (!h && !t.garrison.length) s += '<p>No hero or garrison here.</p>';
-    if (t.built.includes('tavern')) s += `<h3>TAVERN</h3><div class="it"><div class="t">Hire a hero<small>${HIRE_COST} gold, comes with 15 ${units[0]}s</small></div>${btn('HIRE', 'hire', '', 'g', h || G.res.player.gold < HIRE_COST)}</div>`;
+    if (t.built.includes('tavern')) s += `<h3>TAVERN</h3><div class="it"><div class="t">Hire a hero<small>${HIRE_COST} gold, comes with 15 ${units[0]}s${(G.fled || []).some(f => f.owner === 'player') ? ' · next: ' + G.fled.find(f => f.owner === 'player').name + ' (retreated, LV' + G.fled.find(f => f.owner === 'player').lvl + ')' : ''}</small></div>${btn('HIRE', 'hire', '', 'g', h || G.res.player.gold < HIRE_COST)}</div>`;
     if (t.built.includes('guild1')) s += `<h3>MAGE GUILD</h3><p>${Object.keys(SPELLS).filter(k => SPELLS[k].lvl <= (t.built.includes('guild2') ? 2 : 1)).map(k => SPELLS[k].name + ' (' + SPELLS[k].mana + ' mana): ' + SPELLS[k].desc).join('<br>')}<br>Heroes visiting learn these and refill mana.</p>`;
-    if (t.built.includes('market')) s += `<h3>MARKETPLACE</h3>` + ['wood', 'ore', 'gems'].map(r => `<div class="it"><div class="t">${r}<small>Buy 1 for ${r === 'gems' ? 500 : 250}g, sell 1 for ${r === 'gems' ? 100 : 50}g</small></div>${btn('BUY', 'trade', r + ':buy')}${btn('SELL', 'trade', r + ':sell', 'y', !G.res.player[r])}</div>`).join('');
+    if (t.built.includes('market')) s += marketHtml();
     return s + `</div></div>`;
   }, {town: t.id, full: true, after: () => { const c = $('tview'); if (c) SPR.townView(c, t); }});
 }
@@ -1319,9 +1449,16 @@ const ACTIONS = {
   togar: i => { const t = G.towns.find(t => t.id === UI.panel.town), h = heroAt(t.x, t.y), s = h.army[i]; if (h.army.length > 1 && addUnits(t.garrison, s.type, s.count)) h.army.splice(i, 1); refreshPanel(); },
   tohero: i => { const t = G.towns.find(t => t.id === UI.panel.town), h = heroAt(t.x, t.y), s = t.garrison[i]; if (h && addUnits(h.army, s.type, s.count)) t.garrison.splice(i, 1); refreshPanel(); },
   hire: () => { const t = G.towns.find(t => t.id === UI.panel.town), h = hire(t); if (h) { G.sel = h.id; SFX.lvl(); msg(h.name + ' joins you!'); } refreshPanel(); },
+  mmode: v => { const [r, m] = v.split(':'); mktState(r).m = m; mktClamp(r); refreshPanel(); },
+  mq: v => { const [r, d] = v.split(':'); mktState(r).q += +d; mktClamp(r); refreshPanel(); },
+  mset: v => { const [r, n] = v.split(':'), st = mktState(r); st.q = n === 'max' ? mktMax(r, st.m) : +n; mktClamp(r); refreshPanel(); },
+  mdo: r => { const n = tradeBulk(r); if (n) { SFX.pick(); msg('Traded ' + n + ' ' + r); hudSig = ''; } refreshPanel(); },
+  flee: () => openFlee(),
+  retreat: () => { if (!B || B.phase !== 'plan') return; UI.panel = null; $('panel').classList.remove('show'); doRetreat('L'); },
+  surrender: k => { if (!B) return; UI.panel = null; $('panel').classList.remove('show'); if (!doSurrender(k)) msg('Cannot pay that'); },
   trade: v => { const [r, m] = v.split(':'), buy = r === 'gems' ? 500 : 250, sell = r === 'gems' ? 100 : 50, R = G.res.player;
     if (m === 'buy' && R.gold >= buy) { R.gold -= buy; R[r]++; } else if (m === 'sell' && R[r] > 0) { R[r]--; R.gold += sell; } refreshPanel(); },
-  chest: v => { const h = heroById(UI.panel.chestHero); if (v === 'gold') G.res.player.gold += 1000; else if (h) gainXp(h, 750); UI.panel.sticky = false; closePanel(); },
+  chest: v => { const h = heroById(UI.panel.chestHero); if (v === 'gold') { G.res.player.gold += 1000; celebrate('gold', '+1000 GOLD!', 'Treasure chest'); } else if (h) { gainXp(h, 750); celebrate('xp', '+750 EXPERIENCE!', 'Treasure chest'); } UI.panel.sticky = false; closePanel(); },
   lvlp: s => { UI.panel.pick.p = s; refreshPanel(); },
   lvls: k => { UI.panel.pick.s = k; refreshPanel(); },
   lvlok: () => { const h = heroById(UI.panel.lvlHero), pk = UI.panel.pick; if (!pk.p || !pk.s) return; if (h) { h[pk.p]++; if (pk.p === 'kn') h.mana += 10; if (pk.s !== '-') h.sk[pk.s] = (h.sk[pk.s] || 0) + 1; } UI.panel.sticky = false; closePanel(); },
@@ -1419,6 +1556,7 @@ document.addEventListener('click', e => {
   const b = e.target.closest('[data-a]'); if (!b || b.disabled) return;
   SFX.click(); const f = ACTIONS[b.dataset.a]; if (f) f(b.dataset.v);
 });
+for (const ev of ['input', 'change']) document.addEventListener(ev, e => { const r = e.target.dataset && e.target.dataset.r; if (r && e.target.classList.contains('mrange')) { mktState(r).q = +e.target.value; mktClamp(r); if (ev === 'change') refreshPanel(); else { const m = e.target.closest('.mkt').querySelector('.mprev b'); if (m) m.textContent = mktState(r).q; } } });
 $('panel').addEventListener('click', e => { if (e.target.id === 'panel') closePanel(); });
 function battleTap(mx, my) {
   const gx = Math.floor((mx - BOX) / CW), gy = Math.floor((my - BOY) / CW);
@@ -1459,6 +1597,7 @@ cv.addEventListener('pointerdown', e => {
   if (ptrs.size === 1) drag = {moved: false, sx: e.clientX, sy: e.clientY}; else if (ptrs.size === 2) drag = {moved: true, pinch: pinchDist(), z: CAM.z};
 });
 cv.addEventListener('pointermove', e => {
+  if (e.pointerType === 'mouse' && !ptrs.size && (UI.mode === 'map' || UI.mode === 'aiturn') && G && !UI.panel) { const r = cv.getBoundingClientRect(), sx = (e.clientX - r.left) * CAM.dpr, sy = (e.clientY - r.top) * CAM.dpr, tx = Math.floor((CAM.x + sx / CAM.z) / TS), ty = Math.floor((CAM.y + sy / CAM.z) / TS); const k = tx + ',' + ty; if (k !== UI.hoverK) { UI.hoverK = k; showTip(tx, ty, e.clientX, e.clientY); } else UI.tipT = 2.2; }
   const p = ptrs.get(e.pointerId); if (!p || !drag) return;
   const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY;
   const panOK = UI.mode === 'map' || UI.mode === 'aiturn' || UI.mode === 'over';
@@ -1481,6 +1620,7 @@ cv.addEventListener('pointerup', ptrEnd); cv.addEventListener('pointercancel', p
 cv.addEventListener('wheel', e => { e.preventDefault(); if (UI.mode === 'battle' || UI.mode === 'title') return; const r = cv.getBoundingClientRect(); setZoom(CAM.z + (e.deltaY < 0 ? 1 : -1), (e.clientX - r.left) * CAM.dpr, (e.clientY - r.top) * CAM.dpr); }, {passive: false});
 function toCell(cx, cy) { const r = cv.getBoundingClientRect(), mx = ((cx - r.left) * CAM.dpr - BV.ox) / BV.s, my = ((cy - r.top) * CAM.dpr - BV.oy) / BV.s, gx = Math.floor((mx - BOX) / CW), gy = Math.floor((my - BOY) / CW); return gx >= 0 && gy >= 0 && gx < BW && gy < BH ? [gx, gy] : null; }
 function tapAt(cx, cy) {
+  UI.lastTap = [cx, cy];
   if (UI.panel) return;
   const r = cv.getBoundingClientRect(), sx = (cx - r.left) * CAM.dpr, sy = (cy - r.top) * CAM.dpr;
   if (UI.mode === 'title' || !G) { openMenu(); return; }
@@ -1504,6 +1644,6 @@ document.addEventListener('keydown', e => {
 });
 $('mute').onclick = e => { e.stopPropagation(); muted = !muted; localStorage.setItem('mh-mute', muted ? '1' : '0'); $('mute').textContent = muted ? 'MUTE' : 'SND'; };
 $('mute').textContent = muted ? 'MUTE' : 'SND';
-window.MHX = {moraleChance, get G() { return G; }, get B() { return B; }, setPolicy, slotCount, income, learnKT, growthOf, unitCost, newDay, hire, finishFight, KG, pol, maxMana, fight, startFight, tac, blunted, moveOf, calcDmg, intelOf, knownTactics, learnTalent, reach, uById, loadGame, applyFormation, placeTerrain, curHero, gainXp, flood, get PT() { return PT; }, get ET() { return ET; }, battleToClient: (lx, ly) => { const r = cv.getBoundingClientRect(); return [r.left + (BV.ox + lx * BV.s) / CAM.dpr, r.top + (BV.oy + ly * BV.s) / CAM.dpr]; }, UI, CAM, ACTIONS, tapMap, battleTap, endDay, resolveRound, cell: (x, y) => [BOX + x * CW + CW / 2, BOY + y * CW + CW / 2], tileToClient: (x, y) => { const r = cv.getBoundingClientRect(); return [r.left + ((x * TS + TS / 2 - CAM.x) * CAM.z) / CAM.dpr, r.top + ((y * TS + TS / 2 - CAM.y) * CAM.z) / CAM.dpr]; }}; // test hook
+window.MHX = {take, tipFor, threatOf, surrenderPrice, payPlans, doRetreat, doSurrender, openFlee, tradeBulk, mktState, mktMax, celebrate, objAt, moraleChance, get G() { return G; }, get B() { return B; }, setPolicy, slotCount, income, learnKT, growthOf, unitCost, newDay, hire, finishFight, KG, pol, maxMana, fight, startFight, tac, blunted, moveOf, calcDmg, intelOf, knownTactics, learnTalent, reach, uById, loadGame, applyFormation, placeTerrain, curHero, gainXp, flood, get PT() { return PT; }, get ET() { return ET; }, battleToClient: (lx, ly) => { const r = cv.getBoundingClientRect(); return [r.left + (BV.ox + lx * BV.s) / CAM.dpr, r.top + (BV.oy + ly * BV.s) / CAM.dpr]; }, UI, CAM, ACTIONS, tapMap, battleTap, endDay, resolveRound, cell: (x, y) => [BOX + x * CW + CW / 2, BOY + y * CW + CW / 2], tileToClient: (x, y) => { const r = cv.getBoundingClientRect(); return [r.left + ((x * TS + TS / 2 - CAM.x) * CAM.z) / CAM.dpr, r.top + ((y * TS + TS / 2 - CAM.y) * CAM.z) / CAM.dpr]; }}; // test hook
 openMenu();
 requestAnimationFrame(loop);
