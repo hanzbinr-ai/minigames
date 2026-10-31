@@ -125,8 +125,10 @@ function battleResearch(ctx, attWon) {
     const f = facOf(o), foe = side === 'att' ? 'def' : 'att', won = (side === 'att') === attWon, stronger = ctx.pow[foe] > ctx.pow[side] * 1.1;
     const cap = v => Math.min(RP_BATTLE_CAP, v);
     if (f === 'castle' && won) { const raw = Math.min(3, 1 + (D[side].length ? 0 : 1) + (stronger ? 1 : 0) + (big ? 1 : 0)); addRP(o, cap(raw * 0.35), 'Victory x' + raw + (D[side].length ? '' : ' flawless') + (stronger ? ' vs stronger' : '') + (big ? ' big battle' : '')); }
-    if (f === 'necro') { const hp = D.att.concat(D.def).reduce((s, x) => s + x.n * UNITS[x.type].hp, 0); if (hp) addRP(o, cap(hp / 1500), D.att.concat(D.def).reduce((s, x) => s + x.n, 0) + ' creatures died'); }
+    if (f === 'necro') { const hp = D.att.concat(D.def).reduce((s, x) => s + x.n * UNITS[x.type].hp, 0); if (hp) addRP(o, cap(hp / 750), D.att.concat(D.def).reduce((s, x) => s + x.n, 0) + ' creatures died'); }
     if (f === 'sylvan' && won && !D[side].length) addRP(o, 0.4, 'Flawless victory');
+    else if (f === 'sylvan' && won) { const had = ctx.snap[side].reduce((s, x) => s + x.count, 0), lost = D[side].reduce((s, x) => s + x.n, 0); if (had && lost / had < 0.25) addRP(o, 0.1, 'Clean victory (<25% losses)'); }
+    if (f === 'inferno') { const b = sum(ctx.snap[foe]), wiped = D[foe].filter(x => x.n >= (b[x.type] || 0)).length; if (wiped) addRP(o, cap(0.1 * wiped), wiped + ' enemy stacks burned'); }
     if (f === 'stronghold' && D[foe].length) { const v = D[foe].reduce((s, x) => s + x.n * UNITS[x.type].cost, 0) / 3000 * (won && stronger ? 1.5 : 1); addRP(o, cap(v), 'Trophies: ' + D[foe].reduce((s, x) => s + x.n, 0) + ' killed' + (won && stronger ? ' (underdog x1.5)' : '')); }
     if (won && pol(o, 'plunder')) { const g = Math.round(D[foe].reduce((s, x) => s + x.n * UNITS[x.type].cost, 0) * 0.1); if (g) { G.res[o].gold += g; if (o === 'player') msg('Plunder: +' + g + ' gold'); } }
   }
@@ -139,7 +141,7 @@ function dailyResearch(o) {
     const groves = G.objs.filter(x => x.kind === 'grove' && x.owner === o).length;
     const v = near * 0.15 + groves * 0.2 * (pol(o, 'sacredwood') ? 2 : 1); if (v) addRP(o, v, (near ? near + ' hero(es) by the forest' : '') + (near && groves ? ', ' : '') + (groves ? groves + ' Sacred Grove(s)' : ''));
   }
-  if (f === 'dwarf') { const v = savings(o); if (v > 0) addRP(o, 0.11 * Math.sqrt(v / 1000), 'Savings ' + v + ' gold value'); }
+  if (f === 'dwarf') { const v = savings(o); if (v > 0) addRP(o, 0.076 * Math.sqrt(v / 1000), 'Savings ' + v + ' gold value'); }
 }
 const savings = o => { const r = G.res[o]; return Math.round(r.gold + 250 * (r.wood + r.ore) + 500 * r.gems); };
 // Inferno: Sacrificial Pit. kind: 'gold' (2500), 'res' (5 wood+5 ore), 'xp' (1000 xp of the visiting hero), 'troop' (a whole stack: value/2500)
@@ -942,10 +944,11 @@ function resolveRound() {
     const t = uById(B.plans[u.id].target); if (!t || !up(t) || md(u, t) !== 1) continue;
     if (cantAct(u)) { T += 0.3; continue; }
     if (!B.order.includes('melee')) { B.order.push('melee'); stage(T - 0.05, 'MELEE'); }
-    let imp = T;
+    let imp = T, landed = 0, tried = 0;
     for (let n = 0; n < strikes(u) && up(u) && up(t); n++) {
       const at = T + n * 0.3;
-      if (hasAb(t, 'Ethereal') && Math.random() < 0.3) { fx(t, 'PHASED', '#a8a8fc', at + 0.15); continue; }
+      tried++; if (hasAb(t, 'Ethereal') && Math.random() < 0.3) { fx(t, 'PHASED', '#a8a8fc', at + 0.15); continue; }
+      landed++;
       const r = calcDmg(u, t, false), d = US(u).range ? Math.ceil(r.dmg / 2) : r.dmg, tags = (US(u).range ? ['PINNED'] : []).concat(r.tags, n ? ['x' + (n + 1)] : []);
       t.tot -= d; imp = land({a: u, t, d, tags, n, melee: 1}, at, false);
       if (hasAb(t, 'FireShield')) { const fd = Math.max(1, Math.round(d * 0.2)); u.tot -= fd; land({a: t, t: u, d: fd, tags: ['FIRE'], n}, at + 0.05, false); }
@@ -954,7 +957,7 @@ function resolveRound() {
     }
     T = imp + 0.2;
     const noRet = hasAb(u, 'NoRetal') || techCap(ownerOfU(u), 'wildhunt') || (u.hidden && tac(u.side, 'ambush'));
-    if (up(t) && up(u) && !t.retal && !noRet && md(u, t) === 1) { // retaliation uses the defender's surviving count
+    if (up(t) && up(u) && !t.retal && !noRet && md(u, t) === 1 && !(tried && !landed)) { // fully dodged attack = no retaliation // retaliation uses the defender's surviving count
       t.retal = true; const rr = calcDmg(t, u, false), d = tac(t.side, 'riposte') ? rr.dmg : Math.ceil(rr.dmg / 2);
       u.tot -= d; const ri = land({a: t, t: u, d, tags: ['RETAL'], n: 0, ret: 1}, T, false);
       settle(u); show(u, ri); show(t, ri); T = ri + 0.2;
