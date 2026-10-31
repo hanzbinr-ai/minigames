@@ -7,21 +7,23 @@ h1{margin:4px 0;font-size:16px;color:#f0c040;text-shadow:2px 2px 0 #000}
 canvas{display:block;width:min(96vw,520px);aspect-ratio:4/3;background:#1a2a1a;border:4px solid #000;box-shadow:0 0 0 4px #5a5a5a,6px 6px 0 4px #000}
 #hint{font-size:10px;color:#aaa;max-width:96vw;text-align:center;margin-top:10px;line-height:1.4}
 #msg{font-size:12px;color:#58d854;min-height:18px;margin:4px 0;text-align:center}
+#armybox{font-size:10px;color:#ccc;margin:4px 0;text-align:center;min-height:16px}
 #over{display:none;position:fixed;inset:0;background:#000c;flex-direction:column;align-items:center;justify-content:center;gap:12px;z-index:20}
 #over.show{display:flex}
 </style></head><body>
 <a class="btn alt tool back" href="../../">◀ PORTAL</a>
 <h1>MINI HEROES</h1>
-<div id="hud">GOLD <b id="gold">500</b> · HERO <b id="heroinfo">Lv1</b> · ARMY <b id="army">P:8 A:4</b></div>
+<div id="hud">GOLD <b id="gold">500</b> · HERO <b id="heroinfo">Lv1</b></div>
+<div id="armybox"></div>
 <div id="msg"></div>
 <canvas id="c" width="480" height="360"></canvas>
-<div id="hint">Click near your hero to move (one step)<br>Yellow castle = Town (get gold + recruit)<br>Red skull = Enemy (fight)</div>
+<div id="hint">Click near hero to move one step<br>Yellow castle = Enter Town<br>Red skull = Enemy</div>
 <div id="over"><h2 style="color:#e40058;text-shadow:3px 3px 0 #000;margin:0;font-size:22px">GAME OVER</h2><div id="why"></div><button class="btn" id="again">Play Again</button></div>
 <script>
 const c=document.getElementById('c'),x=c.getContext('2d');
 const W=20,H=15,TILE=24;
 let map=[],player,enemies=[],town,gold=500,turn=0,state='map',combat=null;
-function showMsg(t){document.getElementById('msg').textContent=t; setTimeout(()=>document.getElementById('msg').textContent='',1800)}
+function showMsg(t){document.getElementById('msg').textContent=t; setTimeout(()=>document.getElementById('msg').textContent='',2000)}
 function genMap(){
   map=Array.from({length:H},()=>Array(W).fill(0));
   for(let y=0;y<H;y++) for(let xx=0;xx<W;xx++){
@@ -52,19 +54,39 @@ function drawMap(){
       x.fillStyle='#8b1a1a'; x.fillRect(px+10,py+5,4,4);
     }
   }
-  // player hero
   const px=player.x*TILE, py=player.y*TILE;
   x.fillStyle='#f0c040';
   x.beginPath(); x.arc(px+12,py+12,11,0,Math.PI*2); x.fill();
   x.fillStyle='#1a1a1a'; x.font='bold 14px monospace'; x.textAlign='center';
   x.fillText('⚔',px+12,py+17);
-  // enemies
   enemies.forEach(e=>{
     const ex=e.x*TILE, ey=e.y*TILE;
     x.fillStyle='#d04040';
     x.beginPath(); x.arc(ex+12,ey+12,11,0,Math.PI*2); x.fill();
     x.fillStyle='#fff'; x.fillText('☠',ex+12,ey+17);
   });
+  x.textAlign='left';
+}
+function drawTown(){
+  x.fillStyle='#1a1a2e'; x.fillRect(0,0,480,360);
+  x.fillStyle='#f0c040'; x.font='18px monospace'; x.textAlign='center';
+  x.fillText('TOWN',240,36);
+  x.font='13px monospace'; x.fillStyle='#e0e0e0';
+  x.fillText('Gold: '+gold,240,64);
+  const options=[
+    {name:'Peasant', cost:40, add:4},
+    {name:'Archer', cost:80, add:2},
+    {name:'Swordsman', cost:120, add:1}
+  ];
+  options.forEach((o,i)=>{
+    const y=100+i*50;
+    x.fillStyle=gold>=o.cost?'#3a5a8a':'#3a3a3a';
+    x.fillRect(80,y,320,40);
+    x.fillStyle='#fff';
+    x.fillText(o.name+'  +'+o.add+'   ('+o.cost+' gold)',240,y+26);
+  });
+  x.fillStyle='#5a5a5a'; x.fillRect(160,280,160,36);
+  x.fillStyle='#fff'; x.fillText('LEAVE TOWN',240,304);
   x.textAlign='left';
 }
 function canMove(nx,ny){
@@ -85,18 +107,22 @@ function moveTo(tx,ty){
 }
 function checkEvents(){
   if(player.x===town.x && player.y===town.y){
-    gold+=60;
-    showMsg('+60 Gold from Town!');
-    if(gold>=80){
-      gold-=80;
-      const archer=player.army.find(a=>a.type==='Archer');
-      if(archer) archer.count+=2; else player.army.push({type:'Archer',count:2});
-      showMsg('Recruited +2 Archers!');
-    }
-    updateHUD();
+    state='town';
+    showMsg('Welcome to Town!');
+    draw();
+    return;
   }
   const enemy=enemies.find(e=>e.x===player.x && e.y===player.y);
   if(enemy) startCombat(enemy);
+}
+function recruit(type,cost,add){
+  if(gold<cost){ showMsg('Not enough gold!'); return; }
+  gold-=cost;
+  let u=player.army.find(a=>a.type===type);
+  if(u) u.count+=add; else player.army.push({type,count:add});
+  showMsg('Recruited +'+add+' '+type);
+  updateHUD();
+  draw();
 }
 function enemyTurn(){
   enemies.forEach(e=>{
@@ -112,7 +138,7 @@ function enemyTurn(){
 function startCombat(enemy){
   state='combat';
   combat={enemy,playerUnits:JSON.parse(JSON.stringify(player.army)),enemyUnits:JSON.parse(JSON.stringify(enemy.army)),turn:'player'};
-  showMsg('Combat started! Click enemy unit.');
+  showMsg('Combat started! Click enemy.');
   draw();
 }
 function drawCombat(){
@@ -186,12 +212,11 @@ function gameOver(win){
 function updateHUD(){
   document.getElementById('gold').textContent=gold;
   document.getElementById('heroinfo').textContent='Lv'+player.level;
-  const p=player.army.find(a=>a.type==='Peasant');
-  const a=player.army.find(a=>a.type==='Archer');
-  document.getElementById('army').textContent=(p?'P:'+p.count:'')+(a?' A:'+a.count:'');
+  document.getElementById('armybox').textContent=player.army.map(a=>a.type+':'+a.count).join('  |  ') || 'No army';
 }
 function draw(){
   if(state==='map') drawMap();
+  else if(state==='town') drawTown();
   else if(state==='combat') drawCombat();
 }
 c.onclick=e=>{
@@ -201,11 +226,22 @@ c.onclick=e=>{
   if(state==='map'){
     const tx=Math.floor(mx/TILE), ty=Math.floor(my/TILE);
     moveTo(tx,ty);
+  } else if(state==='town'){
+    const options=[{name:'Peasant',cost:40,add:4},{name:'Archer',cost:80,add:2},{name:'Swordsman',cost:120,add:1}];
+    options.forEach((o,i)=>{
+      const y=100+i*50;
+      if(mx>80 && mx<400 && my>y && my<y+40) recruit(o.name,o.cost,o.add);
+    });
+    if(mx>160 && mx<320 && my>280 && my<316){
+      state='map';
+      showMsg('Left Town');
+      draw();
+    }
   } else if(state==='combat'){
     doCombatClick(mx,my);
   }
 };
 document.getElementById('again').onclick=()=>{document.getElementById('over').classList.remove('show'); init();};
-function init(){ gold=500; genMap(); updateHUD(); state='map'; showMsg('Move toward the yellow castle!'); draw(); }
+function init(){ gold=500; genMap(); updateHUD(); state='map'; showMsg('Move to yellow castle to enter Town'); draw(); }
 init();
 </script></body></html>
