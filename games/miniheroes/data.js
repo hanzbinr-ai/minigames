@@ -84,3 +84,47 @@ const HERO_NAMES = ['Roland', 'Lyra', 'Gareth', 'Sylva', 'Tarnum', 'Mira'];
 const AI_NAMES = ['Sandro', 'Vidomina', 'Thant', 'Moandor'];
 const BASE_MP = 20, BASE_INCOME = 500, HIRE_COST = 2500, MAX_STACKS = 7;
 const xpForLevel = l => 250 * l * (l + 1); // xp needed to reach level l+1
+
+// Secondary skills: level 1..3 = Basic / Advanced / Expert. v = value per level.
+const SKILL_LVL = ['', 'Basic', 'Advanced', 'Expert'];
+const MAX_SKILLS = 8;
+const SKILLS = {
+  logistics:   {name: 'Logistics',   v: [0, 10, 20, 30],   desc: v => '+' + v + '% movement points'},
+  pathfinding: {name: 'Pathfinding', v: [0, 1, 2, 3],      desc: v => 'Rough terrain penalty -' + Math.round(v * 33) + '%'},
+  scouting:    {name: 'Scouting',    v: [0, 1, 2, 3],      desc: v => '+' + v + ' sight radius'},
+  estates:     {name: 'Estates',     v: [0, 125, 250, 500],desc: v => '+' + v + ' gold per day'},
+  wisdom:      {name: 'Wisdom',      v: [0, 20, 40, 60],   desc: v => '+' + v + '% max mana'},
+  archery:     {name: 'Archery',     v: [0, 10, 25, 50],   desc: v => '+' + v + '% ranged damage'},
+  offense:     {name: 'Offense',     v: [0, 10, 20, 30],   desc: v => '+' + v + '% melee damage'},
+  armorer:     {name: 'Armorer',     v: [0, 5, 10, 15],    desc: v => '-' + v + '% damage taken'},
+  leadership:  {name: 'Leadership',  v: [0, 10, 20, 30],   desc: v => v + '% chance per stack each RESOLVE: MORALE (+1 move, +20% dmg)'},
+  ballistics:  {name: 'Ballistics',  v: [0, 10, 20, 30],   desc: v => 'Catapult +' + v + '% hit chance' + (v >= 30 ? ', fires twice' : '')},
+};
+const START_SKILLS = {Roland: {leadership: 1, archery: 1}, Lyra: {wisdom: 1, scouting: 1}, Gareth: {offense: 1, armorer: 1}, Sylva: {logistics: 1, pathfinding: 1},
+  Tarnum: {offense: 1, ballistics: 1}, Mira: {estates: 1, wisdom: 1}, Sandro: {wisdom: 1, armorer: 1}, Vidomina: {offense: 1, logistics: 1}, Thant: {armorer: 1, leadership: 1}, Moandor: {archery: 1, scouting: 1}};
+
+// Random map setup
+const MAP_SIZES = {S: {w: 20, h: 15, name: 'Small'}, M: {w: 28, h: 20, name: 'Medium'}, L: {w: 36, h: 26, name: 'Large'}};
+const DIFFICULTY = {
+  easy:   {name: 'Easy',   player: {gold: 7500, wood: 15, ore: 15, gems: 4}, ai: {gold: 3000, wood: 5, ore: 5, gems: 0},   grace: 14, attack: 1.6, aiArmy: 0.7, aiIncome: 0.8},
+  normal: {name: 'Normal', player: {gold: 5000, wood: 10, ore: 10, gems: 2}, ai: {gold: 5000, wood: 10, ore: 10, gems: 2}, grace: 8,  attack: 1.3, aiArmy: 1,   aiIncome: 1},
+  hard:   {name: 'Hard',   player: {gold: 3000, wood: 5, ore: 5, gems: 1},   ai: {gold: 8000, wood: 15, ore: 15, gems: 4}, grace: 4,  attack: 1.1, aiArmy: 1.5, aiIncome: 1.25},
+};
+// Siege: towers shoot in RESOLVE (attack step), catapult fires with spells (before moves).
+const SIEGE = {wallHp: 2, gateHp: 2, citadelBonus: 1, towerDmg: 30, citadelTowerDmg: 45, catapultHit: 0.7};
+
+// Fixed tutorial map (16x12). . grass , rough T trees ^ rocks ~ water
+const TUTORIAL_MAP = [
+  '..............~~',
+  '..............~~',
+  '...........T..~~',
+  '..TT...,,,.....~',
+  '..T....,,,....^^',
+  '.......,,.......',
+  '~~~.............',
+  '~~~~...TT.......',
+  '~~~.....T....^..',
+  '..............^.',
+  '.^^.............',
+  '................',
+];

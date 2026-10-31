@@ -1,6 +1,6 @@
 // Mini Heroes - logic + rendering. G = saved game state, UI = screen state, B = current battle.
 'use strict';
-const MW = 24, MH = 18, TS = 16, BW = 10, BH = 7, CW = 24, BOX = 8, BOY = 28, BLW = 256, BLH = 200;
+let MW = 24, MH = 18; const TS = 16, BW = 10, BH = 7, CW = 24, BOX = 8, BOY = 28, BLW = 256, BLH = 200;
 const cv = document.getElementById('c'), ctx = cv.getContext('2d');
 const $ = id => document.getElementById(id);
 const SAVE_KEY = 'mh-save-v2';
@@ -38,8 +38,10 @@ const myHeroes = () => G.heroes.filter(h => h.owner === 'player');
 const curHero = () => { const h = heroById(G.sel); return h && h.owner === 'player' ? h : myHeroes()[0]; };
 const artBonus = (h, s) => h.arts.reduce((a, k) => a + (ARTIFACTS[k].stat === s ? ARTIFACTS[k].val : 0), 0);
 const stat = (h, s) => h[s] + artBonus(h, s);
-const maxMp = h => BASE_MP + artBonus(h, 'mp');
-const maxMana = h => stat(h, 'kn') * 10;
+const skl = (h, k) => SKILLS[k].v[(h && h.sk && h.sk[k]) || 0];
+const maxMp = h => Math.round((BASE_MP + artBonus(h, 'mp')) * (1 + skl(h, 'logistics') / 100));
+const maxMana = h => Math.round(stat(h, 'kn') * 10 * (1 + skl(h, 'wisdom') / 100));
+const sight = h => 4 + skl(h, 'scouting');
 const costText = c => RES.filter(r => c[r]).map(r => c[r] + ' ' + r).join(', ');
 const canPay = (owner, c) => RES.every(r => (G.res[owner][r] || 0) >= (c[r] || 0));
 const pay = (owner, c) => RES.forEach(r => G.res[owner][r] -= (c[r] || 0));
@@ -68,12 +70,14 @@ function flood(T, sx, sy) {
   while (st.length) { const [x, y] = st.pop(); for (const [dx, dy] of DIRS8) { const nx = x + dx, ny = y + dy; if (inMap(nx, ny) && !seen[ny][nx] && TERRAIN[T[ny][nx]].cost) { seen[ny][nx] = true; st.push([nx, ny]); } } }
   return seen;
 }
-const PT = {x: 2, y: 2}, ET = {x: MW - 3, y: MH - 3};
+let PT = {x: 2, y: 2}, ET = {x: MW - 3, y: MH - 3};
+function setDims(map) { MW = map[0].length; MH = map.length; PT = {x: 2, y: 2}; ET = {x: MW - 3, y: MH - 3}; }
+const DIFF = () => DIFFICULTY[(G && G.cfg && G.cfg.diff) || 'normal'] || DIFFICULTY.normal;
 function genTerrain(seed) {
   for (let tries = 0; tries < 60; tries++) {
     const R = mulberry(seed + tries * 7919);
     const T = Array.from({length: MH}, () => Array(MW).fill(0));
-    for (let i = 0; i < 26; i++) {
+    for (let i = 0, nb = Math.round(26 * MW * MH / 432); i < nb; i++) {
       const t = [1, 1, 2, 2, 2, 3, 4][Math.floor(R() * 7)];
       let x = Math.floor(R() * MW), y = Math.floor(R() * MH);
       for (let k = 0, n = 3 + Math.floor(R() * 6); k < n; k++) { if (inMap(x, y)) T[y][x] = t; x += Math.floor(R() * 3) - 1; y += Math.floor(R() * 3) - 1; }
@@ -87,10 +91,15 @@ function genTerrain(seed) {
   }
   return {T: Array.from({length: MH}, () => Array(MW).fill(0)), R: mulberry(seed)};
 }
-function newGame() {
-  const {T, R} = genTerrain(Date.now() % 1e6);
-  G = {v: 2, day: 1, map: T, fog: T.map(r => r.map(() => 0)), objs: [], heroes: [], towns: [], sel: null, nid: 1, over: null,
-    res: {player: {gold: 5000, wood: 10, ore: 10, gems: 2}, ai: {gold: 5000, wood: 10, ore: 10, gems: 2}}};
+function newGame(opts = {}) {
+  const cfg = {size: MAP_SIZES[opts.size] ? opts.size : 'M', diff: DIFFICULTY[opts.diff] ? opts.diff : 'normal', seed: Number.isFinite(opts.seed) ? opts.seed : Math.floor(Math.random() * 1e6), tutorial: false};
+  const SZ = MAP_SIZES[cfg.size], D = DIFFICULTY[cfg.diff];
+  MW = SZ.w; MH = SZ.h; PT = {x: 2, y: 2}; ET = {x: MW - 3, y: MH - 3};
+  const {T, R} = genTerrain(cfg.seed);
+  const rnd = (a, b) => a + Math.floor(R() * (b - a + 1)), pick = a => a[Math.floor(R() * a.length)];
+  G = {v: 3, cfg, tut: null, day: 1, map: T, fog: T.map(r => r.map(() => 0)), objs: [], heroes: [], towns: [], sel: null, nid: 1, over: null,
+    res: {player: {...D.player}, ai: {...D.ai}}};
+  const k = MW / 24, sc = v => Math.max(2, Math.round(v * k)), rep = Math.max(1, Math.round(MW * MH / 480));
   const id = () => G.nid++;
   const mkTown = (c, owner, faction, name) => ({id: id(), x: c.x, y: c.y, owner, faction, name, built: ['dw1', 'dw2'], avail: {}, garrison: [], builtToday: false});
   G.towns.push(mkTown(PT, 'player', 'castle', 'Castlegate'), mkTown(ET, 'ai', 'necro', 'Bonehold'));
@@ -119,38 +128,54 @@ function newGame() {
     return [];
   }
   const resPick = () => { const r = pick(['gold', 'wood', 'ore', 'wood', 'ore']); return {kind: 'res', res: r, amt: r === 'gold' ? rnd(5, 10) * 100 : rnd(4, 8)}; };
-  pair(3, 6, () => ({kind: 'mine', mine: 'wood', owner: null}));
-  pair(3, 6, () => ({kind: 'mine', mine: 'ore', owner: null}));
-  for (let i = 0; i < 3; i++) pair(3, 8, resPick);
-  pair(3, 7, () => ({kind: 'chest'}));
-  pair(7, 13, () => ({kind: 'mine', mine: 'gold', owner: null}), () => ({type: 'Wolf', count: rnd(10, 16)}));
-  pair(7, 13, () => ({kind: 'mine', mine: 'gems', owner: null}), () => ({type: 'Goblin', count: rnd(18, 26)}));
-  pair(6, 12, () => ({kind: 'chest'}), () => ({type: 'Goblin', count: rnd(8, 12)}));
-  pair(6, 14, () => ({kind: 'res', res: 'gems', amt: rnd(3, 5)}));
   const arts = Object.keys(ARTIFACTS).sort(() => R() - 0.5);
-  pair(8, 15, () => ({kind: 'art', art: arts[0]}), () => ({type: 'Troll', count: rnd(3, 5)}));
-  pair(8, 15, () => ({kind: 'art', art: arts[1]}), () => ({type: 'Wolf', count: rnd(18, 24)}));
-  pair(5, 12, resPick, () => ({type: 'Goblin', count: rnd(6, 10)}));
+  for (let r = 0; r < rep; r++) {
+  pair(3, sc(6), () => ({kind: 'mine', mine: 'wood', owner: null}));
+  pair(3, sc(6), () => ({kind: 'mine', mine: 'ore', owner: null}));
+  for (let i = 0; i < 3; i++) pair(3, sc(8), resPick);
+  pair(3, sc(7), () => ({kind: 'chest'}));
+  pair(7, sc(13), () => ({kind: 'mine', mine: 'gold', owner: null}), () => ({type: 'Wolf', count: rnd(10, 16)}));
+  pair(7, sc(13), () => ({kind: 'mine', mine: 'gems', owner: null}), () => ({type: 'Goblin', count: rnd(18, 26)}));
+  pair(6, sc(12), () => ({kind: 'chest'}), () => ({type: 'Goblin', count: rnd(8, 12)}));
+  pair(6, sc(14), () => ({kind: 'res', res: 'gems', amt: rnd(3, 5)}));
+  pair(8, sc(15), () => ({kind: 'art', art: arts[(r * 2) % arts.length]}), () => ({type: 'Troll', count: rnd(3, 5)}));
+  pair(8, sc(15), () => ({kind: 'art', art: arts[(r * 2 + 1) % arts.length]}), () => ({type: 'Wolf', count: rnd(18, 24)}));
+  pair(5, sc(12), resPick, () => ({type: 'Goblin', count: rnd(6, 10)}));
+  }
+  for (let i = 0, n = Math.round(MW * MH / 200); i < n; i++) pair(3, sc(14), i % 3 ? resPick : () => ({kind: 'chest'}), i % 2 ? () => ({type: pick(['Goblin', 'Wolf']), count: rnd(5, 12)}) : null);
   G.heroes.push(mkHero('player', HERO_NAMES[0], PT.x, PT.y, [{type: 'Peasant', count: 30}, {type: 'Archer', count: 8}]));
-  G.heroes.push(mkHero('ai', AI_NAMES[0], ET.x, ET.y, [{type: 'Skeleton', count: 14}, {type: 'Zombie', count: 3}]));
+  G.heroes.push(mkHero('ai', AI_NAMES[0], ET.x, ET.y, [{type: 'Skeleton', count: Math.round(14 * D.aiArmy)}, {type: 'Zombie', count: Math.max(1, Math.round(3 * D.aiArmy))}]));
   G.sel = G.heroes[0].id;
   revealAll();
 }
+function newTutorial() {
+  const T = TUTORIAL_MAP.map(r => [...r].map(c => ({'.': 0, ',': 1, 'T': 2, '^': 3, '~': 4})[c]));
+  setDims(T); ET = {x: 13, y: 9};
+  G = {v: 3, cfg: {size: 'T', diff: 'easy', seed: 0, tutorial: true}, tut: {step: 0}, day: 1, map: T, fog: T.map(r => r.map(() => 0)), objs: [], heroes: [], towns: [], sel: null, nid: 1, over: null,
+    res: {player: {gold: 6000, wood: 15, ore: 15, gems: 4}, ai: {gold: 0, wood: 0, ore: 0, gems: 0}}};
+  const id = () => G.nid++;
+  G.towns.push({id: id(), x: PT.x, y: PT.y, owner: 'player', faction: 'castle', name: 'Castlegate', built: ['dw1', 'dw2'], avail: {Peasant: 14, Archer: 9}, garrison: [], builtToday: false});
+  G.towns.push({id: id(), x: ET.x, y: ET.y, owner: 'ai', faction: 'necro', name: 'Bonehold', built: ['dw1', 'dw2', 'fort'], avail: {}, garrison: [{type: 'Skeleton', count: 12}], builtToday: false});
+  for (const o of [{x: 5, y: 2, kind: 'res', res: 'gold', amt: 500}, {x: 4, y: 4, kind: 'mine', mine: 'wood', owner: null}, {x: 7, y: 2, kind: 'monster', army: [{type: 'Goblin', count: 6}]}, {x: 8, y: 1, kind: 'chest'}]) G.objs.push(Object.assign(o, {id: id()}));
+  const h = mkHero('player', HERO_NAMES[0], PT.x, PT.y, [{type: 'Peasant', count: 20}, {type: 'Archer', count: 10}]);
+  h.spells = ['arrow']; h.mana = 20; G.heroes.push(h); G.sel = h.id;
+  revealAll();
+}
 function mkHero(owner, name, x, y, army) {
-  return {id: G.nid++, owner, name, x, y, lvl: 1, xp: 0, att: 1, def: 1, sp: 1, kn: 1, mp: BASE_MP, mana: 10, spells: [], arts: [], army};
+  return {id: G.nid++, owner, name, x, y, lvl: 1, xp: 0, att: 1, def: 1, sp: 1, kn: 1, mp: BASE_MP, mana: 10, spells: [], arts: [], army, sk: {...(START_SKILLS[name] || {})}};
 }
 
 // ---------- fog ----------
 function reveal(x, y, r) { for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) if (inMap(x + dx, y + dy) && dx * dx + dy * dy <= r * r + 1) G.fog[y + dy][x + dx] = 1; }
 function revealAll() {
-  myHeroes().forEach(h => reveal(h.x, h.y, 4));
+  myHeroes().forEach(h => reveal(h.x, h.y, sight(h)));
   G.towns.filter(t => t.owner === 'player').forEach(t => reveal(t.x, t.y, 5));
   G.objs.filter(o => o.kind === 'mine' && o.owner === 'player').forEach(o => reveal(o.x, o.y, 2));
 }
 
 // ---------- pathfinding (Dijkstra, 8 directions; objects/guarded tiles end a path) ----------
 function guardOf(x, y) { return G.objs.find(o => o.kind === 'monster' && Math.abs(o.x - x) <= 1 && Math.abs(o.y - y) <= 1); }
-function stepCost(x, y, dx, dy) { const c = TERRAIN[G.map[y][x]].cost; return dx && dy ? Math.round(c * 1.5) : c; }
+function stepCost(x, y, dx, dy, h) { let c = TERRAIN[G.map[y][x]].cost; if (h && c > 2) c = Math.max(2, c - skl(h, 'pathfinding') * 0.34); return Math.round(dx && dy ? c * 1.5 : c); }
 function enterable(x, y, h, avoid) {
   if (!TERRAIN[G.map[y][x]].cost) return false;
   const o = objAt(x, y); if (o && o.kind === 'monster') return false;
@@ -173,7 +198,7 @@ function dijkstra(h, avoid) {
     for (const [dx, dy] of DIRS8) {
       const nx = ux + dx, ny = uy + dy;
       if (!inMap(nx, ny) || !enterable(nx, ny, h, avoid)) continue;
-      const v = ny * MW + nx, d = best + stepCost(nx, ny, dx, dy);
+      const v = ny * MW + nx, d = best + stepCost(nx, ny, dx, dy, h);
       if (d < dist[v]) { dist[v] = d; prev[v] = u; }
     }
   }
@@ -226,10 +251,10 @@ function startWalk(h, path) { UI.walk = {id: h.id, path: path.slice(), t: 0}; }
 function walkStep() {
   const w = UI.walk, h = heroById(w.id);
   if (!h || !w.path.length) { UI.walk = null; return; }
-  const [nx, ny] = w.path[0], c = stepCost(nx, ny, nx - h.x, ny - h.y);
+  const [nx, ny] = w.path[0], c = stepCost(nx, ny, nx - h.x, ny - h.y, h);
   if (h.mp < c) { msg(h.name + ' is out of movement. END DAY to continue.'); UI.walk = null; return; }
   h.mp -= c; h.x = nx; h.y = ny; w.path.shift(); SFX.step();
-  reveal(h.x, h.y, 4);
+  reveal(h.x, h.y, sight(h));
   if (arrive(h) || !w.path.length) UI.walk = null;
 }
 // Called whenever any hero steps on a tile. Returns true if movement must stop.
@@ -271,23 +296,33 @@ function gainXp(h, n) {
   while (h.xp >= xpForLevel(h.lvl)) {
     h.lvl++;
     if (h.owner === 'player') UI.levelQ.push(h.id);
-    else h[pick(['att', 'def', 'att', 'sp', 'kn'])]++;
+    else { h[pick(['att', 'def', 'att', 'sp', 'kn'])]++; const o = skillOffers(h)[0]; if (o) h.sk[o] = (h.sk[o] || 0) + 1; }
   }
 }
+const shuffle = a => a.map(v => [Math.random(), v]).sort((x, y) => x[0] - y[0]).map(v => v[1]);
+function skillOffers(h) { // one upgrade + one new skill when possible (Heroes 3 style)
+  const have = Object.keys(h.sk), up = shuffle(have.filter(k => h.sk[k] < 3)), fresh = have.length < MAX_SKILLS ? shuffle(Object.keys(SKILLS).filter(k => !h.sk[k])) : [];
+  return [...new Set([...up.slice(0, 1), ...fresh, ...up])].slice(0, 2);
+}
+const STAT_NAMES = {att: 'ATTACK', def: 'DEFENSE', sp: 'SPELL POWER', kn: 'KNOWLEDGE'};
 function nextLevelUp() {
   if (!UI.levelQ.length || UI.panel) return;
   const h = heroById(UI.levelQ.shift()); if (!h) return nextLevelUp();
-  const opts = ['att', 'def', 'sp', 'kn'].sort(() => Math.random() - 0.5).slice(0, 2), names = {att: 'ATTACK', def: 'DEFENSE', sp: 'SPELL POWER', kn: 'KNOWLEDGE'};
+  const prim = shuffle(['att', 'def', 'sp', 'kn']).slice(0, 2), sec = skillOffers(h), pickd = {p: null, s: sec.length ? null : '-'};
   SFX.lvl();
-  showPanel(() => `<h2>LEVEL UP!</h2><p>${h.name} reached level ${h.lvl}. Choose a skill:</p>
-    <div class="bar">${opts.map(s => `<button class="btn y" data-a="lvl" data-v="${s}">+1 ${names[s]}</button>`).join('')}</div>`, {lvlHero: h.id, sticky: true});
+  showPanel(() => `<div class="hcard"><img src="${portraitImg(h)}" alt=""><h2>LEVEL UP! ${h.name} is now level ${h.lvl}</h2></div>
+    <h3>1. PRIMARY SKILL</h3><div class="bar">${prim.map(s => btn('+1 ' + STAT_NAMES[s], 'lvlp', s, pickd.p === s ? 'y' : 'alt')).join('')}</div>
+    ${sec.length ? `<h3>2. SECONDARY SKILL</h3>` + sec.map(k => { const n = (h.sk[k] || 0) + 1; return `<div class="it"><div class="t">${SKILL_LVL[n]} ${SKILLS[k].name}<small>${SKILLS[k].desc(SKILLS[k].v[n])}</small></div>${btn(pickd.s === k ? 'CHOSEN' : 'PICK', 'lvls', k, pickd.s === k ? 'y' : 'alt')}</div>`; }).join('') : '<p>All skill slots are at Expert.</p>'}
+    <div class="bar" style="margin-top:8px">${btn('CONFIRM', 'lvlok', '', 'g', !pickd.p || !pickd.s)}</div>`, {lvlHero: h.id, sticky: true, pick: pickd});
 }
 
 // ---------- day / week ----------
 function income(owner) {
   let inc = {gold: 0, wood: 0, ore: 0, gems: 0};
   G.towns.filter(t => t.owner === owner).forEach(t => inc.gold += BASE_INCOME + (t.built.includes('hall') ? 500 : 0));
+  G.heroes.filter(h => h.owner === owner).forEach(h => inc.gold += skl(h, 'estates'));
   G.objs.filter(o => o.kind === 'mine' && o.owner === owner).forEach(o => inc[MINES[o.mine].res] += MINES[o.mine].amt);
+  if (owner === 'ai') inc.gold = Math.round(inc.gold * DIFF().aiIncome);
   return inc;
 }
 function endDay() {
@@ -330,6 +365,7 @@ function canBuild(t, k) {
 function build(t, k) {
   if (canBuild(t, k)) return false;
   pay(t.owner, BUILDINGS[k].cost); t.built.push(k); t.builtToday = true;
+  if (t.owner === 'player' && G.tut) G.tut.built = true;
   const b = BUILDINGS[k];
   if (b.tier !== undefined) { const u = FACTIONS[t.faction].units[b.tier]; t.avail[u] = (t.avail[u] || 0) + UNITS[u].growth; }
   const h = heroAt(t.x, t.y); if (h && h.owner === t.owner) visitTown(h, t);
@@ -341,6 +377,7 @@ function recruit(t, u, n) {
   if (n <= 0) return 0;
   if (!addUnits(recruitTarget(t), u, n)) return 0;
   t.avail[u] -= n; G.res[t.owner].gold -= n * UNITS[u].cost;
+  if (t.owner === 'player' && G.tut) G.tut.recruited = true;
   return n;
 }
 function hire(t) {
@@ -404,6 +441,7 @@ function checkEnd() {
 
 // ---------- enemy AI ----------
 function aiTownTurn(t) {
+  if (G.cfg && G.cfg.tutorial) return;
   for (const k of AI_BUILD_ORDER) if (build(t, k)) break;
   const ai = G.heroes.filter(h => h.owner === 'ai');
   if (!ai.length || (ai.length < 2 && G.day > 10 && G.res.ai.gold > 6000)) hire(t);
@@ -426,11 +464,11 @@ function aiChoosePath(h) {
     else if (o.kind === 'mine' && o.owner !== 'ai') consider(o.x, o.y, o.mine === 'gold' ? 4000 : 2000);
     else if (o.kind === 'monster' && !avoid(o)) consider(o.x, o.y, 500, true);
   }
-  const grace = G.day < 8; // no attacks on the player during week 1
-  for (const e of G.heroes) if (!grace && e.owner === 'player' && my > armyPower(e.army, e) * 1.3) consider(e.x, e.y, 6000);
+  const grace = G.day < DIFF().grace; // no attacks on the player early on (difficulty)
+  for (const e of G.heroes) if (!grace && e.owner === 'player' && my > armyPower(e.army, e) * DIFF().attack) consider(e.x, e.y, 6000);
   for (const t of G.towns) if (!grace && t.owner === 'player') {
     const th = heroAt(t.x, t.y), dp = armyPower(t.garrison) + (th ? armyPower(th.army, th) : 0);
-    if (my > dp * (t.built.includes('fort') ? 1.5 : 1.2)) consider(t.x, t.y, 30000);
+    if (my > dp * (t.built.includes('fort') ? 1.5 : 1.2) * DIFF().attack / 1.3) consider(t.x, t.y, 30000);
   }
   if (home && (home.x !== h.x || home.y !== h.y)) {
     const threat = G.heroes.some(e => e.owner === 'player' && Math.max(Math.abs(e.x - home.x), Math.abs(e.y - home.y)) < 7 && armyPower(e.army, e) > armyPower(home.garrison));
@@ -445,7 +483,7 @@ function aiStep() {
   if (!A.queue.length) { UI.ai = null; newDay(); return; }
   if (!h) { next(); return; }
   if (!A.path || !A.path.length) { if (A.tries++ > 3 || !(A.path = aiChoosePath(h))) { next(); return; } }
-  const [nx, ny] = A.path[0], c = stepCost(nx, ny, nx - h.x, ny - h.y);
+  const [nx, ny] = A.path[0], c = stepCost(nx, ny, nx - h.x, ny - h.y, h);
   if (h.mp < c) { next(); return; }
   h.mp -= c; h.x = nx; h.y = ny; A.path.shift();
   if (G.fog[ny][nx]) SFX.step();
@@ -472,8 +510,20 @@ function startBattle(ctx) {
       B.units.push({id: side + i, side, type: s.type, count: s.count, start: s.count, tot: s.count * UNITS[s.type].hp, x, y, rx: x, ry: y, gx: x, gy: y, shown: s.count, ph: Math.random() * 2, atk: [], hit: [], deadAt: null, src, alive: true});
     }));
   }
-  for (let k = 0; k < 3; k++) { const x = rnd(3, 6), y = rnd(0, BH - 1); if (!uAt(x, y)) B.obst.add(x + ',' + y); }
+  const town = ctx.def.town;
+  if (town && town.built.includes('fort')) { // SIEGE: walls, gate, arrow towers vs catapult
+    const def = L === 'def' ? 'L' : 'R', cit = town.built.includes('citadel') ? SIEGE.citadelBonus : 0;
+    B.siege = {def, att: def === 'R' ? 'L' : 'R', x: def === 'R' ? 7 : 2, cat: {x: def === 'R' ? 0 : BW - 1, y: BH - 1}, target: null, cells: {},
+      towers: cit ? [0, BH - 1] : [0], towerDmg: cit ? SIEGE.citadelTowerDmg : SIEGE.towerDmg, fire: [], shots: []};
+    for (let y = 0; y < BH; y++) {
+      const kind = y === 3 ? 'gate' : B.siege.towers.includes(y) ? 'tower' : 'wall', hp = (kind === 'gate' ? SIEGE.gateHp : SIEGE.wallHp) + cit;
+      B.siege.cells[y] = {kind, hp, max: hp, shown: hp};
+    }
+    for (const u of B.units) while (wallBlocks(u.x, u.y, u.side) || B.units.some(o => o !== u && o.x === u.x && o.y === u.y)) { u.x += u.side === 'L' ? 1 : -1; u.rx = u.gx = u.x; }
+  }
+  for (let k = 0; k < 3; k++) { const x = rnd(3, 6), y = rnd(0, BH - 1); if (!uAt(x, y) && !(B.siege && Math.abs(x - B.siege.x) <= 1)) B.obst.add(x + ',' + y); }
   UI.ret = UI.mode === 'aiturn' ? 'aiturn' : 'map'; UI.mode = 'battle'; UI.walk = null; UI.preview = null;
+  if (B.siege) { msg(B.siege.att === 'L' ? 'SIEGE! Tap a wall or the gate to aim your catapult, then plan your stacks.' : 'SIEGE! Your walls and towers defend you.'); syncBars(); SFX.hit(); B.sel = firstUnplanned(); return; }
   msg((B.attSide === 'R' ? 'You are attacked! ' : 'Battle! ') + 'Foe: ' + armyText(B.units.filter(u => u.side === 'R')) + '. PLAN your moves.');
   syncBars(); SFX.hit();
   B.sel = firstUnplanned();
@@ -482,8 +532,15 @@ const uAt = (x, y) => B.units.find(u => u.alive && u.x === x && u.y === y);
 const uById = id => B.units.find(u => u.id === id);
 const md = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 const heroOf = side => B.sides[side].hero;
-const moveOf = u => u.slow ? 1 : UNITS[u.type].move + (u.haste ? 2 : 0);
-const free = (x, y) => x >= 0 && y >= 0 && x < BW && y < BH && !B.obst.has(x + ',' + y) && !uAt(x, y);
+const moveOf = u => u.slow ? 1 : UNITS[u.type].move + (u.haste ? 2 : 0) + (u.morale ? 1 : 0);
+function wallBlocks(x, y, side) {
+  const S = B.siege; if (!S) return false;
+  if (x === S.cat.x && y === S.cat.y) return true;
+  if (x !== S.x) return false;
+  const c = S.cells[y]; if (c.kind === 'tower') return true; if (c.hp <= 0) return false;
+  return !(c.kind === 'gate' && side === S.def); // only defenders pass the gate
+}
+const free = (x, y, side) => x >= 0 && y >= 0 && x < BW && y < BH && !B.obst.has(x + ',' + y) && !uAt(x, y) && !wallBlocks(x, y, side);
 const enemyNear = u => B.units.some(o => o.alive && o.side !== u.side && md(o, u) === 1);
 const firstUnplanned = () => (B.units.find(u => u.alive && u.side === 'L' && !B.plans[u.id]) || {}).id || null;
 function reach(u, mv) { // BFS: key -> {d, prev}
@@ -492,7 +549,7 @@ function reach(u, mv) { // BFS: key -> {d, prev}
     const c = q.shift(); if (c.d >= mv) continue;
     for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
       const x = c.x + dx, y = c.y + dy, k = x + ',' + y;
-      if (m.has(k) || !free(x, y)) continue;
+      if (m.has(k) || !free(x, y, u.side)) continue;
       const n = {d: c.d + 1, x, y, prev: c}; m.set(k, n); q.push(n);
     }
   }
@@ -513,6 +570,9 @@ function calcDmg(a, t, ranged) {
   if (ua.skill === 'Charge') d *= 1 + 0.1 * (a.moved || 0);
   if (ut.skill === 'Tough') d *= 0.85;
   if (B.plans[t.id] && B.plans[t.id].t === 'def') d *= 0.7;
+  d *= 1 + skl(ha, ranged ? 'archery' : 'offense') / 100;
+  d *= 1 - skl(ht, 'armorer') / 100;
+  if (a.morale) { d *= 1.2; tags.push('MORALE'); }
   return {dmg: Math.max(1, Math.round(d)), tags};
 }
 function bestSpell(side) {
@@ -537,6 +597,21 @@ function planSide(side, onlyMissing) {
     B.plans[u.id] = {t: 'atk', target: t.id};
   }
   if (!B.spell[side] || !onlyMissing) B.spell[side] = B.spell[side] || bestSpell(side);
+  if (B.siege && B.siege.att === side && !wallIntact(B.siege.target)) B.siege.target = autoWallTarget();
+}
+const wallIntact = y => y != null && B.siege.cells[y] && B.siege.cells[y].kind !== 'tower' && B.siege.cells[y].hp > 0;
+function autoWallTarget() { const ys = [3, 2, 4, 1, 5, 6, 0].filter(wallIntact); return ys.length ? ys[0] : null; }
+// Catapult fires together with spells, before any movement, so a breach can be used this round.
+function siegeFire(out) {
+  const S = B.siege; if (!S) return;
+  const h = heroOf(S.att), shots = skl(h, 'ballistics') >= 30 ? 2 : 1;
+  for (let i = 0; i < shots; i++) {
+    const y = wallIntact(S.target) ? S.target : autoWallTarget(); if (y == null) break;
+    const at = 0.1 + i * 0.4, c = S.cells[y], hit = Math.random() < SIEGE.catapultHit + skl(h, 'ballistics') / 100;
+    S.fire.push(at); B.proj.push({at, dur: 0.45, fx: S.cat.x, fy: S.cat.y, tx: S.x, ty: y, kind: 'boulder', arc: 30});
+    if (hit) { c.hp--; const hp = c.hp; later(at + 0.45, () => { c.shown = hp; SFX.hit(); }); fx({x: S.x, y}, hp <= 0 ? 'BREACH!' : 'HIT', '#f8b800', at + 0.45); out.push('Catapult hit the ' + c.kind + (hp <= 0 ? ' - destroyed' : '')); }
+    else { fx({x: S.x, y}, 'MISS', '#bcbcbc', at + 0.45); out.push('Catapult missed'); }
+  }
 }
 function castSpell(side, out) {
   const s = B.spell[side], h = heroOf(side); if (!s || !h) return;
@@ -561,9 +636,11 @@ function resolveRound() {
   planSide('R'); B.phase = 'resolve'; B.sel = null; B.spellPick = null;
   B.clock = 0; B.ev = []; B.proj = []; B.eff = []; UI.fx = [];
   B.units.forEach(u => { if (!u.alive) u.gone = true; u.atk = []; u.hit = []; });
+  if (B.siege) { B.siege.fire = []; B.siege.shots = []; }
   const out = [];
   // 1. spells
-  castSpell('L', out); castSpell('R', out);
+  castSpell('L', out); castSpell('R', out); siegeFire(out);
+  for (const u of B.units) { const l = skl(heroOf(u.side), 'leadership'); if (u.alive && l && Math.random() * 100 < l) { u.morale = 1; fx(u, 'MORALE!', '#58f8f8', 0.5); } }
   const afterSpell = B.units.map(u => [u, u.count, u.alive]);
   later(0.5, () => afterSpell.forEach(([u, c, a]) => { u.shown = c; if (!a && u.deadAt == null) u.deadAt = B.clock; }));
   // 2. movement, fastest first (ties random)
@@ -592,6 +669,7 @@ function resolveRound() {
       if (enemyNear(u)) { out.push(u.type + ' blocked'); continue; }
       const r = calcDmg(u, t, true); let d = r.dmg;
       if (dist > UNITS[u.type].range) d = Math.ceil(d / 2);
+      if (B.siege && u.side === B.siege.att && (B.siege.def === 'R' ? t.x > B.siege.x : t.x < B.siege.x) && B.siege.cells[t.y].hp > 0) { d = Math.ceil(d / 2); r.tags.push('WALL'); }
       hits.push({a: u, t, d, tags: r.tags});
     } else if (dist === 1) {
       const r = calcDmg(u, t, false); let d = ranged ? Math.ceil(r.dmg / 2) : r.dmg;
@@ -599,8 +677,14 @@ function resolveRound() {
       if (!t.retal) { t.retal = true; const rr = calcDmg(t, u, false); hits.push({a: t, t: u, d: Math.ceil(rr.dmg / 2), tags: ['RETAL']}); }
     }
   }
+  if (B.siege) for (const ty of B.siege.towers) { // arrow towers shoot in the same attack step
+    const foes = B.units.filter(u => u.alive && u.side === B.siege.att); if (!foes.length) break;
+    const t = foes.reduce((b, o) => !b || o.tot * UNITS[o.type].att > b.tot * UNITS[b.type].att ? o : b, null);
+    hits.push({a: null, tower: ty, t, d: B.siege.towerDmg, tags: ['TOWER']});
+  }
   for (const h of hits) {
     h.t.tot -= h.d;
+    if (!h.a) { const at = 1.05, imp = 1.45; B.siege.shots.push({at, y: h.tower}); B.proj.push({at, dur: 0.4, fx: B.siege.x, fy: h.tower, tx: h.t.x, ty: h.t.y, kind: 'arrow'}); h.t.hit.push(imp); fx(h.t, '-' + h.d + ' TOWER', '#fc7460', imp); later(imp, SFX.hit); continue; }
     const ret = h.tags.includes('RETAL'), at = ret ? 1.6 : 1.05, shot = !ret && UNITS[h.a.type].range > 0 && md(h.a, h.t) > 1, imp = at + (shot ? 0.35 : 0.15);
     h.a.atk.push({at, dx: shot ? 0 : Math.sign(h.t.x - h.a.x), dy: shot ? 0 : Math.sign(h.t.y - h.a.y)});
     if (shot) B.proj.push({at, dur: 0.35, fx: h.a.x, fy: h.a.y, tx: h.t.x, ty: h.t.y, kind: h.a.type === 'Archer' ? 'arrow' : 'orb', col: UNITS[h.a.type].col});
@@ -613,7 +697,7 @@ function resolveRound() {
     if (u.tot <= 0) { u.alive = false; u.tot = 0; out.push(u.type + ' destroyed'); }
     else if (UNITS[u.type].skill === 'Regen') u.tot = Math.ceil(u.tot / hp) * hp;
     u.count = Math.ceil(u.tot / hp);
-    u.retal = u.haste = u.slow = 0; u.moved = 0;
+    u.retal = u.haste = u.slow = u.morale = 0; u.moved = 0;
   }
   B.plans = {}; B.spell = {L: null, R: null}; B.round++;
   B.log = hits.length + ' hits. ' + out.join('. ');
@@ -644,7 +728,7 @@ function fx(u, text, col, delay = 0) { UI.fx.push({x: u.x, y: u.y, text, col, t:
 function later(at, fn) { B.ev.push({at, fn}); B.ev.sort((a, b) => a.at - b.at); }
 
 // ---------- view, camera, zoom ----------
-const WW = MW * TS, WH = MH * TS;
+let WW = MW * TS, WH = MH * TS;
 const world = document.createElement('canvas'); world.width = WW; world.height = WH; const wctx = world.getContext('2d');
 const bcv = document.createElement('canvas'); bcv.width = BLW; bcv.height = BLH; const bctx = bcv.getContext('2d');
 const CAM = {x: 0, y: 0, z: 0, dpr: 1, w: 1, h: 1, target: null};
@@ -676,6 +760,7 @@ function setZoom(z, sx = CAM.w / 2, sy = CAM.h / 2) {
 
 // ---------- adventure map rendering (drawn at 16px/tile, then scaled by an integer zoom) ----------
 function ensureLayers() {
+  if (!layers || layers.map !== G.map) { WW = MW * TS; WH = MH * TS; world.width = WW; world.height = WH; $('mini').width = MW * 4; $('mini').height = MH * 4; }
   if (!layers || layers.map !== G.map) layers = {map: G.map, land: SPR.landLayer(G.map), water: [0, 1, 2, 3].map(f => SPR.waterLayer(G.map, f)), fog: document.createElement('canvas'), fogN: -1};
   const n = G.fog.reduce((s, r) => s + r.reduce((a, b) => a + b, 0), 0);
   if (n !== layers.fogN) { layers.fogN = n; drawFog(layers.fog); }
@@ -722,6 +807,8 @@ function renderWorld() {
   G.towns.forEach(t => items.push([t.y + 0.1, () => g.drawImage(SPR.town(t.faction, t.owner, Math.floor(clock * 4) % 2), t.x * TS - 10, t.y * TS - 18)]));
   G.heroes.forEach(h => items.push([rp(h).y + 0.2, () => { const p = rp(h), f = p.moving > 0.02 ? 1 + Math.floor(clock * 8) % 2 : 0; g.drawImage(SPR.hero(h.owner, f, p.face < 0), Math.round(p.x * TS) - 2, Math.round(p.y * TS) - 6); }]));
   items.sort((a, b) => a[0] - b[0]).forEach(i => i[1]());
+  const tt = tutTile();
+  if (tt) { const k = Math.floor(clock * 4) % 2; g.strokeStyle = k ? '#f8b800' : '#fcfcfc'; g.lineWidth = 1; g.strokeRect(tt[0] * TS - 1.5 - k, tt[1] * TS - 1.5 - k, TS + 3 + 2 * k, TS + 3 + 2 * k); }
   g.drawImage(layers.fog, 0, 0);
 }
 function renderMapScreen() {
@@ -760,6 +847,18 @@ function drawBattle(g) {
   const selU = B.sel && uById(B.sel), r = selU && B.phase === 'plan' ? reach(selU, moveOf(selU)) : null;
   if (r) { g.fillStyle = '#fcfc5438'; for (const c of r.values()) if (c.d) g.fillRect(BOX + c.x * CW + 1, BOY + c.y * CW + 1, CW - 1, CW - 1); }
   for (const k of B.obst) { const [x, y] = k.split(',').map(Number); g.drawImage(SPR.boulder(), BOX + x * CW, BOY + y * CW); }
+  if (B.siege) {
+    const S = B.siege, necro = B.ctx.def.town.faction === 'necro';
+    for (let y = 0; y < BH; y++) {
+      const c = S.cells[y], X = BOX + S.x * CW, Y = BOY + y * CW;
+      if (c.kind === 'tower') { const sh = S.shots.some(s => s.y === y && B.clock >= s.at && B.clock < s.at + 0.25); g.drawImage(SPR.tower(necro, sh ? 1 : 0), X, Y - 12); continue; }
+      g.drawImage(SPR.wall(c.kind, c.shown <= 0 ? 2 : c.shown < c.max ? 1 : 0, necro), X, Y);
+      if (c.shown > 0) { g.fillStyle = '#000'; g.fillRect(X + 4, Y + CW - 3, 16, 3); g.fillStyle = '#58d854'; g.fillRect(X + 5, Y + CW - 2, Math.round(14 * c.shown / c.max), 1); }
+    }
+    const fired = S.fire.some(t => B.clock >= t && B.clock < t + 0.3), cimg = SPR.catapult(fired ? 1 : 0);
+    g.drawImage(S.att === 'L' ? cimg : SPR.flip(cimg), BOX + S.cat.x * CW, BOY + S.cat.y * CW);
+    if (B.phase === 'plan' && S.att === 'L' && wallIntact(S.target)) { const k = Math.floor(clock * 4) % 2, [cx, cy] = cellC(S.x, S.target); g.fillStyle = k ? '#f8b800' : '#e40058'; g.fillRect(cx - 7, cy, 5, 1); g.fillRect(cx + 3, cy, 5, 1); g.fillRect(cx, cy - 7, 1, 5); g.fillRect(cx, cy + 3, 1, 5); }
+  }
   if (B.phase === 'plan') {
     for (const id in B.plans) {
       const u = uById(id), p = B.plans[id]; if (!u || u.side !== 'L' || p.t === 'def') continue;
@@ -786,8 +885,9 @@ function drawBattle(g) {
   }
   for (const p of B.proj) {
     const k = (B.clock - p.at) / p.dur; if (k < 0 || k > 1) continue;
-    const [x0, y0] = cellC(p.fx, p.fy), [x1, y1] = cellC(p.tx, p.ty), x = x0 + (x1 - x0) * k, y = y0 + (y1 - y0) * k - Math.sin(k * Math.PI) * 14 - 4;
+    const [x0, y0] = cellC(p.fx, p.fy), [x1, y1] = cellC(p.tx, p.ty), x = x0 + (x1 - x0) * k, y = y0 + (y1 - y0) * k - Math.sin(k * Math.PI) * (p.arc || 14) - 4;
     if (p.kind === 'arrow') { const a = Math.atan2(y1 - y0 - Math.cos(k * Math.PI) * 14 * Math.PI, x1 - x0); for (let i = 0; i < 9; i++) { g.fillStyle = i < 2 ? '#fcfcfc' : i > 6 ? '#e40058' : '#c8a060'; g.fillRect(Math.round(x - Math.cos(a) * i), Math.round(y - Math.sin(a) * i), i < 2 ? 2 : 1, i < 2 ? 2 : 1); } }
+    else if (p.kind === 'boulder') { g.fillStyle = '#000'; g.fillRect(Math.round(x) - 3, Math.round(y) - 3, 6, 6); g.fillStyle = '#8c8c8c'; g.fillRect(Math.round(x) - 2, Math.round(y) - 2, 4, 4); g.fillStyle = '#c8c8c8'; g.fillRect(Math.round(x) - 1, Math.round(y) - 2, 2, 1); }
     else { g.fillStyle = '#000'; g.fillRect(Math.round(x) - 2, Math.round(y) - 2, 5, 5); g.fillStyle = p.col; g.fillRect(Math.round(x) - 1, Math.round(y) - 1, 3, 3); g.fillStyle = '#fcfcfc'; g.fillRect(Math.round(x), Math.round(y), 1, 1); }
   }
   for (const e of B.eff) drawSpellFx(g, e);
@@ -840,7 +940,7 @@ function meter(v, m, c) { return `<div class="meter"><i style="width:${Math.max(
 function updateHud() {
   if (!G) return;
   const h = curHero(), r = G.res.player;
-  const sig = JSON.stringify([r, G.day, h && [h.id, h.mp, h.mana, h.lvl, h.xp, h.att, h.def, h.sp, h.kn, h.army, h.arts.length], myHeroes().map(x => x.id + x.name), G.towns.map(t => t.owner), UI.mode]);
+  const sig = JSON.stringify([r, G.day, h && [h.id, h.mp, h.mana, h.lvl, h.xp, h.att, h.def, h.sp, h.kn, h.army, h.arts.length, h.sk], myHeroes().map(x => x.id + x.name), G.towns.map(t => t.owner), UI.mode]);
   if (sig === hudSig) return; hudSig = sig;
   const inc = income('player');
   $('res').innerHTML = RES.map(k => `<span title="${k} +${inc[k]}/day"><img src="${resImg(k)}" alt="${k}"><b>${r[k]}</b></span>`).join('');
@@ -850,6 +950,7 @@ function updateHud() {
     <div class="stats"><div>ATK<b>${stat(h, 'att')}</b></div><div>DEF<b>${stat(h, 'def')}</b></div><div>POW<b>${stat(h, 'sp')}</b></div><div>KNO<b>${stat(h, 'kn')}</b></div></div>
     <div>MOVE ${h.mp}/${maxMp(h)} ${meter(h.mp, maxMp(h), '#58d854')}MANA ${h.mana}/${maxMana(h)} ${meter(h.mana, maxMana(h), '#3cbcfc')}</div>
     <div class="slots">${Array.from({length: MAX_STACKS}, (_, i) => { const a = h.army[i]; return `<div class="slot" title="${a ? a.count + ' ' + a.type : ''}">${a ? `<img src="${unitImg(a.type)}" alt=""><s>${a.count}</s>` : ''}</div>`; }).join('')}</div>
+    <div class="skl">${Array.from({length: MAX_SKILLS}, (_, i) => { const k = Object.keys(h.sk)[i]; return k ? `<span title="${SKILL_LVL[h.sk[k]]} ${SKILLS[k].name}: ${SKILLS[k].desc(skl(h, k))}">${SKILLS[k].name.slice(0, 5).toUpperCase()}<i>${'I'.repeat(h.sk[k])}</i></span>` : '<span class="e">-</span>'; }).join('')}</div>
     ${h.arts.length ? '<div>ARTIFACTS: ' + h.arts.map(k => ARTIFACTS[k].name).join(', ') + '</div>' : ''}` : '<b>No hero. Hire one at a Tavern.</b>';
   $('sidelists').innerHTML = `<h4>HEROES</h4>${myHeroes().map(x => `<button class="btn ${x === h ? 'y' : 'alt'}" data-a="selhero" data-v="${x.id}">${x.name} LV${x.lvl} (${x.mp} MOVE)</button>`).join('') || '-'}
     <h4>TOWNS</h4>${G.towns.filter(t => t.owner === 'player').map(t => `<button class="btn alt" data-a="opentown" data-v="${t.id}">${t.name}</button>`).join('') || '-'}`;
@@ -892,7 +993,7 @@ function loop(now) {
     if (CAM.target) { const k = 1 - Math.exp(-dt * 6); CAM.x += (CAM.target.x - CAM.x) * k; CAM.y += (CAM.target.y - CAM.y) * k; clampCam(); if (Math.abs(CAM.target.x - CAM.x) + Math.abs(CAM.target.y - CAM.y) < 0.5) CAM.target = null; }
   }
   if (UI.mode === 'title' || !G) renderTitle(); else if (UI.mode === 'battle' && B) renderBattleScreen(); else renderMapScreen();
-  renderMini(dt); updateHud(); syncBars();
+  tutTick(); renderMini(dt); updateHud(); syncBars();
   requestAnimationFrame(loop);
 }
 
@@ -942,6 +1043,7 @@ function openHero() {
   showPanel(() => `<div class="hcard"><img src="${portraitImg(h)}" alt=""><h2>${h.name.toUpperCase()} - LEVEL ${h.lvl}</h2></div>
     <p>XP ${h.xp} / ${xpForLevel(h.lvl)}<br>ATTACK ${stat(h, 'att')} · DEFENSE ${stat(h, 'def')}<br>SPELL POWER ${stat(h, 'sp')} · KNOWLEDGE ${stat(h, 'kn')}<br>
     MOVE ${h.mp}/${maxMp(h)} · MANA ${h.mana}/${maxMana(h)}</p>
+    <h3>SECONDARY SKILLS (${Object.keys(h.sk).length}/${MAX_SKILLS})</h3>${Object.keys(h.sk).map(k => `<div class="it"><div class="t">${SKILL_LVL[h.sk[k]]} ${SKILLS[k].name}<small>${SKILLS[k].desc(skl(h, k))}</small></div></div>`).join('') || '<p>None yet. Gain levels to learn skills.</p>'}
     <h3>ARTIFACTS</h3><p>${h.arts.map(k => ARTIFACTS[k].name + ' (+' + ARTIFACTS[k].val + ' ' + ARTIFACTS[k].stat + ')').join('<br>') || 'None'}</p>
     <h3>SPELLS</h3><p>${h.spells.map(k => SPELLS[k].name + ' - ' + SPELLS[k].desc).join('<br>') || 'None. Build a Mage Guild and visit it.'}</p>
     <h3>ARMY</h3>${h.army.map(a => `<div class="it"><img src="${unitImg(a.type)}" alt=""><div class="t">${a.count} ${a.type}<small>${SKILL_DESC[UNITS[a.type].skill]}</small></div></div>`).join('')}
@@ -949,7 +1051,7 @@ function openHero() {
 }
 function openMenu() {
   const has = !!localStorage.getItem(SAVE_KEY), auto = !!localStorage.getItem(SAVE_KEY + '-auto');
-  showPanel(() => `<h2>MENU</h2><div class="bar">${btn('SAVE', 'save', '', 'g', !G || UI.mode !== 'map')}${btn('LOAD', 'load', '', 'alt', !has)}${btn('LOAD AUTOSAVE', 'loadauto', '', 'alt', !auto)}${btn('NEW GAME', 'new', '', 'y')}${G ? btn('CLOSE', 'close', '', 'g') : ''}</div>
+  showPanel(() => `<h2>MENU</h2><div class="bar">${btn('SAVE', 'save', '', 'g', !G || UI.mode !== 'map')}${btn('LOAD', 'load', '', 'alt', !has)}${btn('LOAD AUTOSAVE', 'loadauto', '', 'alt', !auto)}${btn('NEW GAME', 'new', '', 'y')}${btn('TUTORIAL', 'tutorial', '', 'p')}${G ? btn('CLOSE', 'close', '', 'g') : ''}</div>
     <h3>HOW TO PLAY</h3><p>Explore, grab resources, flag mines and grow your army. Build dwellings in town; creatures grow each week (day 1 of every week).
     Capture the enemy town to win. Lose all towns and heroes and you lose.</p>
     <h3>BATTLE</h3><p>PLAN: tap your stack, then tap an empty tile (move), an enemy (attack) or the stack again (defend). Cast one spell per round with SPELL.
@@ -974,10 +1076,19 @@ const ACTIONS = {
   trade: v => { const [r, m] = v.split(':'), buy = r === 'gems' ? 500 : 250, sell = r === 'gems' ? 100 : 50, R = G.res.player;
     if (m === 'buy' && R.gold >= buy) { R.gold -= buy; R[r]++; } else if (m === 'sell' && R[r] > 0) { R[r]--; R.gold += sell; } refreshPanel(); },
   chest: v => { const h = heroById(UI.panel.chestHero); if (v === 'gold') G.res.player.gold += 1000; else if (h) gainXp(h, 750); UI.panel.sticky = false; closePanel(); },
-  lvl: s => { const h = heroById(UI.panel.lvlHero); if (h) { h[s]++; if (s === 'kn') h.mana += 10; } UI.panel.sticky = false; closePanel(); },
+  lvlp: s => { UI.panel.pick.p = s; refreshPanel(); },
+  lvls: k => { UI.panel.pick.s = k; refreshPanel(); },
+  lvlok: () => { const h = heroById(UI.panel.lvlHero), pk = UI.panel.pick; if (!pk.p || !pk.s) return; if (h) { h[pk.p]++; if (pk.p === 'kn') h.mana += 10; if (pk.s !== '-') h.sk[pk.s] = (h.sk[pk.s] || 0) + 1; } UI.panel.sticky = false; closePanel(); },
   save: () => { localStorage.setItem(SAVE_KEY, JSON.stringify(G)); msg('Game saved'); SFX.pick(); closePanel(); },
   load: () => loadGame(SAVE_KEY), loadauto: () => loadGame(SAVE_KEY + '-auto'),
-  new: () => { UI.panel = null; $('panel').classList.remove('show'); B = null; UI.ai = null; UI.walk = null; UI.preview = null; UI.rpos = {}; UI.levelQ = []; newGame(); CAM.z = 0; hudSig = ''; UI.mode = 'map'; msg('Day 1. Tap a tile to plan a path, tap again to move.'); },
+  new: () => { if (!localStorage.getItem('mh-tut-done')) ACTIONS.tutorial(); else openSetup(); },
+  setup: () => openSetup(),
+  tutorial: () => startGame(() => newTutorial(), 'Tutorial: follow the yellow box.'),
+  setsize: v => { UI.setup.size = v; refreshPanel(); }, setdiff: v => { UI.setup.diff = v; refreshPanel(); },
+  rseed: () => { UI.setup.seed = Math.floor(Math.random() * 1e6); refreshPanel(); },
+  start: () => { const v = parseInt(($('seed') || {}).value, 10); const o = {...UI.setup, seed: Number.isFinite(v) ? v : UI.setup.seed}; startGame(() => newGame(o), 'Day 1 - ' + MAP_SIZES[o.size].name + ' map, ' + DIFFICULTY[o.diff].name + ', seed ' + o.seed); },
+  tutskip: () => { localStorage.setItem('mh-tut-done', '1'); if (G) G.tut = null; $('tut').style.display = 'none'; openSetup(); },
+  tutdone: () => { localStorage.setItem('mh-tut-done', '1'); if (G) G.tut = null; $('tut').style.display = 'none'; openSetup(); },
   cast: k => { closePanel(); if (!B) return; if (!k) { B.spell.L = null; B.spellPick = null; msg('No spell this round'); } else { B.spellPick = k; msg('Tap a target for ' + SPELLS[k].name); SFX.magic(); } },
   endday: () => endDay(), town: () => { const h = curHero(), t = (h && townAt(h.x, h.y) && townAt(h.x, h.y).owner === 'player') ? townAt(h.x, h.y) : G.towns.find(t => t.owner === 'player'); t ? openTown(t) : msg('You have no town!'); },
   hero: () => openHero(), menu: () => openMenu(),
@@ -990,10 +1101,58 @@ const ACTIONS = {
   selhero: id => { G.sel = +id; UI.preview = null; const h = curHero(); if (h) centerOn(h.x, h.y); },
   opentown: id => openTown(G.towns.find(t => t.id === +id)),
 };
+// v0.2 saves (v:2) -> v3: add map config, tutorial state and hero skills
+function migrate(g) {
+  if (g.v === 2) { g.v = 3; g.cfg = {size: 'M', diff: 'normal', seed: null, tutorial: false}; g.tut = null; }
+  g.heroes.forEach(h => h.sk = h.sk || {});
+  setDims(g.map); layers = null;
+  return g;
+}
+function startGame(fn, note) {
+  UI.panel = null; $('panel').classList.remove('show'); B = null; UI.ai = null; UI.walk = null; UI.preview = null; UI.rpos = {}; UI.levelQ = []; UI.fx = [];
+  fn(); layers = null; CAM.z = 0; hudSig = ''; UI.mode = 'map'; msg(note || '');
+}
+function openSetup() {
+  UI.setup = UI.setup || {size: 'M', diff: 'normal', seed: Math.floor(Math.random() * 1e6)};
+  const S = UI.setup;
+  showPanel(() => `<h2>NEW GAME</h2><h3>MAP SIZE</h3><div class="bar">${Object.keys(MAP_SIZES).map(k => btn(MAP_SIZES[k].name + ' ' + MAP_SIZES[k].w + 'x' + MAP_SIZES[k].h, 'setsize', k, S.size === k ? 'y' : 'alt')).join('')}</div>
+    <h3>DIFFICULTY</h3><div class="bar">${Object.keys(DIFFICULTY).map(k => btn(DIFFICULTY[k].name, 'setdiff', k, S.diff === k ? 'y' : 'alt')).join('')}</div>
+    <p>${S.diff === 'easy' ? 'More starting resources, slower and weaker enemy.' : S.diff === 'hard' ? 'Less gold for you, a rich and aggressive enemy.' : 'Even start for both sides.'}</p>
+    <h3>SEED</h3><div class="bar"><input id="seed" inputmode="numeric" value="${S.seed}" style="font:inherit;font-size:11px;width:120px;padding:8px;border:3px solid #000;background:#0f0f1b;color:#fff">${btn('RANDOM', 'rseed', '', 'alt')}</div>
+    <p>Same seed + size = same map. Both sides get a mirrored, fair layout; every town and mine is reachable.</p>
+    <div class="bar" style="margin-top:8px">${btn('START', 'start', '', 'g')}${btn('TUTORIAL', 'tutorial', '', 'p')}${G ? btn('BACK', 'menu', '', 'alt') : ''}</div>`, {sticky: !G});
+}
+// ---------- tutorial: each step completes when the game state shows the player did it ----------
+const objOf = k => G.objs.find(o => o.kind === k);
+const TUT = [
+  {t: 'Tap the GOLD pile once to see the path, then tap it again to walk there and pick it up.', tile: () => objOf('res'), done: () => !objOf('res')},
+  {t: 'Mines pay every day. Walk onto the SAWMILL to put your flag on it.', tile: () => objOf('mine'), done: () => G.objs.some(o => o.kind === 'mine' && o.owner === 'player')},
+  {t: 'Press TOWN (or tap your castle) and BUILD something - the Tavern is cheap.', tile: () => G.towns[0], done: () => G.tut.built},
+  {t: 'Still in town: press ALL next to Peasants to RECRUIT them.', done: () => G.tut.recruited},
+  {t: 'Close the town and walk next to the GOBLINS to start a battle.', tile: () => objOf('monster'), done: () => !!B},
+  {t: 'PLAN phase: tap one of your stacks (left), then tap a Goblin to plan an attack.', done: () => !B || Object.keys(B.plans).length > 0},
+  {t: 'Press SPELL, choose Magic Arrow, then tap a Goblin. Spells hit first in RESOLVE.', done: () => !B || !!B.spell.L || B.round > 1},
+  {t: 'Press RESOLVE: spells, then all moves, then every attack lands at the same time!', done: () => !B || B.round > 1},
+  {t: 'Keep planning (AUTO fills in the rest) and RESOLVE until you win.', done: () => !B && !UI.panel && !objOf('monster')},
+  {t: 'Press END DAY. Your resources come in each morning, creatures grow each week.', done: () => G.day >= 2},
+  {t: 'Tutorial complete! Next: a random map from the setup screen. Capture the enemy town to win.', final: true},
+];
+function tutTile() { if (!G || !G.tut || UI.mode === 'battle') return null; const s = TUT[G.tut.step], o = s && s.tile && s.tile(); return o ? [o.x, o.y] : null; }
+let tutShown = -1;
+function tutTick() {
+  const el = $('tut');
+  if (!G || !G.tut || G.over) { if (el.style.display !== 'none') el.style.display = 'none'; tutShown = -1; return; }
+  const s = TUT[G.tut.step];
+  if (s && !s.final && s.done()) { G.tut.step++; SFX.pick(); return; }
+  if (tutShown !== G.tut.step) {
+    tutShown = G.tut.step; el.style.display = 'block';
+    el.innerHTML = `<b>TUTORIAL ${G.tut.step + 1}/${TUT.length}</b> ${s.t}<div>${s.final ? btn('NEW GAME', 'tutdone', '', 'g') : btn('SKIP', 'tutskip', '', 'alt')}</div>`;
+  }
+}
 function loadGame(key) {
-  try { const g = JSON.parse(localStorage.getItem(key)); if (!g || g.v !== 2) throw 0; G = g; } catch (e) { msg('No valid save'); return; }
+  try { const g = JSON.parse(localStorage.getItem(key)); if (!g || (g.v !== 2 && g.v !== 3)) throw 0; G = migrate(g); } catch (e) { msg('No valid save'); return; }
   UI.panel = null; $('panel').classList.remove('show'); B = null; UI.ai = null; UI.walk = null; UI.preview = null; UI.rpos = {}; UI.levelQ = [];
-  UI.mode = G.over ? 'over' : 'map'; msg('Game loaded - ' + calText(G.day)); CAM.z = 0; hudSig = '';
+  UI.mode = G.over ? 'over' : 'map'; msg('Game loaded - ' + calText(G.day)); CAM.z = 0; hudSig = ''; tutShown = -1;
 }
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-a]'); if (!b || b.disabled) return;
@@ -1005,6 +1164,11 @@ function battleTap(mx, my) {
   const gx = Math.floor((mx - BOX) / CW), gy = Math.floor((my - BOY) / CW);
   if (gx < 0 || gy < 0 || gx >= BW || gy >= BH) return;
   const u = uAt(gx, gy);
+  if (B.siege && gx === B.siege.x && B.siege.att === 'L' && !B.spellPick) {
+    if (wallIntact(gy)) { B.siege.target = gy; msg('Catapult will fire at the ' + B.siege.cells[gy].kind + ' (row ' + (gy + 1) + ')'); SFX.click(); }
+    else msg(B.siege.cells[gy].kind === 'tower' ? 'Towers cannot be targeted' : 'Already destroyed');
+    return;
+  }
   if (B.spellPick) {
     const sp = SPELLS[B.spellPick];
     if (u && (sp.target === 'enemy') === (u.side === 'R')) { B.spell.L = {k: B.spellPick, target: u.id}; msg(sp.name + ' on ' + u.type + ' planned'); }
@@ -1075,6 +1239,6 @@ document.addEventListener('keydown', e => {
 });
 $('mute').onclick = e => { e.stopPropagation(); muted = !muted; localStorage.setItem('mh-mute', muted ? '1' : '0'); $('mute').textContent = muted ? 'MUTE' : 'SND'; };
 $('mute').textContent = muted ? 'MUTE' : 'SND';
-window.MHX = {get G() { return G; }, get B() { return B; }, UI, CAM, ACTIONS, tapMap, battleTap, endDay, resolveRound, cell: (x, y) => [BOX + x * CW + CW / 2, BOY + y * CW + CW / 2], tileToClient: (x, y) => { const r = cv.getBoundingClientRect(); return [r.left + ((x * TS + TS / 2 - CAM.x) * CAM.z) / CAM.dpr, r.top + ((y * TS + TS / 2 - CAM.y) * CAM.z) / CAM.dpr]; }}; // test hook
+window.MHX = {get G() { return G; }, get B() { return B; }, gainXp, flood, get PT() { return PT; }, get ET() { return ET; }, battleToClient: (lx, ly) => { const r = cv.getBoundingClientRect(); return [r.left + (BV.ox + lx * BV.s) / CAM.dpr, r.top + (BV.oy + ly * BV.s) / CAM.dpr]; }, UI, CAM, ACTIONS, tapMap, battleTap, endDay, resolveRound, cell: (x, y) => [BOX + x * CW + CW / 2, BOY + y * CW + CW / 2], tileToClient: (x, y) => { const r = cv.getBoundingClientRect(); return [r.left + ((x * TS + TS / 2 - CAM.x) * CAM.z) / CAM.dpr, r.top + ((y * TS + TS / 2 - CAM.y) * CAM.z) / CAM.dpr]; }}; // test hook
 openMenu();
 requestAnimationFrame(loop);

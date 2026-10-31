@@ -1,52 +1,52 @@
 [
- {
-  "id": "miniheroes",
-  "title": "Mini Heroes",
-  "desc": "Heroes-style strategy: explore, flag mines, build your town, and win plan-then-resolve battles.",
-  "version": "0.3.0",
-  "added": "2026-10-31",
-  "updated": "2026-10-31",
-  "path": "games/miniheroes/",
-  "icon": "⚔️"
- },
- {
-  "id": "skyhop",
-  "title": "Sky Hop",
-  "desc": "Tap to fly, avoid obstacles. The farther you go, the higher the score.",
-  "version": "1.0.0",
-  "added": "2026-10-29",
-  "updated": "2026-10-29",
-  "path": "games/skyhop/",
-  "icon": "🐦"
- },
- {
-  "id": "2048",
-  "title": "2048",
-  "desc": "Merge matching numbers until you reach 2048. Big merges feel great.",
-  "version": "1.0.0",
-  "added": "2026-10-29",
-  "updated": "2026-10-29",
-  "path": "games/2048/",
-  "icon": "💯"
- },
- {
-  "id": "tank",
-  "title": "Tank Fortress",
-  "desc": "Protect the flagged fortress from enemy tanks!",
-  "version": "1.0.0",
-  "added": "2026-10-29",
-  "updated": "2026-10-29",
-  "path": "games/tank/",
-  "icon": "🛡️"
- },
- {
-  "id": "snake",
-  "title": "Snake",
-  "desc": "Eat apples, don't hit the walls or yourself.",
-  "version": "1.2.0",
-  "added": "2026-10-29",
-  "updated": "2026-10-29",
-  "path": "games/snake/",
-  "icon": "🐍"
- }
+  {
+    "id": "miniheroes",
+    "title": "Mini Heroes",
+    "desc": "Heroes-style strategy: explore, flag mines, build your town, and win plan-then-resolve battles.",
+    "version": "0.4.0",
+    "added": "2026-10-31",
+    "updated": "2026-10-31",
+    "path": "games/miniheroes/",
+    "icon": "⚔️"
+  },
+  {
+    "id": "skyhop",
+    "title": "Sky Hop",
+    "desc": "Tap to fly, avoid obstacles. The farther you go, the higher the score.",
+    "version": "1.0.0",
+    "added": "2026-10-29",
+    "updated": "2026-10-29",
+    "path": "games/skyhop/",
+    "icon": "🐦"
+  },
+  {
+    "id": "2048",
+    "title": "2048",
+    "desc": "Merge matching numbers until you reach 2048. Big merges feel great.",
+    "version": "1.0.0",
+    "added": "2026-10-29",
+    "updated": "2026-10-29",
+    "path": "games/2048/",
+    "icon": "💯"
+  },
+  {
+    "id": "tank",
+    "title": "Tank Fortress",
+    "desc": "Protect the flagged fortress from enemy tanks!",
+    "version": "1.0.0",
+    "added": "2026-10-29",
+    "updated": "2026-10-29",
+    "path": "games/tank/",
+    "icon": "🛡️"
+  },
+  {
+    "id": "snake",
+    "title": "Snake",
+    "desc": "Eat apples, don't hit the walls or yourself.",
+    "version": "1.2.0",
+    "added": "2026-10-29",
+    "updated": "2026-10-29",
+    "path": "games/snake/",
+    "icon": "🐍"
+  }
 ]

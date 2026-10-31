@@ -227,6 +227,40 @@ const SPR = (() => {
   }));
   const boulder = () => memo('boulder', () => outline(mk(24, 24, p => { p(3, 10, 18, 12, '#7c7c7c'); p(6, 6, 12, 6, '#9c9c9c'); p(8, 7, 4, 2, '#c8c8c8'); p(3, 19, 18, 3, '#5c5c5c'); p(15, 12, 3, 6, '#6c6c6c'); })));
 
+
+  // ---------- siege: wall segments (state 0 intact, 1 cracked, 2 rubble), gate, tower, catapult ----------
+  const wall = (kind, state, necro) => memo('wall' + kind + state + necro, () => {
+    const st = necro ? '#7c7c8c' : '#b8b0a0', dk = necro ? '#4c4c5c' : '#7c7468', lt = necro ? '#9c9cac' : '#d8d0c0';
+    if (state === 2) return outline(mk(24, 24, p => { p(2, 16, 8, 6, st); p(9, 18, 7, 4, dk); p(14, 14, 8, 8, st); p(5, 13, 5, 4, lt); p(16, 12, 3, 3, lt); p(11, 15, 3, 3, dk); }));
+    return outline(mk(24, 24, p => {
+      if (kind === 'gate') {
+        p(1, 2, 22, 22, st); p(1, 2, 22, 2, lt); for (let i = 0; i < 4; i++) p(1 + i * 6, 0, 4, 3, st);
+        p(5, 7, 14, 17, state ? '#5a3a1a' : '#8b5a2b'); p(5, 7, 14, 1, '#3a2a1a'); for (let i = 0; i < 3; i++) p(6 + i * 5, 8, 1, 16, '#5a3a1a');
+        p(5, 12, 14, 1, '#4c4c4c'); p(5, 19, 14, 1, '#4c4c4c'); if (state) { p(9, 9, 2, 6, '#1a1a1a'); p(12, 14, 3, 5, '#1a1a1a'); }
+        return;
+      }
+      p(3, 3, 18, 21, st); for (let i = 0; i < 3; i++) p(3 + i * 7, 0, 4, 4, st);
+      for (let y = 0; y < 5; y++) for (let x = 0; x < 3; x++) p(3 + x * 6 + (y % 2) * 3, 5 + y * 4, 5, 1, dk);
+      p(3, 3, 18, 1, lt);
+      if (state) { p(8, 6, 1, 4, '#1a1a1a'); p(9, 9, 1, 4, '#1a1a1a'); p(10, 12, 2, 1, '#1a1a1a'); p(15, 14, 1, 5, '#1a1a1a'); p(14, 18, 1, 3, '#1a1a1a'); }
+    }));
+  });
+  const tower = (necro, f) => memo('tower' + necro + f, () => {
+    const st = necro ? '#7c7c8c' : '#b8b0a0', dk = necro ? '#4c4c5c' : '#7c7468', rf = necro ? '#4c2c5c' : '#c84c0c';
+    return outline(mk(24, 36, p => {
+      p(3, 12, 18, 24, st); for (let y = 0; y < 6; y++) p(3 + (y % 2) * 4, 15 + y * 4, 14, 1, dk);
+      p(1, 8, 22, 5, st); for (let i = 0; i < 4; i++) p(1 + i * 6, 5, 4, 3, st);
+      p(10, 16, 4, 6, '#101018'); if (f) { p(11, 17, 2, 3, '#f8b800'); }
+      p(4, 0, 16, 6, rf); p(8, -1, 8, 2, rf);
+    }));
+  });
+  const catapult = f => memo('cata' + f, () => outline(mk(24, 24, p => {
+    p(2, 16, 20, 3, '#8b5a2b'); p(3, 19, 4, 4, '#5a3a1a'); p(17, 19, 4, 4, '#5a3a1a'); p(4, 20, 2, 2, '#bcbcbc'); p(18, 20, 2, 2, '#bcbcbc');
+    p(10, 9, 3, 8, '#6c3c1c');
+    if (f) { for (let i = 0; i < 9; i++) p(11 + Math.round(i * 0.3), 9 - i, 2, 1, '#a0522d'); p(13, 0, 4, 3, '#5a3a1a'); }
+    else { for (let i = 0; i < 10; i++) p(11 - i, 10 + Math.round(i * 0.5), 2, 1, '#a0522d'); p(0, 14, 4, 3, '#5a3a1a'); p(1, 12, 3, 3, '#8c8c8c'); }
+  })));
+
   // ---------- town screen view: skyline showing what has been built ----------
   function townView(cv, t) {
     const w = 240, h = 96; cv.width = w; cv.height = h; const g = cv.getContext('2d'); g.imageSmoothingEnabled = false;
@@ -249,5 +283,5 @@ const SPR = (() => {
     u.forEach((name, i) => { if (B('dw' + (i + 1))) g.drawImage(unit(name, 0, false), 10 + i * 46, 70); });
   }
 
-  return {T, landLayer, waterLayer, pile, chest, artifact, mine, unit, unitFlash, hero, town, portrait, field, boulder, townView};
+  return {wall, tower, catapult, flip, T, landLayer, waterLayer, pile, chest, artifact, mine, unit, unitFlash, hero, town, portrait, field, boulder, townView};
 })();
