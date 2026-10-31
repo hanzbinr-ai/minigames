@@ -17,12 +17,18 @@ canvas{display:block;width:min(96vw,520px);aspect-ratio:4/3;background:#1a2a1a;b
 <div id="armybox"></div>
 <div id="msg"></div>
 <canvas id="c" width="480" height="360"></canvas>
-<div id="hint">Battle: click unit → move or attack<br>Archer can shoot from distance (range 4)</div>
+<div id="hint">Battle: click unit → move/attack<br>Flanking +50% dmg · Archer range 4 · Skills active</div>
 <div id="over"><h2 style="color:#e40058;text-shadow:3px 3px 0 #000;margin:0;font-size:22px">GAME OVER</h2><div id="why"></div><button class="btn" id="again">Play Again</button></div>
 <script>
 const c=document.getElementById('c'),x=c.getContext('2d');
 const W=20,H=15,TILE=24;
-const UNIT={Peasant:{atk:1,def:1,hp:1,dmg:[1,1],range:1},Archer:{atk:2,def:1,hp:2,dmg:[2,3],range:4},Swordsman:{atk:4,def:3,hp:4,dmg:[3,5],range:1},Skeleton:{atk:2,def:1,hp:2,dmg:[1,2],range:1},Zombie:{atk:2,def:2,hp:3,dmg:[2,3],range:1}};
+const UNIT={
+  Peasant:{atk:1,def:1,hp:1,spd:4,dmg:[1,1],range:1,skill:'Swarm'},
+  Archer:{atk:2,def:1,hp:2,spd:5,dmg:[2,3],range:4,skill:'Ranged'},
+  Swordsman:{atk:4,def:3,hp:4,spd:3,dmg:[3,5],range:1,skill:'Cleave'},
+  Skeleton:{atk:2,def:1,hp:2,spd:4,dmg:[1,2],range:1,skill:'Undead'},
+  Zombie:{atk:2,def:2,hp:3,spd:2,dmg:[2,3],range:1,skill:'Tough'}
+};
 let map=[],player,enemies=[],playerTown,enemyTown,gold=500,day=1,moves=0,state='map',combat=null;
 function showMsg(t){document.getElementById('msg').textContent=t; setTimeout(()=>document.getElementById('msg').textContent='',2500)}
 function genMap(){
@@ -186,12 +192,12 @@ function startCombat(enemy){
   combat={enemy,grid:[],selected:null,turn:'player'};
   for(let y=0;y<BH;y++) combat.grid[y]=Array(BW).fill(null);
   player.army.forEach((u,i)=>{
-    if(i<3) combat.grid[1+i][1]={side:'player',type:u.type,count:u.count,hp:UNIT[u.type].hp*u.count};
+    if(i<3) combat.grid[1+i][1]={side:'player',type:u.type,count:u.count,hp:UNIT[u.type].hp*u.count,acted:false};
   });
   enemy.army.forEach((u,i)=>{
-    if(i<3) combat.grid[1+i][6]={side:'enemy',type:u.type,count:u.count,hp:UNIT[u.type].hp*u.count};
+    if(i<3) combat.grid[1+i][6]={side:'enemy',type:u.type,count:u.count,hp:UNIT[u.type].hp*u.count,acted:false};
   });
-  showMsg('Select unit. Archer can shoot far.');
+  showMsg('Select unit. Flank for +50% dmg.');
   draw();
 }
 function drawCombat(){
@@ -207,9 +213,11 @@ function drawCombat(){
     if(u){
       x.fillStyle=u.side==='player'?'#3a7a3a':'#7a3a3a';
       x.fillRect(px+4,py+4,TW-8,TH-8);
-      x.fillStyle='#fff'; x.font='9px monospace';
-      x.fillText(u.type.slice(0,4),px+TW/2,py+16);
-      x.fillText(u.count,px+TW/2,py+28);
+      x.fillStyle='#fff'; x.font='8px monospace';
+      x.fillText(u.type.slice(0,4),px+TW/2,py+14);
+      x.fillText(u.count,px+TW/2,py+24);
+      x.font='7px monospace'; x.fillStyle='#f0c040';
+      x.fillText(UNIT[u.type].skill.slice(0,3),px+TW/2,py+32);
     }
   }
   if(combat.selected){
@@ -218,14 +226,25 @@ function drawCombat(){
     x.lineWidth=1;
   }
   x.fillStyle='#aaa'; x.font='10px monospace';
-  x.fillText(combat.turn==='player'?'Select unit → move or attack (Archer range 4)':'Enemy thinking...',240,340);
+  x.fillText(combat.turn==='player'?'Select → move/attack | Flank +50%':'Enemy turn...',240,340);
   x.textAlign='left';
 }
-function calcDmg(atk,def){
+function isFlanked(defX,defY,atkX,atkY){
+  const dx=Math.sign(atkX-defX), dy=Math.sign(atkY-defY);
+  const behindX=defX-dx, behindY=defY-dy;
+  if(behindX<0||behindY<0||behindX>=8||behindY>=6) return false;
+  const behind=combat.grid[behindY][behindX];
+  return behind && behind.side!==combat.grid[defY][defX].side;
+}
+function calcDmg(atk,def,atkPos,defPos){
   const uA=UNIT[atk.type], uD=UNIT[def.type];
-  const base=uA.dmg[0]+Math.random()*(uA.dmg[1]-uA.dmg[0]);
-  const ratio=uA.atk/(uA.atk+uD.def);
-  return Math.max(1,Math.round(base*ratio*atk.count*0.6));
+  let base=uA.dmg[0]+Math.random()*(uA.dmg[1]-uA.dmg[0]);
+  let ratio=uA.atk/(uA.atk+uD.def);
+  let dmg=base*ratio*atk.count*0.55;
+  if(isFlanked(defPos.x,defPos.y,atkPos.x,atkPos.y)) dmg*=1.5;
+  if(uA.skill==='Cleave' && Math.random()<0.25) dmg*=1.3;
+  if(uD.skill==='Tough') dmg*=0.85;
+  return Math.max(1,Math.round(dmg));
 }
 function canAttack(unit,dist){
   const range=UNIT[unit.type].range||1;
@@ -240,7 +259,7 @@ function doCombatClick(mx,my){
   if(!combat.selected){
     if(cell && cell.side==='player'){
       combat.selected={x:gx,y:gy};
-      showMsg(cell.type+' selected');
+      showMsg(cell.type+' ('+UNIT[cell.type].skill+')');
       draw();
     }
     return;
@@ -248,17 +267,18 @@ function doCombatClick(mx,my){
   const sel=combat.grid[combat.selected.y][combat.selected.x];
   const dist=Math.abs(gx-combat.selected.x)+Math.abs(gy-combat.selected.y);
   if(cell && cell.side==='enemy' && canAttack(sel,dist)){
-    const dmg=calcDmg(sel,cell);
+    const dmg=calcDmg(sel,cell,combat.selected,{x:gx,y:gy});
     cell.hp-=dmg;
     cell.count=Math.max(0,Math.ceil(cell.hp/UNIT[cell.type].hp));
-    showMsg(sel.type+' dealt '+dmg+' dmg');
+    const flank=isFlanked(gx,gy,combat.selected.x,combat.selected.y)?' (Flank!)':'';
+    showMsg(sel.type+' dealt '+dmg+flank);
     if(cell.count<=0) combat.grid[gy][gx]=null;
     combat.selected=null;
     if(!hasUnits('enemy')){ endCombat(true); return; }
     combat.turn='enemy';
     setTimeout(enemyCombatAI,700);
     draw();
-  } else if(!cell && dist<=2){
+  } else if(!cell && dist<=UNIT[sel.type].spd){
     combat.grid[gy][gx]=sel;
     combat.grid[combat.selected.y][combat.selected.x]=null;
     combat.selected=null;
@@ -285,7 +305,7 @@ function enemyCombatAI(){
       if(!t || t.side!=='player') continue;
       const dist=Math.abs(tx-xx)+Math.abs(ty-y);
       if(dist>=1 && dist<=range){
-        const score=calcDmg(u,t);
+        const score=calcDmg(u,t,{x:xx,y},{x:tx,y:ty});
         if(score>bestScore){ bestScore=score; best={ex:xx,ey:y,tx,ty,attack:true}; }
       }
     }
@@ -298,7 +318,7 @@ function enemyCombatAI(){
     const u=combat.grid[best.ey][best.ex];
     if(best.attack){
       const t=combat.grid[best.ty][best.tx];
-      const dmg=calcDmg(u,t);
+      const dmg=calcDmg(u,t,{x:best.ex,y:best.ey},{x:best.tx,y:best.ty});
       t.hp-=dmg;
       t.count=Math.max(0,Math.ceil(t.hp/UNIT[t.type].hp));
       if(t.count<=0) combat.grid[best.ty][best.tx]=null;
@@ -374,6 +394,6 @@ c.onclick=e=>{
   }
 };
 document.getElementById('again').onclick=()=>{document.getElementById('over').classList.remove('show'); init();};
-function init(){ gold=500; day=1; moves=0; genMap(); updateHUD(); state='map'; showMsg('Build Archer Tower for ranged units'); draw(); }
+function init(){ gold=500; day=1; moves=0; genMap(); updateHUD(); state='map'; showMsg('Flank enemies for bonus damage'); draw(); }
 init();
 </script></body></html>
