@@ -97,7 +97,7 @@ function newGame(opts = {}) {
   MW = SZ.w; MH = SZ.h; PT = {x: 2, y: 2}; ET = {x: MW - 3, y: MH - 3};
   const {T, R} = genTerrain(cfg.seed);
   const rnd = (a, b) => a + Math.floor(R() * (b - a + 1)), pick = a => a[Math.floor(R() * a.length)];
-  G = {v: 3, cfg, tut: null, day: 1, map: T, fog: T.map(r => r.map(() => 0)), objs: [], heroes: [], towns: [], sel: null, nid: 1, over: null,
+  G = {v: 4, cfg, tut: null, day: 1, map: T, fog: T.map(r => r.map(() => 0)), objs: [], heroes: [], towns: [], sel: null, nid: 1, over: null,
     res: {player: {...D.player}, ai: {...D.ai}}};
   const k = MW / 24, sc = v => Math.max(2, Math.round(v * k)), rep = Math.max(1, Math.round(MW * MH / 480));
   const id = () => G.nid++;
@@ -151,7 +151,7 @@ function newGame(opts = {}) {
 function newTutorial() {
   const T = TUTORIAL_MAP.map(r => [...r].map(c => ({'.': 0, ',': 1, 'T': 2, '^': 3, '~': 4})[c]));
   setDims(T); ET = {x: 13, y: 9};
-  G = {v: 3, cfg: {size: 'T', diff: 'easy', seed: 0, tutorial: true}, tut: {step: 0}, day: 1, map: T, fog: T.map(r => r.map(() => 0)), objs: [], heroes: [], towns: [], sel: null, nid: 1, over: null,
+  G = {v: 4, cfg: {size: 'T', diff: 'easy', seed: 0, tutorial: true}, tut: {step: 0}, day: 1, map: T, fog: T.map(r => r.map(() => 0)), objs: [], heroes: [], towns: [], sel: null, nid: 1, over: null,
     res: {player: {gold: 6000, wood: 15, ore: 15, gems: 4}, ai: {gold: 0, wood: 0, ore: 0, gems: 0}}};
   const id = () => G.nid++;
   G.towns.push({id: id(), x: PT.x, y: PT.y, owner: 'player', faction: 'castle', name: 'Castlegate', built: ['dw1', 'dw2'], avail: {Peasant: 14, Archer: 9}, garrison: [], builtToday: false});
@@ -162,6 +162,9 @@ function newTutorial() {
   revealAll();
 }
 function mkHero(owner, name, x, y, army) {
+  return Object.assign(mkHero0(owner, name, x, y, army), {tal: {}, tp: 0});
+}
+function mkHero0(owner, name, x, y, army) {
   return {id: G.nid++, owner, name, x, y, lvl: 1, xp: 0, att: 1, def: 1, sp: 1, kn: 1, mp: BASE_MP, mana: 10, spells: [], arts: [], army, sk: {...(START_SKILLS[name] || {})}};
 }
 
@@ -295,8 +298,9 @@ function gainXp(h, n) {
   h.xp += Math.round(n);
   while (h.xp >= xpForLevel(h.lvl)) {
     h.lvl++;
+    h.tp = (h.tp || 0) + 1; h.tal = h.tal || {};
     if (h.owner === 'player') UI.levelQ.push(h.id);
-    else { h[pick(['att', 'def', 'att', 'sp', 'kn'])]++; const o = skillOffers(h)[0]; if (o) h.sk[o] = (h.sk[o] || 0) + 1; }
+    else { aiLearnTalent(h); h[pick(['att', 'def', 'att', 'sp', 'kn'])]++; const o = skillOffers(h)[0]; if (o) h.sk[o] = (h.sk[o] || 0) + 1; }
   }
 }
 const shuffle = a => a.map(v => [Math.random(), v]).sort((x, y) => x[0] - y[0]).map(v => v[1]);
@@ -310,7 +314,7 @@ function nextLevelUp() {
   const h = heroById(UI.levelQ.shift()); if (!h) return nextLevelUp();
   const prim = shuffle(['att', 'def', 'sp', 'kn']).slice(0, 2), sec = skillOffers(h), pickd = {p: null, s: sec.length ? null : '-'};
   SFX.lvl();
-  showPanel(() => `<div class="hcard"><img src="${portraitImg(h)}" alt=""><h2>LEVEL UP! ${h.name} is now level ${h.lvl}</h2></div>
+  showPanel(() => `<div class="hcard"><img src="${portraitImg(h)}" alt=""><h2>LEVEL UP! ${h.name} is now level ${h.lvl}</h2></div><p class="y">+1 TALENT POINT (spend it in HERO &gt; TACTICS TALENTS)</p>
     <h3>1. PRIMARY SKILL</h3><div class="bar">${prim.map(s => btn('+1 ' + STAT_NAMES[s], 'lvlp', s, pickd.p === s ? 'y' : 'alt')).join('')}</div>
     ${sec.length ? `<h3>2. SECONDARY SKILL</h3>` + sec.map(k => { const n = (h.sk[k] || 0) + 1; return `<div class="it"><div class="t">${SKILL_LVL[n]} ${SKILLS[k].name}<small>${SKILLS[k].desc(SKILLS[k].v[n])}</small></div>${btn(pickd.s === k ? 'CHOSEN' : 'PICK', 'lvls', k, pickd.s === k ? 'y' : 'alt')}</div>`; }).join('') : '<p>All skill slots are at Expert.</p>'}
     <div class="bar" style="margin-top:8px">${btn('CONFIRM', 'lvlok', '', 'g', !pickd.p || !pickd.s)}</div>`, {lvlHero: h.id, sticky: true, pick: pickd});
@@ -402,7 +406,7 @@ function fight(h, target, after) {
   startBattle(ctx);
 }
 function autoBattle(ctx) {
-  const all = s => s.arrs.flat(), pa = armyPower(all(ctx.att), ctx.att.hero), pd = armyPower(all(ctx.def), ctx.def.hero);
+  const all = s => s.arrs.flat(), tb = h => h ? 1.1 + 0.04 * Object.keys(h.tal || {}).length : 1, pa = armyPower(all(ctx.att), ctx.att.hero) * tb(ctx.att.hero), pd = armyPower(all(ctx.def), ctx.def.hero) * tb(ctx.def.hero);
   const attWon = pa >= pd * (0.85 + Math.random() * 0.3), [w, l] = attWon ? [ctx.att, ctx.def] : [ctx.def, ctx.att];
   const frac = Math.min(0.9, (attWon ? pd / pa : pa / pd) * 0.6), hp = a => a.reduce((s, x) => s + x.count * UNITS[x.type].hp, 0);
   const lostHp = hp(all(l));
@@ -499,7 +503,7 @@ function aiVisit(h, t) {
 function startBattle(ctx) {
   const L = ctx.def.owner === 'player' ? 'def' : 'att';
   B = {ctx, sides: {L: L === 'att' ? ctx.att : ctx.def, R: L === 'att' ? ctx.def : ctx.att}, attSide: L === 'att' ? 'L' : 'R',
-    round: 1, phase: 'plan', units: [], seed: rnd(1, 1e6), clock: 0, ev: [], proj: [], eff: [], obst: new Set(), plans: {}, spell: {L: null, R: null}, sel: null, spellPick: null, log: ''};
+    round: 1, phase: 'pre', terr: {}, noPlan: null, units: [], seed: rnd(1, 1e6), clock: 0, ev: [], proj: [], eff: [], obst: new Set(), plans: {}, spell: {L: null, R: null}, sel: null, spellPick: null, log: ''};
   B.fort = ctx.def.town && ctx.def.town.built.includes('fort') ? (L === 'def' ? 'L' : 'R') : null;
   const rows = [3, 1, 5, 0, 6, 2, 4];
   for (const side of ['L', 'R']) {
@@ -522,17 +526,18 @@ function startBattle(ctx) {
     for (const u of B.units) while (wallBlocks(u.x, u.y, u.side) || B.units.some(o => o !== u && o.x === u.x && o.y === u.y)) { u.x += u.side === 'L' ? 1 : -1; u.rx = u.gx = u.x; }
   }
   for (let k = 0; k < 3; k++) { const x = rnd(3, 6), y = rnd(0, BH - 1); if (!uAt(x, y) && !(B.siege && Math.abs(x - B.siege.x) <= 1)) B.obst.add(x + ',' + y); }
-  UI.ret = UI.mode === 'aiturn' ? 'aiturn' : 'map'; UI.mode = 'battle'; UI.walk = null; UI.preview = null;
-  if (B.siege) { msg(B.siege.att === 'L' ? 'SIEGE! Tap a wall or the gate to aim your catapult, then plan your stacks.' : 'SIEGE! Your walls and towers defend you.'); syncBars(); SFX.hit(); B.sel = firstUnplanned(); return; }
-  msg((B.attSide === 'R' ? 'You are attacked! ' : 'Battle! ') + 'Foe: ' + armyText(B.units.filter(u => u.side === 'R')) + '. PLAN your moves.');
-  syncBars(); SFX.hit();
-  B.sel = firstUnplanned();
+  UI.ret = UI.mode === 'aiturn' ? 'aiturn' : 'map'; UI.mode = 'battle'; UI.walk = null; UI.preview = null; UI.preSel = null; UI.preTerr = null;
+  B.tac = {L: {tactic: null, form: 'line', terrain: [], reveal: false, intel: 0}, R: {tactic: null, form: 'line', terrain: [], reveal: false, intel: 0}};
+  B.tac.L.intel = intelOf('L'); B.tac.R.intel = intelOf('R');
+  applyFormation('L', 'line'); setTactic('L', knownTactics(heroOf('L'))[0]); aiPre('R');
+  msg((B.siege ? (B.siege.att === 'L' ? 'SIEGE! ' : 'SIEGE! Your walls defend you. ') : B.attSide === 'R' ? 'You are attacked! ' : 'Battle! ') + 'PRE-BATTLE: scout, formation, tactic and terrain, then FIGHT.');
+  $('pre').dataset.sig = ''; syncBars(); SFX.hit(); B.sel = null;
 }
 const uAt = (x, y) => B.units.find(u => u.alive && u.x === x && u.y === y);
 const uById = id => B.units.find(u => u.id === id);
 const md = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 const heroOf = side => B.sides[side].hero;
-const moveOf = u => u.slow ? 1 : UNITS[u.type].move + (u.haste ? 2 : 0) + (u.morale ? 1 : 0);
+const moveOf = u => u.slow ? 1 : Math.max(1, UNITS[u.type].move + (u.haste ? 2 : 0) + (u.morale ? 1 : 0) + (tac(u.side, 'blitz') ? (hasTal(heroOf(u.side), 'grandblitz') ? 2 : 1) : 0) - (tac(otherSide(u.side), 'sabotage') ? 1 : 0));
 function wallBlocks(x, y, side) {
   const S = B.siege; if (!S) return false;
   if (x === S.cat.x && y === S.cat.y) return true;
@@ -548,16 +553,20 @@ function reach(u, mv) { // BFS: key -> {d, prev}
   while (q.length) {
     const c = q.shift(); if (c.d >= mv) continue;
     for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-      const x = c.x + dx, y = c.y + dy, k = x + ',' + y;
-      if (m.has(k) || !free(x, y, u.side)) continue;
-      const n = {d: c.d + 1, x, y, prev: c}; m.set(k, n); q.push(n);
+      const x = c.x + dx, y = c.y + dy, k = x + ',' + y, d = c.d + ((terrAt(x, y) || {}).k === 'quagmire' ? 2 : 1);
+      if (d > mv || (m.has(k) && m.get(k).d <= d) || !free(x, y, u.side)) continue;
+      const n = {d, x, y, prev: c}; m.set(k, n); q.push(n);
     }
   }
   return m;
 }
 function calcDmg(a, t, ranged) {
   const ua = UNITS[a.type], ut = UNITS[t.type], ha = heroOf(a.side), ht = heroOf(t.side);
-  const A = ua.att + (ha ? stat(ha, 'att') : 0), D = ut.def + (ht ? stat(ht, 'def') : 0) + (B.fort === t.side ? 3 : 0);
+  const A = ua.att + (ha ? stat(ha, 'att') : 0);
+  let D = ut.def + (ht ? stat(ht, 'def') : 0) + (B.fort === t.side ? 3 : 0);
+  if (tac(t.side, 'shieldwall')) { const sw = 3 + (hasTal(ht, 'bulwark') ? 2 : 0); if (hasTal(ht, 'phalanx')) D += sw + 5; else if (B.units.some(o => o.alive && o !== t && o.side === t.side && md(o, t) === 1)) D += sw; }
+  if (tac(t.side, 'bloodlust')) D -= 2;
+  if ((terrAt(t.x, t.y) || {}).k === 'raise') D += 3;
   let d = a.count * (ua.dmg[0] + Math.random() * (ua.dmg[1] - ua.dmg[0]));
   d *= A >= D ? 1 + 0.05 * Math.min(60, A - D) : Math.max(0.3, 1 - 0.025 * (D - A));
   const tags = [];
@@ -573,6 +582,13 @@ function calcDmg(a, t, ranged) {
   d *= 1 + skl(ha, ranged ? 'archery' : 'offense') / 100;
   d *= 1 - skl(ht, 'armorer') / 100;
   if (a.morale) { d *= 1.2; tags.push('MORALE'); }
+  if (tac(a.side, 'blitz')) d *= hasTal(ha, 'grandblitz') ? 1.25 : hasTal(ha, 'momentum') ? 1.2 : 1.1;
+  if (tac(a.side, 'bloodlust') && !ranged) d *= 1.25;
+  if (tac(a.side, 'volley') && ranged) d *= 1.3;
+  if (tac(t.side, 'decoy') && ranged) d *= 0.75;
+  if (tac(t.side, 'entrench') && !t.moved) d *= 0.8;
+  if (ranged && md(a, t) > 1 && (terrAt(t.x, t.y) || {}).k === 'fog' && terrAt(t.x, t.y).side === t.side) { d *= 0.5; tags.push('FOG'); }
+  if (a.hidden && tac(a.side, 'ambush')) { d *= 1.5; tags.unshift('AMBUSH'); }
   return {dmg: Math.max(1, Math.round(d)), tags};
 }
 function bestSpell(side) {
@@ -587,7 +603,7 @@ function bestSpell(side) {
   return null;
 }
 function planSide(side, onlyMissing) {
-  const foes = () => B.units.filter(u => u.alive && u.side !== side);
+  const foes = () => B.units.filter(u => u.alive && u.side !== side && !u.hidden);
   for (const u of B.units) {
     if (!u.alive || u.side !== side || (onlyMissing && B.plans[u.id])) continue;
     const f = foes(); if (!f.length) break;
@@ -628,12 +644,15 @@ function castSpell(side, out) {
   t.count = Math.max(0, Math.ceil(t.tot / ut.hp));
 }
 function moveAlong(u, cell) { // walk to a reached cell
-  let c = cell, steps = 0; while (c && c.prev) { steps++; c = c.prev; }
+  let c = cell, steps = 0; const path = []; while (c && c.prev) { steps++; path.push(c); c = c.prev; }
   u.x = cell.x; u.y = cell.y; u.moved = steps;
+  for (const p of path) { const t = terrAt(p.x, p.y); if (t && t.k === 'thorns' && t.side !== u.side) { const h = heroOf(t.side), d = (12 + 6 * (h ? stat(h, 'sp') : 0)) * (hasTal(h, 'brambles') ? 2 : 1); u.tot -= d; fx(u, '-' + d + ' THORNS', '#80d010', 0.6); B.thornHits = (B.thornHits || 0) + 1; if (u.tot <= 0) { u.tot = 0; u.alive = false; } u.count = Math.max(0, Math.ceil(u.tot / UNITS[u.type].hp)); break; } }
 }
 function resolveRound() {
   if (!B || B.phase !== 'plan') return;
-  planSide('R'); B.phase = 'resolve'; B.sel = null; B.spellPick = null;
+  if (B.noPlan !== 'R' || B.round > 1) planSide('R');
+  if (B.noPlan && B.round === 1) { B.units.forEach(u => { if (u.side === B.noPlan) delete B.plans[u.id]; }); B.spell[B.noPlan] = null; }
+  B.phase = 'resolve'; B.sel = null; B.spellPick = null;
   B.clock = 0; B.ev = []; B.proj = []; B.eff = []; UI.fx = [];
   B.units.forEach(u => { if (!u.alive) u.gone = true; u.atk = []; u.hit = []; });
   if (B.siege) { B.siege.fire = []; B.siege.shots = []; }
@@ -668,13 +687,13 @@ function resolveRound() {
     if (ranged && dist > 1) {
       if (enemyNear(u)) { out.push(u.type + ' blocked'); continue; }
       const r = calcDmg(u, t, true); let d = r.dmg;
-      if (dist > UNITS[u.type].range) d = Math.ceil(d / 2);
+      if (dist > rangeOf(u)) d = Math.ceil(d / 2);
       if (B.siege && u.side === B.siege.att && (B.siege.def === 'R' ? t.x > B.siege.x : t.x < B.siege.x) && B.siege.cells[t.y].hp > 0) { d = Math.ceil(d / 2); r.tags.push('WALL'); }
       hits.push({a: u, t, d, tags: r.tags});
     } else if (dist === 1) {
       const r = calcDmg(u, t, false); let d = ranged ? Math.ceil(r.dmg / 2) : r.dmg;
       hits.push({a: u, t, d, tags: r.tags});
-      if (!t.retal) { t.retal = true; const rr = calcDmg(t, u, false); hits.push({a: t, t: u, d: Math.ceil(rr.dmg / 2), tags: ['RETAL']}); }
+      if (!t.retal && !(u.hidden && tac(u.side, 'ambush'))) { t.retal = true; const rr = calcDmg(t, u, false); hits.push({a: t, t: u, d: tac(t.side, 'riposte') ? rr.dmg : Math.ceil(rr.dmg / 2), tags: ['RETAL']}); }
     }
   }
   if (B.siege) for (const ty of B.siege.towers) { // arrow towers shoot in the same attack step
@@ -682,6 +701,8 @@ function resolveRound() {
     const t = foes.reduce((b, o) => !b || o.tot * UNITS[o.type].att > b.tot * UNITS[b.type].att ? o : b, null);
     hits.push({a: null, tower: ty, t, d: B.siege.towerDmg, tags: ['TOWER']});
   }
+  B.lastHits = hits.map(h => ({a: h.a && h.a.id, t: h.t.id, d: h.d, tags: h.tags}));
+  for (const u of B.units) if (u.hidden && B.plans[u.id] && B.plans[u.id].t !== 'def') { u.hidden = false; fx(u, 'AMBUSH!', '#d858f8', 0.9); }
   for (const h of hits) {
     h.t.tot -= h.d;
     if (!h.a) { const at = 1.05, imp = 1.45; B.siege.shots.push({at, y: h.tower}); B.proj.push({at, dur: 0.4, fx: B.siege.x, fy: h.tower, tx: h.t.x, ty: h.t.y, kind: 'arrow'}); h.t.hit.push(imp); fx(h.t, '-' + h.d + ' TOWER', '#fc7460', imp); later(imp, SFX.hit); continue; }
@@ -722,6 +743,144 @@ function endBattle(playerWon) {
     <p>You lost: ${lost}.</p>${playerWon && myXp ? '<p>Experience: +' + Math.round(myXp) + '</p>' : ''}
     <div class="bar"><button class="btn g" data-a="close">OK</button></div>`, {onClose: () => finishFight(ctx, attWon, xpA, xpD)});
 }
+
+// ---------- PRE-BATTLE: intel, formation, tactic, terrain spells (everything lasts the whole battle) ----------
+const otherSide = s => s === 'L' ? 'R' : 'L';
+const hasTal = (h, k) => !!(h && h.tal && h.tal[k]);
+const ALL_TAL = () => Object.values(TALENTS).flat();
+const knownTactics = h => Object.keys(TACTICS).filter(k => TACTICS[k].base || ALL_TAL().some(t => t.unlock === k && hasTal(h, t.k)));
+function talentState(h, br, i) {
+  const t = TALENTS[br][i]; if (hasTal(h, t.k)) return 'have';
+  return (i === 0 || hasTal(h, TALENTS[br][i - 1].k)) && (h.tp || 0) > 0 ? 'open' : 'locked';
+}
+function learnTalent(h, k) {
+  for (const br in TALENTS) { const i = TALENTS[br].findIndex(t => t.k === k); if (i >= 0 && talentState(h, br, i) === 'open') { h.tal[k] = 1; h.tp--; return true; } }
+  return false;
+}
+function aiLearnTalent(h) { const brs = shuffle(Object.keys(TALENTS)); for (const br of brs) { const i = TALENTS[br].findIndex((t, j) => talentState(h, br, j) === 'open'); if (i >= 0) { learnTalent(h, TALENTS[br][i].k); return; } } }
+const baseIntel = h => !h ? 0 : Math.min(2, (h.sk && h.sk.scouting ? (h.sk.scouting >= 3 ? 2 : 1) : 0) + (hasTal(h, 'spymaster') ? 1 : 0));
+const intelOf = side => Math.min(2, baseIntel(heroOf(side)) + (B.tac[side].reveal ? 1 : 0));
+const terrCost = (h, k) => Math.max(1, TERRAIN_SPELLS[k].mana - (hasTal(h, 'geomancer') ? 2 : 0) - (k === 'fog' && hasTal(h, 'mist') ? 2 : 0));
+const revealCost = h => hasTal(h, 'mist') ? 0 : REVEAL.mana;
+const terrAt = (x, y) => B && B.terr && B.terr[x + ',' + y];
+function blunted(side) {
+  const T = B.tac[side], t = T.tactic, o = B.tac[otherSide(side)].tactic, h = heroOf(side); if (!t) return false;
+  if ((t === 'blitz' && hasTal(h, 'grandblitz')) || (t === 'shieldwall' && hasTal(h, 'phalanx'))) return false;
+  if (t === 'ambush' && hasTal(h, 'perfect')) return false;
+  if (o && TACTICS[o].beats.includes(t)) return true;
+  return t === 'ambush' && B.tac[otherSide(side)].intel >= 2;
+}
+const tac = (side, k) => !!(B && B.tac && B.tac[side].tactic === k && !blunted(side));
+const rangeOf = u => UNITS[u.type].range ? UNITS[u.type].range + (tac(u.side, 'volley') ? 1 : 0) + ((terrAt(u.x, u.y) || {}).k === 'raise' ? 2 : 0) : 0;
+// deploy zone = own first 2 columns
+const deployCols = side => side === 'L' ? [1, 0] : [BW - 2, BW - 1];
+const inDeploy = (side, x, y) => deployCols(side).includes(x) && y >= 0 && y < BH && !wallBlocks(x, y, side) && !B.obst.has(x + ',' + y);
+const FORM_SLOTS = {
+  line:   {m: ['F3', 'F1', 'F5', 'F2', 'F4', 'F0', 'F6'], r: ['B3', 'B2', 'B4', 'B1', 'B5', 'B0', 'B6']},
+  wedge:  {m: ['F3', 'B2', 'B4', 'B1', 'B5', 'B0', 'B6'], r: ['B3', 'F2', 'F4', 'F1', 'F5', 'F0', 'F6']},
+  turtle: {m: ['F3', 'F2', 'F4', 'B1', 'B5', 'F1', 'F5'], r: ['B3', 'B2', 'B4', 'B0', 'B6', 'F0', 'F6']},
+};
+function applyFormation(side, kind) {
+  const [F, Bk] = deployCols(side), us = B.units.filter(u => u.alive && u.side === side), taken = new Set();
+  const all = [...FORM_SLOTS[kind].m, ...FORM_SLOTS[kind].r].map(s => [s[0] === 'F' ? F : Bk, +s[1]]);
+  const put = (u, pref) => { for (const [x, y] of [...pref, ...all]) { const k = x + ',' + y; if (!taken.has(k) && inDeploy(side, x, y)) { taken.add(k); u.x = u.rx = u.gx = x; u.y = u.ry = u.gy = y; return; } } };
+  const slots = l => l.map(s => [s[0] === 'F' ? F : Bk, +s[1]]);
+  us.filter(u => !UNITS[u.type].range).forEach(u => put(u, slots(FORM_SLOTS[kind].m)));
+  us.filter(u => UNITS[u.type].range).forEach(u => put(u, slots(FORM_SLOTS[kind].r)));
+  B.tac[side].form = kind;
+}
+function placeTerrain(side, k, x, y) {
+  const h = heroOf(side); if (!h || h.mana < terrCost(h, k)) return false;
+  const cells = TERRAIN_SPELLS[k].cells.map(([dx, dy]) => [x + dx, y + dy]).filter(([cx, cy]) => cx >= 0 && cy >= 0 && cx < BW && cy < BH && !(B.siege && cx === B.siege.x) && !(B.siege && cx === B.siege.cat.x && cy === B.siege.cat.y));
+  if (!cells.length) return false;
+  h.mana -= terrCost(h, k); cells.forEach(([cx, cy]) => { if (k !== 'raise' || !B.obst.has(cx + ',' + cy)) B.terr[cx + ',' + cy] = {k, side}; });
+  B.tac[side].terrain.push({k, x, y, cost: terrCost(h, k)}); return true;
+}
+function clearTerrain(side) {
+  const h = heroOf(side); for (const t of B.tac[side].terrain) if (h) h.mana += t.cost;
+  for (const key in B.terr) if (B.terr[key].side === side) delete B.terr[key];
+  B.tac[side].terrain = [];
+}
+function setTactic(side, k) {
+  const T = B.tac[side]; T.tactic = k;
+  B.units.forEach(u => { if (u.side === side) u.hidden = false; });
+  if (k === 'ambush') B.units.filter(u => u.alive && u.side === side).sort((a, b) => (UNITS[a.type].range - UNITS[b.type].range) || (b.tot - a.tot)).slice(0, 2).forEach(u => u.hidden = true);
+}
+// AI: picks tactic by army make-up; with Intel 2 it also counters the foe's tactic.
+function aiTactic(side) {
+  const h = heroOf(side), foe = otherSide(side), mine = B.units.filter(u => u.alive && u.side === side), them = B.units.filter(u => u.alive && u.side === foe);
+  const share = (l, f) => l.length ? l.filter(f).length / l.length : 0, myR = share(mine, u => UNITS[u.type].range), foeR = share(them, u => UNITS[u.type].range);
+  const foeFast = share(them, u => UNITS[u.type].move >= 4), seen = B.tac[side].intel >= 2 ? B.tac[foe].tactic : null;
+  const base = {blitz: 1.5 + (1 - myR), bloodlust: 1.2 + 1.5 * (1 - myR), volley: 0.5 + 3 * myR, shieldwall: 1.4 + (1 - foeR), riposte: 1 + (1 - foeR), entrench: 0.8 + 2 * myR,
+    ambush: mine.length >= 3 ? 1.6 : 0.5, sabotage: 0.8 + 2 * foeFast, decoy: 0.6 + 3 * foeR};
+  let best = null, bs = -99;
+  for (const k of knownTactics(h)) {
+    let s = base[k] + Math.random() * 0.3;
+    if (seen) { if (TACTICS[k].beats.includes(seen)) s += 5; if (TACTICS[seen].beats.includes(k)) s -= 5; if (k === 'ambush') s -= 3; }
+    if (k === 'ambush' && B.tac[foe].intel >= 2 && !hasTal(h, 'perfect')) s -= 4; // it knows it would be seen through
+    if (s > bs) { bs = s; best = k; }
+  }
+  return best;
+}
+function aiPre(side) {
+  const T = B.tac[side], h = heroOf(side), foe = otherSide(side), them = B.units.filter(u => u.alive && u.side === foe), mine = B.units.filter(u => u.alive && u.side === side);
+  const foeR = them.filter(u => UNITS[u.type].range).length / Math.max(1, them.length), myR = mine.filter(u => UNITS[u.type].range).length / Math.max(1, mine.length);
+  if (h && h.mana >= revealCost(h) && baseIntel(h) < 2 && h.mana > 12) { h.mana -= revealCost(h); T.reveal = true; T.intel = intelOf(side); }
+  applyFormation(side, foeR > 0.5 ? 'wedge' : myR > 0.4 ? 'turtle' : 'line');
+  setTactic(side, aiTactic(side));
+  if (!h) return;
+  const dir = side === 'R' ? -1 : 1, [F] = deployCols(side), budget = () => h.mana - 10;
+  const tryT = (k, x, y) => budget() >= terrCost(h, k) && placeTerrain(side, k, x, y);
+  if (foeR > 0.3) tryT('fog', side === 'R' ? BW - 1 : 1, 3);
+  if (foeR < 0.7) tryT('thorns', F + dir * 3, 3);
+  const shooter = mine.find(u => UNITS[u.type].range); if (shooter) tryT('raise', shooter.x, shooter.y);
+  if (foeR < 0.5) tryT('quagmire', F + dir * 4, 3);
+}
+function aiAdapt(side) { // at FIGHT: an Intel-2 AI sees the player's final tactic and may switch
+  if (B.tac[side].intel < 2 || !B.tac[otherSide(side)].tactic) return false;
+  const old = B.tac[side].tactic, k = aiTactic(side); if (k === old) return false;
+  setTactic(side, k); return true;
+}
+function startFight() {
+  if (!B || B.phase !== 'pre') return;
+  for (const s of ['L', 'R']) B.tac[s].intel = intelOf(s);
+  const adapted = aiAdapt('R');
+  for (const s of ['L', 'R']) { if (!tac(s, 'ambush')) B.units.forEach(u => { if (u.side === s) u.hidden = false; }); if (tac(s, 'ambush') && hasTal(heroOf(s), 'perfect')) B.noPlan = otherSide(s); }
+  B.phase = 'plan'; B.sel = firstUnplanned(); $('pre').style.display = 'none'; UI.preSel = null; UI.preTerr = null;
+  const tn = s => B.tac[s].tactic ? TACTICS[B.tac[s].tactic].name + (blunted(s) ? ' (blunted)' : '') : 'none';
+  msg('FIGHT! Your tactic: ' + tn('L') + '. Enemy: ' + (B.tac.L.intel >= 2 ? tn('R') + (adapted ? ' - they adapted to you!' : '') : 'unknown') + (B.noPlan === 'L' ? ' AMBUSHED: you cannot act in round 1!' : '') + ' PLAN your moves.');
+  SFX.hit();
+}
+const rough = n => n < 5 ? '1-4' : n < 10 ? '5-9' : n < 20 ? '10+' : n < 50 ? '20+' : '50+';
+function renderPre() {
+  const el = $('pre'); if (!B || B.phase !== 'pre') { if (el.style.display !== 'none') el.style.display = 'none'; return; }
+  el.style.display = 'block';
+  const h = heroOf('L'), T = B.tac.L, E = B.tac.R, iv = intelOf('L'), known = knownTactics(h), foes = B.units.filter(u => u.side === 'R' && u.alive);
+  const sig = JSON.stringify([T, E.tactic, E.terrain.length, iv, h && h.mana, UI.preSel, UI.preTerr, B.units.map(u => [u.x, u.y, u.hidden])]);
+  if (sig === el.dataset.sig) return; el.dataset.sig = sig;
+  const tb = k => { const t = TACTICS[k], ok = known.includes(k); return btn((ok ? '' : 'LOCKED ') + t.name, ok ? 'ptac' : 'nop', k, T.tactic === k ? 'y' : 'alt', !ok); };
+  let s = `<h2>PRE-BATTLE${B.siege ? ' - SIEGE' : ''}</h2>
+    <h3>1. SCOUT - INTEL ${iv}</h3><p>${INTEL_DESC[iv]}.<br>${foes.map(u => (iv ? u.count : sizeWord(u.count)) + ' ' + u.type).join(', ')}${iv >= 2 ? `<br><b class="hl">Enemy tactic: ${E.tactic ? TACTICS[E.tactic].name : 'none'}</b><br><b class="hl">Enemy terrain: ${E.terrain.map(t => TERRAIN_SPELLS[t.k].name).join(', ') || 'none'}</b>` : '<br>Enemy tactic: ???'}</p>
+    ${h && iv < 2 && !T.reveal ? `<div class="bar">${btn('REVEAL (' + revealCost(h) + ' mana)', 'preveal', '', 'p', h.mana < revealCost(h))}</div>` : ''}
+    <h3>2. FORMATION</h3><div class="bar">${FORMATIONS.map(f => btn(f.toUpperCase(), 'pform', f, T.form === f ? 'y' : 'alt')).join('')}</div><p>Tap or drag your stacks inside the blue zone to fine-tune.</p>
+    <h3>3. TACTIC (whole battle)</h3>${Object.keys(DOCTRINES).map(d => `<div class="bar"><b style="color:${DOCTRINES[d].col};width:64px">${DOCTRINES[d].name.toUpperCase()}</b>${Object.keys(TACTICS).filter(k => TACTICS[k].doc === d).map(tb).join('')}</div>`).join('')}
+    <p>${T.tactic ? TACTICS[T.tactic].name + ': ' + TACTICS[T.tactic].desc + (TACTICS[T.tactic].beats.length ? '. Blunts ' + TACTICS[T.tactic].beats.map(k => TACTICS[k].name).join(', ') : '') : 'No tactic chosen.'}</p>`;
+  if (T.tactic === 'ambush') s += `<p>Hidden (max 2): ${B.units.filter(u => u.side === 'L' && u.alive).map(u => btn((u.hidden ? 'HIDDEN ' : '') + u.type, 'phide', u.id, u.hidden ? 'p' : 'alt')).join('')}</p>`;
+  s += `<h3>4. TERRAIN SPELLS ${h ? '(mana ' + h.mana + ')' : ''}</h3>${h ? `<div class="bar">${Object.keys(TERRAIN_SPELLS).map(k => btn(TERRAIN_SPELLS[k].name + ' ' + terrCost(h, k), 'pterr', k, UI.preTerr === k ? 'y' : 'p', h.mana < terrCost(h, k))).join('')}${T.terrain.length ? btn('CLEAR', 'pclear', '', 'alt') : ''}</div>
+    <p>${UI.preTerr ? 'Tap the field to place ' + TERRAIN_SPELLS[UI.preTerr].name + ': ' + TERRAIN_SPELLS[UI.preTerr].desc : 'Placed: ' + (T.terrain.map(t => TERRAIN_SPELLS[t.k].name).join(', ') || 'none') + '. Lasts the whole battle.'}</p>` : '<p>No hero - no spells.</p>'}
+    <div class="bar"><button class="btn g" data-a="pfight" style="flex:1">FIGHT!</button></div>`;
+  el.innerHTML = s;
+}
+function preTap(gx, gy) {
+  if (UI.preTerr) { const k = UI.preTerr; if (placeTerrain('L', k, gx, gy)) { SFX.magic(); msg(TERRAIN_SPELLS[k].name + ' placed'); UI.preTerr = null; } else { SFX.bad(); msg('Cannot place there'); } return; }
+  const u = uAt(gx, gy), s = UI.preSel && uById(UI.preSel);
+  if (u && u.side === 'L') { if (s && s !== u) { const [x, y] = [s.x, s.y]; moveUnitTo(s, u.x, u.y); moveUnitTo(u, x, y); UI.preSel = null; SFX.click(); } else { UI.preSel = s === u ? null : u.id; SFX.click(); } return; }
+  if (s && !u && inDeploy('L', gx, gy)) { moveUnitTo(s, gx, gy); UI.preSel = null; SFX.click(); return; }
+  if (u) { msg(B.tac.L.intel || intelOf('L') ? u.count + ' ' + u.type : sizeWord(u.count) + ' ' + u.type); return; }
+  if (s) { msg('Place stacks inside the blue zone'); SFX.bad(); }
+}
+function preDrag(ax, ay, bx, by) { const u = uAt(ax, ay); if (!u || u.side !== 'L') return; UI.preSel = u.id; preTap(bx, by); }
+function moveUnitTo(u, x, y) { u.x = u.gx = x; u.y = u.gy = y; }
 
 // ---------- floating text & battle timeline (all driven by elapsed seconds) ----------
 function fx(u, text, col, delay = 0) { UI.fx.push({x: u.x, y: u.y, text, col, t: -delay, life: 1.1}); }
@@ -831,21 +990,32 @@ function renderMini(dt) {
 
 // ---------- battle rendering (256x202 logical canvas, integer scaled) ----------
 function txt(g, s, x, y, col, align = 'center') { g.font = '8px PS2P, monospace'; g.textAlign = align; g.textBaseline = 'alphabetic'; g.fillStyle = '#000'; g.fillText(s, x + 1, y + 1); g.fillStyle = col; g.fillText(s, x, y); }
+function smallTxt(g, s, x, y, col, align) { g.save(); g.translate(x, y); g.scale(0.62, 0.62); txt(g, s, 0, 0, col, align); g.restore(); }
 function dotLine(g, x0, y0, x1, y1, col) { const n = Math.ceil(Math.hypot(x1 - x0, y1 - y0) / 3); for (let i = 0; i <= n; i++) { const x = Math.round(x0 + (x1 - x0) * i / n), y = Math.round(y0 + (y1 - y0) * i / n); g.fillStyle = '#000'; g.fillRect(x - 1, y - 1, 3, 3); g.fillStyle = col; g.fillRect(x, y, 1, 1); } }
 const cellC = (x, y) => [BOX + x * CW + CW / 2, BOY + y * CW + CW / 2];
 function drawBattle(g) {
   g.imageSmoothingEnabled = false;
   g.drawImage(SPR.field(BLW, BLH, CW, B.seed), 0, 0);
   g.fillStyle = '#10102a'; g.fillRect(0, 0, BLW, BOY - 3); g.fillStyle = '#000'; g.fillRect(0, BOY - 3, BLW, 2);
-  txt(g, 'ROUND ' + (B.phase === 'plan' ? B.round : B.round - 1) + ' - ' + (B.phase === 'plan' ? 'PLAN' : 'RESOLVE'), BLW / 2, 10, B.phase === 'plan' ? '#f8b800' : '#58d854');
+  txt(g, B.phase === 'pre' ? 'PRE-BATTLE' : 'ROUND ' + (B.phase === 'plan' ? B.round : B.round - 1) + ' - ' + (B.phase === 'plan' ? 'PLAN' : 'RESOLVE'), BLW / 2, 10, B.phase === 'resolve' ? '#58d854' : '#f8b800');
   const hl = heroOf('L'), hr = heroOf('R');
   txt(g, hl ? hl.name + ' ' + hl.mana + 'MP' : 'GARRISON', 3, 20, '#3cbcfc', 'left');
   txt(g, hr ? hr.name : (B.sides.R.monster ? 'NEUTRALS' : 'GARRISON'), BLW - 3, 20, '#e40058', 'right');
+  const tl = s => { const t = B.tac[s].tactic; if (s === 'R' && B.tac.L.intel < 2) return '???'; return t ? TACTICS[t].name.toUpperCase() + (blunted(s) ? '-X' : '') : '-'; };
+  smallTxt(g, tl('L'), 3, 8, blunted('L') ? '#888' : '#f8b800', 'left'); smallTxt(g, tl('R'), BLW - 3, 8, blunted('R') ? '#888' : '#f8b800', 'right');
   g.fillStyle = '#00000030';
   for (let x = 0; x <= BW; x++) g.fillRect(BOX + x * CW, BOY, 1, BH * CW);
   for (let y = 0; y <= BH; y++) g.fillRect(BOX, BOY + y * CW, BW * CW, 1);
   const selU = B.sel && uById(B.sel), r = selU && B.phase === 'plan' ? reach(selU, moveOf(selU)) : null;
   if (r) { g.fillStyle = '#fcfc5438'; for (const c of r.values()) if (c.d) g.fillRect(BOX + c.x * CW + 1, BOY + c.y * CW + 1, CW - 1, CW - 1); }
+  const seeTerr = t => t.side === 'L' || B.phase !== 'pre' || B.tac.L.intel >= 2, fr = Math.floor(clock * 2) % 2;
+  for (const key in B.terr) { const t = B.terr[key], [x, y] = key.split(',').map(Number); if (t.k !== 'fog' && seeTerr(t)) g.drawImage(SPR.terr(t.k, fr), BOX + x * CW, BOY + y * CW); }
+  if (B.phase === 'pre') {
+    const a = 0.16 + 0.08 * Math.sin(clock * 4); g.fillStyle = `rgba(60,188,252,${a})`;
+    for (const x of deployCols('L')) for (let y = 0; y < BH; y++) if (inDeploy('L', x, y)) g.fillRect(BOX + x * CW + 1, BOY + y * CW + 1, CW - 1, CW - 1);
+    if (UI.preTerr) { g.fillStyle = '#d858f820'; g.fillRect(BOX, BOY, BW * CW, BH * CW); }
+    const su = UI.preSel && uById(UI.preSel); if (su) { g.strokeStyle = '#f8b800'; g.lineWidth = 1; g.strokeRect(BOX + su.x * CW + 0.5, BOY + su.y * CW + 0.5, CW - 1, CW - 1); }
+  }
   for (const k of B.obst) { const [x, y] = k.split(',').map(Number); g.drawImage(SPR.boulder(), BOX + x * CW, BOY + y * CW); }
   if (B.siege) {
     const S = B.siege, necro = B.ctx.def.town.faction === 'necro';
@@ -866,18 +1036,19 @@ function drawBattle(g) {
       const [x0, y0] = cellC(u.x, u.y), [x1, y1] = cellC(t.x, t.y); dotLine(g, x0, y0, x1, y1, p.t === 'atk' ? '#e40058' : '#58d854');
     }
   }
-  const vis = B.units.filter(u => !u.gone && (u.alive || u.deadAt == null || B.clock < u.deadAt + 0.6)).sort((a, b) => a.ry - b.ry);
+  const vis = B.units.filter(u => !u.gone && !(u.hidden && u.side === 'R') && (u.alive || u.deadAt == null || B.clock < u.deadAt + 0.6)).sort((a, b) => a.ry - b.ry);
   for (const u of vis) {
     let X = BOX + u.rx * CW, Y = BOY + u.ry * CW - 4, f = Math.floor(clock * 2 + u.ph) % 2, flash = false;
     for (const a of u.atk) { const k = (B.clock - a.at) / 0.3; if (k >= 0 && k <= 1) { f = 2; X += a.dx * Math.sin(k * Math.PI) * 7; Y += a.dy * Math.sin(k * Math.PI) * 7; } }
     for (const h of u.hit) { const k = B.clock - h; if (k >= 0 && k < 0.22) { flash = Math.floor(k * 20) % 2 === 0; X += Math.floor(k * 40) % 2 ? 1 : -1; } }
     const dying = u.deadAt != null && B.clock >= u.deadAt;
     if (dying) { const k = Math.min(1, (B.clock - u.deadAt) / 0.6); g.globalAlpha = 1 - k; Y += k * 6; }
+    else if (u.hidden) g.globalAlpha = 0.45 + 0.1 * Math.sin(clock * 5);
     g.fillStyle = '#00000050'; g.fillRect(Math.round(X) + 5, BOY + u.ry * CW + 19, 14, 2); g.fillRect(Math.round(X) + 7, BOY + u.ry * CW + 21, 10, 1);
     g.drawImage((flash ? SPR.unitFlash : SPR.unit)(u.type, f, u.side === 'R'), Math.round(X), Math.round(Y));
     g.globalAlpha = 1;
     if (!dying) {
-      const s = String(u.shown), w = s.length * 6 + 3, bx = Math.round(X) + (u.side === 'L' ? CW - w : 0), by = BOY + u.ry * CW + CW - 8;
+      const s = u.side === 'R' && !(B.tac.L.intel >= 1) ? rough(u.shown) : String(u.shown), w = s.length * 6 + 3, bx = Math.round(X) + (u.side === 'L' ? CW - w : 0), by = BOY + u.ry * CW + CW - 8;
       g.fillStyle = '#000'; g.fillRect(bx, by, w, 9); g.fillStyle = u.side === 'L' ? '#2050c0' : '#a00030'; g.fillRect(bx + 1, by + 1, w - 2, 7);
       g.font = '8px PS2P, monospace'; g.textAlign = 'left'; g.fillStyle = '#fcfcfc'; g.save(); g.translate(bx + 2, by + 8); g.scale(0.75, 0.875); g.fillText(s, 0, 0); g.restore();
       if (B.phase === 'plan' && B.plans[u.id] && B.plans[u.id].t === 'def' && u.side === 'L') { g.fillStyle = '#000'; g.fillRect(X + 1, Y + 3, 7, 8); g.fillStyle = '#f8b800'; g.fillRect(X + 2, Y + 4, 5, 5); g.fillRect(X + 3, Y + 9, 3, 1); }
@@ -890,6 +1061,7 @@ function drawBattle(g) {
     else if (p.kind === 'boulder') { g.fillStyle = '#000'; g.fillRect(Math.round(x) - 3, Math.round(y) - 3, 6, 6); g.fillStyle = '#8c8c8c'; g.fillRect(Math.round(x) - 2, Math.round(y) - 2, 4, 4); g.fillStyle = '#c8c8c8'; g.fillRect(Math.round(x) - 1, Math.round(y) - 2, 2, 1); }
     else { g.fillStyle = '#000'; g.fillRect(Math.round(x) - 2, Math.round(y) - 2, 5, 5); g.fillStyle = p.col; g.fillRect(Math.round(x) - 1, Math.round(y) - 1, 3, 3); g.fillStyle = '#fcfcfc'; g.fillRect(Math.round(x), Math.round(y), 1, 1); }
   }
+  for (const key in B.terr) { const t = B.terr[key], [x, y] = key.split(',').map(Number); if (t.k === 'fog' && seeTerr(t)) { g.globalAlpha = 0.42; g.drawImage(SPR.terr('fog', fr), BOX + x * CW, BOY + y * CW); g.globalAlpha = 1; } }
   for (const e of B.eff) drawSpellFx(g, e);
   for (const f of UI.fx) if (f.t >= 0) { const [x, y] = cellC(f.x, f.y); txt(g, f.text, x, y - 10 - Math.round(f.t * 16), f.col); }
   if (B.phase === 'plan') {
@@ -909,8 +1081,9 @@ function drawSpellFx(g, e) {
 }
 function renderBattleScreen() {
   drawBattle(bctx);
-  const s = Math.max(1, Math.floor(Math.min(CAM.w / BLW, CAM.h / BLH)));
-  BV = {s, ox: Math.floor((CAM.w - BLW * s) / 2), oy: Math.floor((CAM.h - BLH * s) / 2)};
+  const pe = $('pre'), pre = B.phase === 'pre' && pe.style.display !== 'none', wide = pre && innerWidth >= 900, pw = wide ? pe.offsetWidth * CAM.dpr : 0, ph = pre && !wide ? pe.offsetHeight * CAM.dpr : 0;
+  const aw = CAM.w - pw, ah = CAM.h - ph, s = Math.max(1, Math.floor(Math.min(aw / BLW, ah / BLH)));
+  BV = {s, ox: Math.floor((aw - BLW * s) / 2), oy: Math.max(0, Math.floor((ah - BLH * s) / 2))};
   ctx.imageSmoothingEnabled = false; ctx.fillStyle = '#10101e'; ctx.fillRect(0, 0, CAM.w, CAM.h);
   ctx.drawImage(bcv, BV.ox, BV.oy, BLW * s, BLH * s);
 }
@@ -958,6 +1131,7 @@ function updateHud() {
 function syncBars() {
   const b = UI.mode === 'battle';
   $('battlebar').style.display = b ? 'contents' : 'none';
+  document.querySelectorAll('#battlebar .btn').forEach(e => e.disabled = !!(b && B && B.phase === 'pre' && e.dataset.a !== 'binfo'));
   $('mapbar').style.display = b ? 'none' : 'contents';
   $('zoom').style.display = b || UI.mode === 'title' ? 'none' : 'flex';
   $('chip').style.visibility = b || UI.mode === 'title' ? 'hidden' : 'visible';
@@ -993,7 +1167,7 @@ function loop(now) {
     if (CAM.target) { const k = 1 - Math.exp(-dt * 6); CAM.x += (CAM.target.x - CAM.x) * k; CAM.y += (CAM.target.y - CAM.y) * k; clampCam(); if (Math.abs(CAM.target.x - CAM.x) + Math.abs(CAM.target.y - CAM.y) < 0.5) CAM.target = null; }
   }
   if (UI.mode === 'title' || !G) renderTitle(); else if (UI.mode === 'battle' && B) renderBattleScreen(); else renderMapScreen();
-  tutTick(); renderMini(dt); updateHud(); syncBars();
+  renderPre(); tutTick(); renderMini(dt); updateHud(); syncBars();
   requestAnimationFrame(loop);
 }
 
@@ -1044,6 +1218,8 @@ function openHero() {
     <p>XP ${h.xp} / ${xpForLevel(h.lvl)}<br>ATTACK ${stat(h, 'att')} · DEFENSE ${stat(h, 'def')}<br>SPELL POWER ${stat(h, 'sp')} · KNOWLEDGE ${stat(h, 'kn')}<br>
     MOVE ${h.mp}/${maxMp(h)} · MANA ${h.mana}/${maxMana(h)}</p>
     <h3>SECONDARY SKILLS (${Object.keys(h.sk).length}/${MAX_SKILLS})</h3>${Object.keys(h.sk).map(k => `<div class="it"><div class="t">${SKILL_LVL[h.sk[k]]} ${SKILLS[k].name}<small>${SKILLS[k].desc(skl(h, k))}</small></div></div>`).join('') || '<p>None yet. Gain levels to learn skills.</p>'}
+    <h3>TACTICS TALENTS (${h.tp || 0} point${h.tp === 1 ? '' : 's'})</h3><div class="tal">${Object.keys(TALENTS).map(br => `<div><b style="color:${DOCTRINES[br].col}">${DOCTRINES[br].name.toUpperCase()}</b>${TALENTS[br].map((t, i) => { const st = talentState(h, br, i); return `<button class="btn sb ${st === 'have' ? 'g' : st === 'open' ? 'y' : 'alt'}${t.ult ? ' ult' : ''}" data-a="tal" data-v="${t.k}" ${st !== 'open' ? 'disabled' : ''} title="${t.desc}">${t.name}<small>${t.desc}</small></button>`; }).join('')}</div>`).join('')}</div>
+    <p>Tactics known: ${knownTactics(h).map(k => TACTICS[k].name).join(', ')}</p>
     <h3>ARTIFACTS</h3><p>${h.arts.map(k => ARTIFACTS[k].name + ' (+' + ARTIFACTS[k].val + ' ' + ARTIFACTS[k].stat + ')').join('<br>') || 'None'}</p>
     <h3>SPELLS</h3><p>${h.spells.map(k => SPELLS[k].name + ' - ' + SPELLS[k].desc).join('<br>') || 'None. Build a Mage Guild and visit it.'}</p>
     <h3>ARMY</h3>${h.army.map(a => `<div class="it"><img src="${unitImg(a.type)}" alt=""><div class="t">${a.count} ${a.type}<small>${SKILL_DESC[UNITS[a.type].skill]}</small></div></div>`).join('')}
@@ -1055,6 +1231,7 @@ function openMenu() {
     <h3>HOW TO PLAY</h3><p>Explore, grab resources, flag mines and grow your army. Build dwellings in town; creatures grow each week (day 1 of every week).
     Capture the enemy town to win. Lose all towns and heroes and you lose.</p>
     <h3>BATTLE</h3><p>PLAN: tap your stack, then tap an empty tile (move), an enemy (attack) or the stack again (defend). Cast one spell per round with SPELL.
+    PRE-BATTLE (before round 1): scout (Intel 0-2), set your formation, pick one tactic and cast terrain spells. All of these last the whole battle.
     RESOLVE: spells, then moves (fastest first), then all attacks hit at the same time. Melee targets strike back at half damage. Attacking from the opposite side of an ally = FLANK x1.5.</p>`, {sticky: !G});
 }
 function openSpells() {
@@ -1099,12 +1276,21 @@ const ACTIONS = {
   zin: () => setZoom(CAM.z + 1), zout: () => setZoom(CAM.z - 1),
   center: () => { const h = curHero(); if (h) centerOn(h.x, h.y); },
   selhero: id => { G.sel = +id; UI.preview = null; const h = curHero(); if (h) centerOn(h.x, h.y); },
+  pfight: () => startFight(), nop: () => {},
+  ptac: k => { if (B && B.phase === 'pre') { setTactic('L', k); SFX.click(); } },
+  pform: f => { if (B && B.phase === 'pre') { applyFormation('L', f); SFX.click(); } },
+  phide: id => { const u = B && uById(id); if (!u) return; if (u.hidden) u.hidden = false; else if (B.units.filter(o => o.side === 'L' && o.hidden).length < 2) u.hidden = true; else msg('Max 2 hidden stacks'); },
+  pterr: k => { UI.preTerr = UI.preTerr === k ? null : k; if (UI.preTerr) msg('Tap the field to place ' + TERRAIN_SPELLS[k].name); },
+  pclear: () => { clearTerrain('L'); UI.preTerr = null; },
+  preveal: () => { const h = heroOf('L'); if (h && h.mana >= revealCost(h) && !B.tac.L.reveal) { h.mana -= revealCost(h); B.tac.L.reveal = true; B.tac.L.intel = intelOf('L'); SFX.magic(); msg('Reveal! Intel ' + B.tac.L.intel); } },
+  tal: k => { const h = curHero(); if (h && learnTalent(h, k)) { SFX.lvl(); msg(ALL_TAL().find(t => t.k === k).name + ' learned!'); } refreshPanel(); },
   opentown: id => openTown(G.towns.find(t => t.id === +id)),
 };
 // v0.2 saves (v:2) -> v3: add map config, tutorial state and hero skills
 function migrate(g) {
   if (g.v === 2) { g.v = 3; g.cfg = {size: 'M', diff: 'normal', seed: null, tutorial: false}; g.tut = null; }
-  g.heroes.forEach(h => h.sk = h.sk || {});
+  if (g.v === 3) g.v = 4;
+  g.heroes.forEach(h => { h.sk = h.sk || {}; if (!h.tal) { h.tal = {}; h.tp = Math.max(0, h.lvl - 1); } });
   setDims(g.map); layers = null;
   return g;
 }
@@ -1130,6 +1316,7 @@ const TUT = [
   {t: 'Press TOWN (or tap your castle) and BUILD something - the Tavern is cheap.', tile: () => G.towns[0], done: () => G.tut.built},
   {t: 'Still in town: press ALL next to Peasants to RECRUIT them.', done: () => G.tut.recruited},
   {t: 'Close the town and walk next to the GOBLINS to start a battle.', tile: () => objOf('monster'), done: () => !!B},
+  {t: 'PRE-BATTLE: pick a FORMATION and a TACTIC (try Blitz), optionally cast a terrain spell, then press FIGHT!', done: () => !B || B.phase !== 'pre'},
   {t: 'PLAN phase: tap one of your stacks (left), then tap a Goblin to plan an attack.', done: () => !B || Object.keys(B.plans).length > 0},
   {t: 'Press SPELL, choose Magic Arrow, then tap a Goblin. Spells hit first in RESOLVE.', done: () => !B || !!B.spell.L || B.round > 1},
   {t: 'Press RESOLVE: spells, then all moves, then every attack lands at the same time!', done: () => !B || B.round > 1},
@@ -1150,7 +1337,7 @@ function tutTick() {
   }
 }
 function loadGame(key) {
-  try { const g = JSON.parse(localStorage.getItem(key)); if (!g || (g.v !== 2 && g.v !== 3)) throw 0; G = migrate(g); } catch (e) { msg('No valid save'); return; }
+  try { const g = JSON.parse(localStorage.getItem(key)); if (!g || ![2, 3, 4].includes(g.v)) throw 0; G = migrate(g); } catch (e) { msg('No valid save'); return; }
   UI.panel = null; $('panel').classList.remove('show'); B = null; UI.ai = null; UI.walk = null; UI.preview = null; UI.rpos = {}; UI.levelQ = [];
   UI.mode = G.over ? 'over' : 'map'; msg('Game loaded - ' + calText(G.day)); CAM.z = 0; hudSig = ''; tutShown = -1;
 }
@@ -1160,10 +1347,11 @@ document.addEventListener('click', e => {
 });
 $('panel').addEventListener('click', e => { if (e.target.id === 'panel') closePanel(); });
 function battleTap(mx, my) {
-  if (B.phase !== 'plan') return;
   const gx = Math.floor((mx - BOX) / CW), gy = Math.floor((my - BOY) / CW);
   if (gx < 0 || gy < 0 || gx >= BW || gy >= BH) return;
-  const u = uAt(gx, gy);
+  if (B.phase === 'pre') { preTap(gx, gy); return; }
+  if (B.phase !== 'plan') return;
+  const u0 = uAt(gx, gy), u = u0 && u0.hidden && u0.side === 'R' ? null : u0;
   if (B.siege && gx === B.siege.x && B.siege.att === 'L' && !B.spellPick) {
     if (wallIntact(gy)) { B.siege.target = gy; msg('Catapult will fire at the ' + B.siege.cells[gy].kind + ' (row ' + (gy + 1) + ')'); SFX.click(); }
     else msg(B.siege.cells[gy].kind === 'tower' ? 'Towers cannot be targeted' : 'Already destroyed');
@@ -1194,7 +1382,7 @@ const ptrs = new Map(); let drag = null;
 const pinchDist = () => { const [a, b] = [...ptrs.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
 cv.addEventListener('pointerdown', e => {
   cv.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, {x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY});
-  if (ptrs.size === 1) drag = {moved: false}; else if (ptrs.size === 2) drag = {moved: true, pinch: pinchDist(), z: CAM.z};
+  if (ptrs.size === 1) drag = {moved: false, sx: e.clientX, sy: e.clientY}; else if (ptrs.size === 2) drag = {moved: true, pinch: pinchDist(), z: CAM.z};
 });
 cv.addEventListener('pointermove', e => {
   const p = ptrs.get(e.pointerId); if (!p || !drag) return;
@@ -1212,10 +1400,12 @@ function ptrEnd(e) {
   if (!ptrs.has(e.pointerId)) return;
   ptrs.delete(e.pointerId);
   if (e.type === 'pointerup' && drag && !drag.moved && !ptrs.size) tapAt(e.clientX, e.clientY);
+  else if (e.type === 'pointerup' && drag && drag.moved && !drag.pinch && UI.mode === 'battle' && B && B.phase === 'pre') { const a = toCell(drag.sx, drag.sy), b = toCell(e.clientX, e.clientY); if (a && b) preDrag(a[0], a[1], b[0], b[1]); }
   if (!ptrs.size) drag = null;
 }
 cv.addEventListener('pointerup', ptrEnd); cv.addEventListener('pointercancel', ptrEnd);
 cv.addEventListener('wheel', e => { e.preventDefault(); if (UI.mode === 'battle' || UI.mode === 'title') return; const r = cv.getBoundingClientRect(); setZoom(CAM.z + (e.deltaY < 0 ? 1 : -1), (e.clientX - r.left) * CAM.dpr, (e.clientY - r.top) * CAM.dpr); }, {passive: false});
+function toCell(cx, cy) { const r = cv.getBoundingClientRect(), mx = ((cx - r.left) * CAM.dpr - BV.ox) / BV.s, my = ((cy - r.top) * CAM.dpr - BV.oy) / BV.s, gx = Math.floor((mx - BOX) / CW), gy = Math.floor((my - BOY) / CW); return gx >= 0 && gy >= 0 && gx < BW && gy < BH ? [gx, gy] : null; }
 function tapAt(cx, cy) {
   if (UI.panel) return;
   const r = cv.getBoundingClientRect(), sx = (cx - r.left) * CAM.dpr, sy = (cy - r.top) * CAM.dpr;
@@ -1228,6 +1418,7 @@ $('fs').onclick = e => { e.stopPropagation(); const d = document; if (d.fullscre
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') { closePanel(); return; }
   if (UI.panel) return;
+  if (UI.mode === 'battle' && B && B.phase === 'pre') { if (e.key === 'Enter') startFight(); return; }
   if (UI.mode === 'battle') { if (e.key === 'Enter' || e.key === ' ') resolveRound(); if (e.key === 'a') ACTIONS.auto(); if (e.key === 's') ACTIONS.spell(); return; }
   if (e.key === '+' || e.key === '=') { setZoom(CAM.z + 1); return; } if (e.key === '-') { setZoom(CAM.z - 1); return; }
   if (UI.mode !== 'map') return;
@@ -1239,6 +1430,6 @@ document.addEventListener('keydown', e => {
 });
 $('mute').onclick = e => { e.stopPropagation(); muted = !muted; localStorage.setItem('mh-mute', muted ? '1' : '0'); $('mute').textContent = muted ? 'MUTE' : 'SND'; };
 $('mute').textContent = muted ? 'MUTE' : 'SND';
-window.MHX = {get G() { return G; }, get B() { return B; }, gainXp, flood, get PT() { return PT; }, get ET() { return ET; }, battleToClient: (lx, ly) => { const r = cv.getBoundingClientRect(); return [r.left + (BV.ox + lx * BV.s) / CAM.dpr, r.top + (BV.oy + ly * BV.s) / CAM.dpr]; }, UI, CAM, ACTIONS, tapMap, battleTap, endDay, resolveRound, cell: (x, y) => [BOX + x * CW + CW / 2, BOY + y * CW + CW / 2], tileToClient: (x, y) => { const r = cv.getBoundingClientRect(); return [r.left + ((x * TS + TS / 2 - CAM.x) * CAM.z) / CAM.dpr, r.top + ((y * TS + TS / 2 - CAM.y) * CAM.z) / CAM.dpr]; }}; // test hook
+window.MHX = {get G() { return G; }, get B() { return B; }, fight, startFight, tac, blunted, moveOf, calcDmg, intelOf, knownTactics, learnTalent, reach, uById, loadGame, applyFormation, placeTerrain, curHero, gainXp, flood, get PT() { return PT; }, get ET() { return ET; }, battleToClient: (lx, ly) => { const r = cv.getBoundingClientRect(); return [r.left + (BV.ox + lx * BV.s) / CAM.dpr, r.top + (BV.oy + ly * BV.s) / CAM.dpr]; }, UI, CAM, ACTIONS, tapMap, battleTap, endDay, resolveRound, cell: (x, y) => [BOX + x * CW + CW / 2, BOY + y * CW + CW / 2], tileToClient: (x, y) => { const r = cv.getBoundingClientRect(); return [r.left + ((x * TS + TS / 2 - CAM.x) * CAM.z) / CAM.dpr, r.top + ((y * TS + TS / 2 - CAM.y) * CAM.z) / CAM.dpr]; }}; // test hook
 openMenu();
 requestAnimationFrame(loop);

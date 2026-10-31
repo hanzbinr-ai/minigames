@@ -261,6 +261,13 @@ const SPR = (() => {
     else { for (let i = 0; i < 10; i++) p(11 - i, 10 + Math.round(i * 0.5), 2, 1, '#a0522d'); p(0, 14, 4, 3, '#5a3a1a'); p(1, 12, 3, 3, '#8c8c8c'); }
   })));
 
+  // ---------- terrain spells (24x24 battle tiles, 2 animation frames) ----------
+  const terr = (k, f) => memo('terr' + k + f, () => mk(24, 24, p => {
+    if (k === 'quagmire') { p(1, 3, 22, 19, '#2c4a2c'); p(3, 5, 18, 15, '#3c5c34'); p(5, 8, 14, 8, '#24402c'); for (let i = 0; i < 5; i++) p(3 + i * 4, 4 + (i % 2) * 15, 2, 3, '#6c8c3c'); p(7 + f * 6, 10 - f, 3, 3, '#5c7c4c'); p(14 - f * 5, 13 + f, 2, 2, '#7c9c5c'); p(4, 12, 1, 6, '#8cac4c'); p(19, 6, 1, 6, '#8cac4c'); }
+    if (k === 'raise') { p(2, 14, 20, 8, '#6c4c2c'); p(5, 9, 14, 6, '#8c6c3c'); p(8, 5, 8, 5, '#a8845a'); p(10, 4, 4, 1, '#c8a878'); p(4, 21, 16, 1, '#3a2a1a'); p(6 + f, 12, 2, 1, '#5c3c1c'); p(15 - f, 17, 3, 1, '#5c3c1c'); p(9, 6, 2, 2, '#58a038'); }
+    if (k === 'thorns') { for (let i = 0; i < 6; i++) { const x = 2 + i * 4, y = 6 + ((i * 7) % 11); p(x, y, 1, 14 - (i % 3) * 3, '#2c5c1c'); p(x - 1, y + 3, 3, 1, '#4c8c2c'); p(x + 1, y + 1 + f, 1, 1, '#e8e8b0'); p(x - 1, y + 6 - f, 1, 1, '#e8e8b0'); } p(3, 20, 18, 2, '#3c2c1c'); p(9 + f * 2, 9, 2, 2, '#c02040'); }
+    if (k === 'fog') { for (let i = 0; i < 8; i++) p(((i * 9 + f * 3) % 20), 2 + i * 3, 10, 3, i % 2 ? '#d8d8e8' : '#b8b8d0'); }
+  }));
   // ---------- town screen view: skyline showing what has been built ----------
   function townView(cv, t) {
     const w = 240, h = 96; cv.width = w; cv.height = h; const g = cv.getContext('2d'); g.imageSmoothingEnabled = false;
@@ -283,5 +290,5 @@ const SPR = (() => {
     u.forEach((name, i) => { if (B('dw' + (i + 1))) g.drawImage(unit(name, 0, false), 10 + i * 46, 70); });
   }
 
-  return {wall, tower, catapult, flip, T, landLayer, waterLayer, pile, chest, artifact, mine, unit, unitFlash, hero, town, portrait, field, boulder, townView};
+  return {terr, wall, tower, catapult, flip, T, landLayer, waterLayer, pile, chest, artifact, mine, unit, unitFlash, hero, town, portrait, field, boulder, townView};
 })();

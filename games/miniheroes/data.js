@@ -128,3 +128,53 @@ const TUTORIAL_MAP = [
   '.^^.............',
   '................',
 ];
+
+// ---------- Pre-battle: tactics, terrain spells, intel, talents (all last the WHOLE battle) ----------
+// Doctrines hold 3 tactics each. 'base' tactics are always known, others unlock via talents.
+// beats: tactics this one blunts (the blunted tactic gives no bonus for the whole battle).
+const DOCTRINES = {offense: {name: 'Offense', col: '#e40058'}, defense: {name: 'Defense', col: '#3cbcfc'}, trickery: {name: 'Trickery', col: '#d858f8'}};
+const TACTICS = {
+  blitz:      {doc: 'offense',  name: 'Blitz',       base: true, beats: ['sabotage'],   desc: '+1 move and +10% damage for all your stacks'},
+  bloodlust:  {doc: 'offense',  name: 'Bloodlust',   beats: ['decoy'],                  desc: '+25% melee damage, but -2 defense'},
+  volley:     {doc: 'offense',  name: 'Volley',      beats: ['riposte'],                desc: 'Shooters +30% damage and +1 range'},
+  shieldwall: {doc: 'defense',  name: 'Shield Wall', base: true, beats: ['blitz'],      desc: '+3 defense to stacks next to an ally'},
+  riposte:    {doc: 'defense',  name: 'Riposte',     beats: ['bloodlust'],              desc: 'Retaliation hits at full damage'},
+  entrench:   {doc: 'defense',  name: 'Entrench',    beats: ['ambush'],                 desc: 'Stacks that did not move take -20% damage'},
+  ambush:     {doc: 'trickery', name: 'Ambush',      base: true, beats: [],             desc: 'Up to 2 stacks hidden until they act; first strike +50% and no retaliation. Seen through by Intel 2'},
+  sabotage:   {doc: 'trickery', name: 'Sabotage',    beats: ['shieldwall'],             desc: 'Enemy stacks -1 move'},
+  decoy:      {doc: 'trickery', name: 'Decoys',      beats: ['volley'],                 desc: 'Enemy shooters deal -25% damage'},
+};
+// Terrain spells: cast in the pre-battle screen, permanent for this battle. cells = shape offsets around the tapped tile.
+const TERRAIN_SPELLS = {
+  quagmire: {name: 'Quagmire',   mana: 4, cells: [[0, -1], [0, 0], [0, 1]], desc: 'Swamp: entering a tile costs 2 move (both sides)'},
+  raise:    {name: 'Raise Earth', mana: 4, cells: [[0, 0]], desc: 'Hill: stack on it +3 defense, shooters +2 range'},
+  fog:      {name: 'Fog',        mana: 5, cells: [[-1, -1], [0, -1], [-1, 0], [0, 0], [-1, 1], [0, 1]], desc: 'Your stacks in fog take -50% from enemy shots at range'},
+  thorns:   {name: 'Thorns',     mana: 5, cells: [[0, -1], [0, 0], [0, 1]], desc: 'Enemies entering take 12 + 6xSP damage'},
+};
+const REVEAL = {name: 'Reveal', mana: 3, desc: '+1 Intel for this battle'};
+const INTEL_DESC = ['Rough counts only', 'Exact units and counts', 'Exact counts + enemy tactic and terrain spells'];
+// Talent tree: 3 branches x 4 tiers + ultimate (tier 5). 1 point per level; a tier needs the one before it.
+const TALENTS = {
+  offense: [
+    {k: 'drill',     name: 'Drill',       desc: 'Unlock Bloodlust tactic', unlock: 'bloodlust'},
+    {k: 'momentum',  name: 'Momentum',    desc: 'Blitz: +10% more damage'},
+    {k: 'marksmen',  name: 'Marksmen',    desc: 'Unlock Volley tactic', unlock: 'volley'},
+    {k: 'brambles',  name: 'Bramble Lore', desc: 'Thorns deal double damage'},
+    {k: 'grandblitz', name: 'GRAND BLITZ', ult: true, desc: 'Blitz: +2 move, +25% damage, cannot be blunted'},
+  ],
+  defense: [
+    {k: 'parry',     name: 'Parry Drill', desc: 'Unlock Riposte tactic', unlock: 'riposte'},
+    {k: 'bulwark',   name: 'Bulwark',     desc: 'Shield Wall: +2 more defense'},
+    {k: 'trenches',  name: 'Trenches',    desc: 'Unlock Entrench tactic', unlock: 'entrench'},
+    {k: 'geomancer', name: 'Geomancer',   desc: 'Terrain spells cost 2 less mana'},
+    {k: 'phalanx',   name: 'IRON PHALANX', ult: true, desc: 'Shield Wall: all stacks +5 defense, cannot be blunted'},
+  ],
+  trickery: [
+    {k: 'saboteur',  name: 'Saboteur',    desc: 'Unlock Sabotage tactic', unlock: 'sabotage'},
+    {k: 'spymaster', name: 'Spymaster',   desc: '+1 Intel in every battle'},
+    {k: 'decoys',    name: 'Decoy Craft', desc: 'Unlock Decoys tactic', unlock: 'decoy'},
+    {k: 'mist',      name: 'Mist Weaver', desc: 'Fog costs 2 less and Reveal is free'},
+    {k: 'perfect',   name: 'PERFECT AMBUSH', ult: true, desc: 'Ambush cannot be seen through; enemy cannot plan round 1'},
+  ],
+};
+const FORMATIONS = ['line', 'wedge', 'turtle'];
