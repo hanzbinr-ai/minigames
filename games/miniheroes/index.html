@@ -17,11 +17,12 @@ canvas{display:block;width:min(96vw,520px);aspect-ratio:4/3;background:#1a2a1a;b
 <div id="armybox"></div>
 <div id="msg"></div>
 <canvas id="c" width="480" height="360"></canvas>
-<div id="hint">Move onto yellow castle to manage Town<br>Buildings unlock units · +50 gold every 5 moves</div>
+<div id="hint">Battle: click your unit, then click empty tile to move or enemy to attack<br>Adjacent attack only</div>
 <div id="over"><h2 style="color:#e40058;text-shadow:3px 3px 0 #000;margin:0;font-size:22px">GAME OVER</h2><div id="why"></div><button class="btn" id="again">Play Again</button></div>
 <script>
 const c=document.getElementById('c'),x=c.getContext('2d');
 const W=20,H=15,TILE=24;
+const UNIT={Peasant:{atk:1,def:1,hp:1,dmg:[1,1]},Archer:{atk:2,def:1,hp:2,dmg:[2,3]},Swordsman:{atk:4,def:3,hp:4,dmg:[3,5]},Skeleton:{atk:2,def:1,hp:2,dmg:[1,2]},Zombie:{atk:2,def:2,hp:3,dmg:[2,3]}};
 let map=[],player,enemies=[],playerTown,enemyTown,gold=500,day=1,moves=0,state='map',combat=null;
 function showMsg(t){document.getElementById('msg').textContent=t; setTimeout(()=>document.getElementById('msg').textContent='',2500)}
 function genMap(){
@@ -133,7 +134,6 @@ function moveTo(tx,ty){
   updateHUD();
 }
 function enemyIncome(){
-  // Enemy recruits if possible
   if(enemyTown.buildings.includes('Barracks') && Math.random()<0.6){
     let e=enemies[0];
     if(e){
@@ -182,51 +182,130 @@ function enemyTurn(){
 }
 function startCombat(enemy){
   state='combat';
-  combat={enemy,playerUnits:JSON.parse(JSON.stringify(player.army)),enemyUnits:JSON.parse(JSON.stringify(enemy.army)),turn:'player'};
-  showMsg('Combat!');
+  const BW=8, BH=6;
+  combat={enemy,grid:[],selected:null,turn:'player'};
+  for(let y=0;y<BH;y++) combat.grid[y]=Array(BW).fill(null);
+  player.army.forEach((u,i)=>{
+    if(i<3) combat.grid[1+i][1]={side:'player',type:u.type,count:u.count,hp:UNIT[u.type].hp*u.count};
+  });
+  enemy.army.forEach((u,i)=>{
+    if(i<3) combat.grid[1+i][6]={side:'enemy',type:u.type,count:u.count,hp:UNIT[u.type].hp*u.count};
+  });
+  showMsg('Tactical Battle! Select your unit.');
   draw();
 }
 function drawCombat(){
-  x.fillStyle='#12121e'; x.fillRect(0,0,480,360);
-  x.fillStyle='#f0c040'; x.font='16px monospace'; x.textAlign='center';
-  x.fillText('COMBAT',240,28);
-  x.font='12px monospace';
-  x.fillText('YOUR ARMY',120,55);
-  x.fillText('ENEMY',360,55);
-  combat.playerUnits.forEach((u,i)=>{
-    x.fillStyle='#3a7a3a'; x.fillRect(30,70+i*42,180,36);
-    x.fillStyle='#fff'; x.fillText(u.type+'  x'+u.count,120,92+i*42);
-  });
-  combat.enemyUnits.forEach((u,i)=>{
-    x.fillStyle='#7a3a3a'; x.fillRect(270,70+i*42,180,36);
-    x.fillStyle='#fff'; x.fillText(u.type+'  x'+u.count,360,92+i*42);
-  });
-  x.fillStyle='#f0c040'; x.font='13px monospace';
-  x.fillText(combat.turn==='player'?'Your turn — click enemy':'Enemy turn...',240,330);
+  x.fillStyle='#1a1a2e'; x.fillRect(0,0,480,360);
+  x.fillStyle='#f0c040'; x.font='14px monospace'; x.textAlign='center';
+  x.fillText('TACTICAL BATTLE',240,22);
+  const TW=40, TH=36, ox=80, oy=40;
+  for(let y=0;y<6;y++) for(let xx=0;xx<8;xx++){
+    const px=ox+xx*TW, py=oy+y*TH;
+    x.fillStyle='#2a2a3a'; x.fillRect(px+1,py+1,TW-2,TH-2);
+    x.strokeStyle='#444'; x.strokeRect(px,py,TW,TH);
+    const u=combat.grid[y][xx];
+    if(u){
+      x.fillStyle=u.side==='player'?'#3a7a3a':'#7a3a3a';
+      x.fillRect(px+4,py+4,TW-8,TH-8);
+      x.fillStyle='#fff'; x.font='9px monospace';
+      x.fillText(u.type.slice(0,4),px+TW/2,py+16);
+      x.fillText(u.count,px+TW/2,py+28);
+    }
+  }
+  if(combat.selected){
+    x.strokeStyle='#f0c040'; x.lineWidth=2;
+    x.strokeRect(ox+combat.selected.x*TW, oy+combat.selected.y*TH, TW, TH);
+    x.lineWidth=1;
+  }
+  x.fillStyle='#aaa'; x.font='10px monospace';
+  x.fillText(combat.turn==='player'?'Select unit → click tile to move / enemy to attack':'Enemy thinking...',240,340);
   x.textAlign='left';
+}
+function calcDmg(atk,def){
+  const uA=UNIT[atk.type], uD=UNIT[def.type];
+  const base=uA.dmg[0]+Math.random()*(uA.dmg[1]-uA.dmg[0]);
+  const ratio=uA.atk/(uA.atk+uD.def);
+  return Math.max(1,Math.round(base*ratio*atk.count*0.6));
 }
 function doCombatClick(mx,my){
   if(combat.turn!=='player') return;
-  combat.enemyUnits.forEach((u,i)=>{
-    if(mx>270 && mx<450 && my>70+i*42 && my<106+i*42){
-      const dmg=5+Math.floor(Math.random()*6);
-      u.count=Math.max(0,u.count-dmg);
-      if(u.count<=0) combat.enemyUnits.splice(i,1);
-      if(!combat.enemyUnits.length){ endCombat(true); return; }
-      combat.turn='enemy';
-      setTimeout(enemyCombatTurn,600);
+  const TW=40, TH=36, ox=80, oy=40;
+  const gx=Math.floor((mx-ox)/TW), gy=Math.floor((my-oy)/TH);
+  if(gx<0||gy<0||gx>=8||gy>=6) return;
+  const cell=combat.grid[gy][gx];
+  if(!combat.selected){
+    if(cell && cell.side==='player'){
+      combat.selected={x:gx,y:gy};
+      showMsg('Unit selected');
       draw();
     }
-  });
+    return;
+  }
+  const sel=combat.grid[combat.selected.y][combat.selected.x];
+  const dist=Math.abs(gx-combat.selected.x)+Math.abs(gy-combat.selected.y);
+  if(cell && cell.side==='enemy' && dist===1){
+    const dmg=calcDmg(sel,cell);
+    cell.hp-=dmg;
+    cell.count=Math.max(0,Math.ceil(cell.hp/UNIT[cell.type].hp));
+    showMsg('Dealt '+dmg+' dmg');
+    if(cell.count<=0) combat.grid[gy][gx]=null;
+    combat.selected=null;
+    if(!hasUnits('enemy')){ endCombat(true); return; }
+    combat.turn='enemy';
+    setTimeout(enemyCombatAI,700);
+    draw();
+  } else if(!cell && dist<=2){
+    combat.grid[gy][gx]=sel;
+    combat.grid[combat.selected.y][combat.selected.x]=null;
+    combat.selected=null;
+    combat.turn='enemy';
+    setTimeout(enemyCombatAI,700);
+    draw();
+  } else {
+    combat.selected=null;
+    draw();
+  }
 }
-function enemyCombatTurn(){
-  if(!combat.playerUnits.length){ endCombat(false); return; }
-  const target=combat.playerUnits[0];
-  const dmg=3+Math.floor(Math.random()*5);
-  target.count=Math.max(0,target.count-dmg);
-  if(target.count<=0) combat.playerUnits.shift();
-  if(!combat.playerUnits.length){ endCombat(false); return; }
-  if(!combat.enemyUnits.length){ endCombat(true); return; }
+function hasUnits(side){
+  for(let y=0;y<6;y++) for(let xx=0;xx<8;xx++) if(combat.grid[y][xx]?.side===side) return true;
+  return false;
+}
+function enemyCombatAI(){
+  let best=null, bestScore=-1;
+  for(let y=0;y<6;y++) for(let xx=0;xx<8;xx++){
+    const u=combat.grid[y][xx];
+    if(!u || u.side!=='enemy') continue;
+    for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++){
+      if(dx===0&&dy===0) continue;
+      const nx=xx+dx, ny=y+dy;
+      if(nx<0||ny<0||nx>=8||ny>=6) continue;
+      const t=combat.grid[ny][nx];
+      if(t && t.side==='player'){
+        const score=calcDmg(u,t);
+        if(score>bestScore){ bestScore=score; best={ex:xx,ey:y,tx:nx,ty:ny,attack:true}; }
+      }
+    }
+    if(!best){
+      const tx=xx-1;
+      if(tx>=0 && !combat.grid[y][tx]) best={ex:xx,ey:y,tx,ty:y,attack:false};
+    }
+  }
+  if(best){
+    const u=combat.grid[best.ey][best.ex];
+    if(best.attack){
+      const t=combat.grid[best.ty][best.tx];
+      const dmg=calcDmg(u,t);
+      t.hp-=dmg;
+      t.count=Math.max(0,Math.ceil(t.hp/UNIT[t.type].hp));
+      if(t.count<=0) combat.grid[best.ty][best.tx]=null;
+      showMsg('Enemy dealt '+dmg);
+    } else {
+      combat.grid[best.ty][best.tx]=u;
+      combat.grid[best.ey][best.ex]=null;
+    }
+  }
+  if(!hasUnits('player')){ endCombat(false); return; }
+  if(!hasUnits('enemy')){ endCombat(true); return; }
   combat.turn='player';
   draw();
 }
@@ -235,7 +314,12 @@ function endCombat(win){
     gold+=80;
     player.exp+=20;
     if(player.exp>=40){ player.level++; player.exp=0; showMsg('Level Up!'); }
-    player.army=combat.playerUnits.filter(u=>u.count>0);
+    const remaining=[];
+    for(let y=0;y<6;y++) for(let xx=0;xx<8;xx++){
+      const u=combat.grid[y][xx];
+      if(u && u.side==='player' && u.count>0) remaining.push({type:u.type,count:u.count});
+    }
+    player.army=remaining;
     enemies=enemies.filter(e=>e!==combat.enemy);
     showMsg('Victory! +80 Gold');
     if(!enemies.length){ gameOver(true); return; }
@@ -286,6 +370,6 @@ c.onclick=e=>{
   }
 };
 document.getElementById('again').onclick=()=>{document.getElementById('over').classList.remove('show'); init();};
-function init(){ gold=500; day=1; moves=0; genMap(); updateHUD(); state='map'; showMsg('Build Barracks to recruit Peasants'); draw(); }
+function init(){ gold=500; day=1; moves=0; genMap(); updateHUD(); state='map'; showMsg('Build Barracks to recruit'); draw(); }
 init();
 </script></body></html>
