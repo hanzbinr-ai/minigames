@@ -17,7 +17,7 @@ canvas{display:block;width:min(96vw,520px);aspect-ratio:4/3;background:#1a2a1a;b
 <div id="armybox"></div>
 <div id="msg"></div>
 <canvas id="c" width="480" height="360"></canvas>
-<div id="hint">Enter your town to build/recruit/garrison<br>Enter enemy town to view or attack garrison</div>
+<div id="hint">Build → Recruit → Garrison<br>Enter enemy town to attack garrison</div>
 <div id="over"><h2 style="color:#e40058;text-shadow:3px 3px 0 #000;margin:0;font-size:22px">GAME OVER</h2><div id="why"></div><button class="btn" id="again">Play Again</button></div>
 <script>
 const c=document.getElementById('c'),x=c.getContext('2d');
@@ -82,32 +82,46 @@ function drawTown(){
   const town=viewTown||playerTown;
   const isPlayer=town.owner==='player';
   x.fillStyle='#12121e'; x.fillRect(0,0,480,360);
-  x.fillStyle=isPlayer?'#f0c040':'#e04040'; x.font='18px monospace'; x.textAlign='center';
-  x.fillText(isPlayer?'YOUR TOWN':'ENEMY TOWN',240,32);
-  x.font='12px monospace'; x.fillStyle='#fff';
-  x.fillText('Buildings: '+town.buildings.join(', '),240,54);
+  x.fillStyle=isPlayer?'#f0c040':'#e04040'; x.font='16px monospace'; x.textAlign='center';
+  x.fillText(isPlayer?'YOUR TOWN':'ENEMY TOWN',240,26);
+  x.font='11px monospace'; x.fillStyle='#fff';
+  x.fillText('Buildings: '+town.buildings.join(', '),240,44);
   if(isPlayer){
     const builds=[
-      {name:'Barracks', cost:200, unlock:'Peasant'},
-      {name:'Archer Tower', cost:300, unlock:'Archer'},
-      {name:'Blacksmith', cost:250, unlock:'Swordsman'}
+      {name:'Barracks', cost:200},
+      {name:'Archer Tower', cost:300},
+      {name:'Blacksmith', cost:250}
     ];
     builds.forEach((b,i)=>{
-      const y=75+i*38;
+      const y=56+i*28;
       const has=town.buildings.includes(b.name);
       x.fillStyle=has?'#2a5a2a':(gold>=b.cost?'#2a6aaa':'#444');
-      x.fillRect(40,y,400,32);
-      x.fillStyle='#fff'; x.font='11px monospace';
-      x.fillText(has?b.name+' (Built)':b.name+'  '+b.cost+'g',240,y+20);
+      x.fillRect(50,y,380,24);
+      x.fillStyle='#fff'; x.font='10px monospace';
+      x.fillText(has?b.name+' (Built)':b.name+'  '+b.cost+'g',240,y+16);
     });
-    x.fillStyle='#f0c040'; x.font='12px monospace'; x.fillText('GARRISON',240,200);
+    x.fillStyle='#f0c040'; x.font='11px monospace'; x.fillText('RECRUIT',240,150);
+    const recs=[
+      {name:'Peasant', cost:40, add:4, need:'Barracks'},
+      {name:'Archer', cost:80, add:2, need:'Archer Tower'},
+      {name:'Swordsman', cost:120, add:1, need:'Blacksmith'}
+    ];
+    recs.forEach((r,i)=>{
+      const y=164+i*26;
+      const can=town.buildings.includes(r.need) && gold>=r.cost;
+      x.fillStyle=can?'#3a5a8a':'#333';
+      x.fillRect(60,y,360,22);
+      x.fillStyle='#fff'; x.font='9px monospace';
+      x.fillText(r.name+' +'+r.add+' ('+r.cost+'g)'+(town.buildings.includes(r.need)?'':' [Need '+r.need+']'),240,y+15);
+    });
+    x.fillStyle='#f0c040'; x.font='11px monospace'; x.fillText('GARRISON',240,250);
     const gar=town.garrison.map(g=>g.type+':'+g.count).join(' | ')||'Empty';
-    x.fillStyle='#aaa'; x.font='10px monospace'; x.fillText(gar,240,218);
-    x.fillStyle='#3a5a8a'; x.fillRect(60,230,160,28);
-    x.fillStyle='#fff'; x.font='11px monospace';
-    x.fillText('STATION 2',140,248);
-    x.fillStyle='#3a5a8a'; x.fillRect(260,230,160,28);
-    x.fillText('TAKE 2',340,248);
+    x.fillStyle='#aaa'; x.font='9px monospace'; x.fillText(gar,240,266);
+    x.fillStyle='#3a5a8a'; x.fillRect(60,276,140,24);
+    x.fillStyle='#fff'; x.font='10px monospace';
+    x.fillText('STATION 2',130,292);
+    x.fillStyle='#3a5a8a'; x.fillRect(280,276,140,24);
+    x.fillText('TAKE 2',350,292);
   } else {
     x.fillStyle='#aaa'; x.font='12px monospace';
     x.fillText('Garrison: '+(town.garrison.map(g=>g.type+':'+g.count).join(', ')||'None'),240,120);
@@ -115,9 +129,9 @@ function drawTown(){
     x.fillStyle='#fff'; x.font='13px monospace';
     x.fillText('ATTACK GARRISON',240,202);
   }
-  x.fillStyle='#666'; x.fillRect(160,320,160,28);
-  x.fillStyle='#fff'; x.font='12px monospace';
-  x.fillText('LEAVE',240,338);
+  x.fillStyle='#666'; x.fillRect(160,330,160,24);
+  x.fillStyle='#fff'; x.font='11px monospace';
+  x.fillText('LEAVE',240,346);
   x.textAlign='left';
 }
 function canMove(nx,ny){
@@ -184,6 +198,15 @@ function build(name,cost){
   gold-=cost;
   playerTown.buildings.push(name);
   showMsg(name+' built!');
+  updateHUD(); draw();
+}
+function recruit(type,cost,add,need){
+  if(!playerTown.buildings.includes(need)){ showMsg('Need '+need+' first!'); return; }
+  if(gold<cost){ showMsg('Not enough gold!'); return; }
+  gold-=cost;
+  let u=player.army.find(a=>a.type===type);
+  if(u) u.count+=add; else player.army.push({type,count:add});
+  showMsg('+'+add+' '+type);
   updateHUD(); draw();
 }
 function stationUnits(){
@@ -441,17 +464,22 @@ c.onclick=e=>{
     if(town.owner==='player'){
       const builds=[{name:'Barracks',cost:200},{name:'Archer Tower',cost:300},{name:'Blacksmith',cost:250}];
       builds.forEach((b,i)=>{
-        const y=75+i*38;
-        if(mx>40 && mx<440 && my>y && my<y+32) build(b.name,b.cost);
+        const y=56+i*28;
+        if(mx>50 && mx<430 && my>y && my<y+24) build(b.name,b.cost);
       });
-      if(mx>60 && mx<220 && my>230 && my<258) stationUnits();
-      if(mx>260 && mx<420 && my>230 && my<258) takeUnits();
+      const recs=[{name:'Peasant',cost:40,add:4,need:'Barracks'},{name:'Archer',cost:80,add:2,need:'Archer Tower'},{name:'Swordsman',cost:120,add:1,need:'Blacksmith'}];
+      recs.forEach((r,i)=>{
+        const y=164+i*26;
+        if(mx>60 && mx<420 && my>y && my<y+22) recruit(r.name,r.cost,r.add,r.need);
+      });
+      if(mx>60 && mx<200 && my>276 && my<300) stationUnits();
+      if(mx>280 && mx<420 && my>276 && my<300) takeUnits();
     } else {
       if(mx>140 && mx<340 && my>180 && my<216){
         startCombat({army:enemyTown.garrison,garrison:true});
       }
     }
-    if(mx>160 && mx<320 && my>320 && my<348){
+    if(mx>160 && mx<320 && my>330 && my<354){
       state='map'; viewTown=null; showMsg('Left Town'); draw();
     }
   } else if(state==='combat'){
