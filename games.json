@@ -1,5 +1,15 @@
 [
  {
+  "id": "miniheroes",
+  "title": "Mini Heroes",
+  "desc": "Turn-based strategy. Move your hero, recruit units, and defeat enemies.",
+  "version": "0.1.0",
+  "added": "2026-10-31",
+  "updated": "2026-10-31",
+  "path": "games/miniheroes/",
+  "icon": "⚔️"
+ },
+ {
   "id": "skyhop",
   "title": "Sky Hop",
   "desc": "Tap to fly, avoid obstacles. The farther you go, the higher the score.",
