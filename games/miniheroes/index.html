@@ -82,6 +82,12 @@ body{touch-action:none;font-size:9px}
 .tview{display:block;width:100%;max-height:34dvh;object-fit:contain;image-rendering:pixelated;background:#000;border-bottom:3px solid #000}
 .cols{display:grid;grid-template-columns:1fr;gap:0 16px;padding:0 10px 16px}
 @media (min-width:900px){.cols{grid-template-columns:1fr 1fr}}
+.rp{background:#0f0f1b;border:3px solid #000;padding:6px 8px;font-size:9px}.rp b{font-size:16px;color:var(--yellow)}.rp .meter{width:100%;margin:4px 0}.rp small{display:block;color:#aaa}
+.tl{display:grid;grid-template-columns:70px 1fr;gap:6px;align-items:stretch;margin:4px 0;border-bottom:2px solid #000;padding-bottom:4px}.tl>b{font-size:8px;color:var(--blue)}.tl>b small{display:block;color:var(--yellow)}
+.tch{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px}.tch .btn{font-size:7px;padding:5px 4px;text-align:left}.tch .btn small{display:block;font-size:6px;line-height:1.4;opacity:.85}.tch .btn[disabled]{opacity:.5}.tch .ult{border-color:#f8b800}
+@media (max-width:520px){.tl{grid-template-columns:1fr}.tch{grid-template-columns:1fr}}
+.fi{display:flex;flex-direction:column;gap:2px}.fu{display:flex;flex-wrap:wrap;gap:2px}.fu img{width:32px;height:32px;image-rendering:pixelated;background:#0f0f1b;border:2px solid #000}
+.rpbar{font-size:8px;color:#3cbcfc}.rpbar b{color:var(--yellow)}.rpbar .meter{width:100%}
 </style></head><body>
 <div id="app">
  <header id="top">
@@ -101,7 +107,7 @@ body{touch-action:none;font-size:9px}
  <footer id="bar">
   <span id="mapbar" style="display:contents">
    <button class="btn g" data-a="endday">END DAY</button><button class="btn alt" data-a="town">TOWN</button>
-   <button class="btn y" data-a="hero">HERO</button><button class="btn alt" data-a="next">NEXT</button><button class="btn p" data-a="kingdom">KINGDOM</button><button class="btn" data-a="menu">MENU</button>
+   <button class="btn y" data-a="hero">HERO</button><button class="btn alt" data-a="next">NEXT</button><button class="btn p" data-a="kingdom">KINGDOM</button><button class="btn y" data-a="tech">TECH</button><button class="btn" data-a="menu">MENU</button>
   </span>
   <span id="battlebar" style="display:none">
    <button class="btn g" data-a="resolve">RESOLVE</button><button class="btn p" data-a="spell">SPELL</button>
