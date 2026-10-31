@@ -2,8 +2,8 @@
  {
   "id": "miniheroes",
   "title": "Mini Heroes",
-  "desc": "Turn-based strategy. Move your hero, recruit units, and defeat enemies.",
-  "version": "0.1.0",
+  "desc": "Heroes-style strategy: explore, flag mines, build your town, and win plan-then-resolve battles.",
+  "version": "0.2.0",
   "added": "2026-10-31",
   "updated": "2026-10-31",
   "path": "games/miniheroes/",
