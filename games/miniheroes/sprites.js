@@ -350,6 +350,7 @@ const SPR = (() => {
     if (!L.aura && !L.ghostly) return body;
     return mk(24, 24, (p, g) => { if (L.ghostly) g.globalAlpha = 0.8; g.drawImage(body, 0, 0); g.globalAlpha = 1; if (L.aura) for (let i = 0; i < 6; i++) { const k = (i * 5 + f * 3) % 22; p(1 + k, 2 + ((i * 7 + f * 4) % 20), 1, 1, L.aura); } });
   });
+  const unitTeam = (type, f, left, col) => memo('ut' + type + f + (left ? 'L' : '') + col, () => outline(unit(type, f, left), col));
   const unitFlash = (type, f, left) => memo('uf' + type + f + (left ? 'L' : ''), () => tint(unit(type, f, left), '#fcfcfc'));
 
   // ---------- hero on horseback (map, 16x16 + overflow) ----------
@@ -492,5 +493,5 @@ const SPR = (() => {
     u.forEach((name, i) => { if (!B('dw' + (i + 1))) return; const up = B('up' + (i + 1)); p(6 + i * 33, 72, 28, 22, '#00000030'); if (up) p(6 + i * 33, 92, 28, 2, '#f8b800'); g.drawImage(unit(up ? UNITS[name].upName : name, 0, false), 8 + i * 33, 70); });
   }
 
-  return {grove, terr, wall, tower, catapult, flip, T, landLayer, waterLayer, pile, chest, artifact, mine, unit, unitFlash, hero, town, portrait, field, boulder, townView};
+  return {grove, terr, wall, tower, catapult, flip, T, landLayer, waterLayer, pile, chest, artifact, mine, unit, unitFlash, unitTeam, hero, town, portrait, field, boulder, townView};
 })();

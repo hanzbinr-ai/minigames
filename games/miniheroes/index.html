@@ -88,6 +88,28 @@ body{touch-action:none;font-size:9px}
 @media (max-width:520px){.tl{grid-template-columns:1fr}.tch{grid-template-columns:1fr}}
 .fi{display:flex;flex-direction:column;gap:2px}.fu{display:flex;flex-wrap:wrap;gap:2px}.fu img{width:32px;height:32px;image-rendering:pixelated;background:#0f0f1b;border:2px solid #000}
 .rpbar{font-size:8px;color:#3cbcfc}.rpbar b{color:var(--yellow)}.rpbar .meter{width:100%}
+
+/* ---- battle: full-viewport field, slim bottom bar, spellbook menu ---- */
+body.battle #app{grid-template-columns:100%;grid-template-rows:1fr auto;grid-template-areas:"view" "bar"}
+body.battle #top,body.battle #side{display:none!important}
+body.battle #bar{border-left:0;border-top:3px solid #000;padding:4px 6px;padding-bottom:max(4px,env(safe-area-inset-bottom));gap:6px;flex-wrap:nowrap}
+body.battle #bar .btn{flex:1 1 0;max-width:180px;padding:8px 4px;font-size:8px;box-shadow:2px 2px 0 #000}
+body.battle #msg{bottom:4px;font-size:8px}
+#book{display:none;position:absolute;inset:0;z-index:20;background:#000b;align-items:center;justify-content:center;perspective:1200px}
+#book.show{display:flex}
+#book .bk{position:relative;display:grid;grid-template-columns:1fr 1fr;width:min(96vw,760px);height:min(86%,520px);background:#5a2a10;border:4px solid #000;box-shadow:0 0 0 3px #a8641c,8px 8px 0 #000;padding:8px;gap:0;transform-style:preserve-3d}
+#book .pg{background:#e8d4a0;color:#2a1808;padding:10px 12px;overflow-y:auto;font-size:8px;line-height:1.7;border:2px solid #000;box-shadow:inset 0 0 12px #a8844880}
+#book .pg.l{transform-origin:right center;border-right:1px solid #7a5428;box-shadow:inset -10px 0 12px -6px #6a4418}
+#book .pg.r{transform-origin:left center;box-shadow:inset 10px 0 12px -6px #6a4418}
+#book.show .pg.l{animation:bkl .45s ease-out}#book.show .pg.r{animation:bkr .45s ease-out}#book.show .bk{animation:bkin .3s ease-out}
+@keyframes bkl{0%{transform:rotateY(-88deg);opacity:.2}100%{transform:none;opacity:1}}@keyframes bkr{0%{transform:rotateY(88deg);opacity:.2}100%{transform:none;opacity:1}}
+@keyframes bkin{0%{transform:scale(.6) translateY(40px);opacity:0}100%{transform:none;opacity:1}}
+#book h2{font-size:11px;margin:0 0 6px;color:#7a1020;text-shadow:1px 1px 0 #fff8}#book h3{font-size:9px;margin:8px 0 3px;color:#204080}
+#book .btn{font-size:8px;padding:6px 6px;border-width:3px;box-shadow:2px 2px 0 #000;margin:2px 2px 2px 0}
+#book .sp{display:flex;align-items:center;gap:6px;border-bottom:2px dotted #8a6438;padding:4px 0}#book .sp div{flex:1}#book .sp small{display:block;color:#5a4028;font-size:7px}
+#book .bkx{position:absolute;right:-10px;top:-12px;width:34px;height:34px;padding:0;background:#e40058;color:#fff;font-size:11px}
+@media (max-width:600px){#book .bk{grid-template-columns:1fr;grid-template-rows:1fr 1fr;height:88%}#book .pg.l{transform-origin:center bottom;border-right:2px solid #000}#book .pg.r{transform-origin:center top}
+ @keyframes bkl{0%{transform:rotateX(88deg);opacity:.2}100%{transform:none;opacity:1}}@keyframes bkr{0%{transform:rotateX(-88deg);opacity:.2}100%{transform:none;opacity:1}}}
 </style></head><body>
 <div id="app">
  <header id="top">
@@ -101,6 +123,7 @@ body{touch-action:none;font-size:9px}
   <div id="tut" style="display:none"></div>
   <div id="pre" style="display:none"></div>
   <div id="msg"></div>
+  <div id="book"><div class="bk"><div class="pg l" id="bkl"></div><div class="pg r" id="bkr"></div><button class="btn bkx" data-a="bookclose" title="Close">X</button></div></div>
   <div id="tip" style="display:none"></div><div id="cele" style="display:none"></div>
  </main>
  <aside id="side"><div id="sideinfo"></div><canvas id="mini" width="96" height="72"></canvas><div id="sidelists" class="lst"></div></aside>
@@ -110,8 +133,7 @@ body{touch-action:none;font-size:9px}
    <button class="btn y" data-a="hero">HERO</button><button class="btn alt" data-a="next">NEXT</button><button class="btn p" data-a="kingdom">KINGDOM</button><button class="btn y" data-a="tech">TECH</button><button class="btn" data-a="menu">MENU</button>
   </span>
   <span id="battlebar" style="display:none">
-   <button class="btn g" data-a="resolve">RESOLVE</button><button class="btn p" data-a="spell">SPELL</button>
-   <button class="btn alt" data-a="auto">AUTO</button><button class="btn" data-a="flee" style="background:#e40058">FLEE</button><button class="btn alt" data-a="speed">SPEED 1X</button><button class="btn y" data-a="binfo">HELP</button>
+   <button class="btn g" data-a="resolve">RESOLVE</button><button class="btn alt" data-a="auto">AUTO</button><button class="btn alt" data-a="speed">SPEED 1X</button><button class="btn p bkbtn" data-a="book" title="Battle book: spells, retreat, tactics">📖 BOOK</button>
   </span>
  </footer>
 </div>

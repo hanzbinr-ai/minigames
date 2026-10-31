@@ -881,6 +881,8 @@ function resolveRound() {
     return false;
   };
   let T = 0.6; // timeline cursor (seconds of battle clock)
+  const stage = (at, k) => later(at, () => { B.stage = k; msg(k + ' PHASE'); });
+  B.stage = 'SPELLS'; $('msg').textContent = '';
   B.order = [];
   for (const u of B.units) if (u.hidden && B.plans[u.id] && B.plans[u.id].t !== 'def') { u.hidden = false; fx(u, 'AMBUSH!', '#d858f8', 0.5); }
   // --- 1. RANGED PHASE: every shooter not pinned by an adjacent enemy fires; damage from one snapshot, applied together
@@ -907,7 +909,7 @@ function resolveRound() {
     volley.push({a: null, tower: ty, t, d: B.siege.towerDmg, tags: ['TOWER']});
   }
   if (volley.length) {
-    B.order.push('ranged');
+    B.order.push('ranged'); stage(T - 0.1, 'RANGED');
     volley.forEach(h => h.t.tot -= h.d); // simultaneous: everyone shot before anyone fell
     let end = T; volley.forEach((h, i) => { end = Math.max(end, land(h, T + (h.n || 0) * 0.25 + (i % 4) * 0.04, true)); });
     B.units.forEach(u => { settle(u); show(u, end); });
@@ -916,6 +918,7 @@ function resolveRound() {
   // --- 2. MOVEMENT PHASE: fastest first (ties random)
   const order = B.units.filter(up).sort((a, b) => moveOf(b) - moveOf(a) || Math.random() - 0.5);
   let anyMove = false;
+  stage(T - 0.05, 'MOVE');
   for (const u of order) {
     const p = B.plans[u.id]; if (!p || !up(u)) continue;
     const ox = u.x, oy = u.y;
@@ -938,7 +941,7 @@ function resolveRound() {
     if (!up(u)) continue;
     const t = uById(B.plans[u.id].target); if (!t || !up(t) || md(u, t) !== 1) continue;
     if (cantAct(u)) { T += 0.3; continue; }
-    if (!B.order.includes('melee')) B.order.push('melee');
+    if (!B.order.includes('melee')) { B.order.push('melee'); stage(T - 0.05, 'MELEE'); }
     let imp = T;
     for (let n = 0; n < strikes(u) && up(u) && up(t); n++) {
       const at = T + n * 0.3;
@@ -974,7 +977,7 @@ function resolveRound() {
   const fin = B.units.map(u => [u, u.count, u.alive]);
   later(T, () => { fin.forEach(([u, c, a]) => { u.shown = c; if (!a && u.deadAt == null) u.deadAt = B.clock; }); msg(B.log); });
   if (!lAlive || !rAlive || B.round > 30) { later(T + 0.8, () => endBattle(lAlive && !rAlive)); return; }
-  later(T + 0.5, () => { if (aiShouldRetreat()) { doRetreat('R'); return; } B.phase = 'plan'; B.sel = firstUnplanned(); msg('Round ' + B.round + ' - PLAN. ' + B.log); });
+  later(T + 0.5, () => { if (aiShouldRetreat()) { doRetreat('R'); return; } B.phase = 'plan'; B.stage = null; B.sel = firstUnplanned(); msg('Round ' + B.round + ' - PLAN. ' + B.log); });
 }
 function endBattle(playerWon) {
   const ctx = B.ctx, killed = side => B.units.filter(u => u.side !== side).reduce((s, u) => s + Math.max(0, u.start * US(u).hp - u.tot), 0);
@@ -1427,17 +1430,25 @@ function drawBattle(g) {
   g.imageSmoothingEnabled = false;
   g.drawImage(SPR.field(BLW, BLH, CW, B.seed), 0, 0);
   g.fillStyle = '#10102a'; g.fillRect(0, 0, BLW, BOY - 3); g.fillStyle = '#000'; g.fillRect(0, BOY - 3, BLW, 2);
-  txt(g, B.phase === 'pre' ? 'PRE-BATTLE' : 'ROUND ' + (B.phase === 'plan' ? B.round : B.round - 1) + ' - ' + (B.phase === 'plan' ? 'PLAN' : 'RESOLVE'), BLW / 2, 10, B.phase === 'resolve' ? '#58d854' : '#f8b800');
+  txt(g, B.phase === 'pre' ? 'PRE-BATTLE' : 'ROUND ' + (B.phase === 'plan' ? B.round : B.round - 1) + ' - ' + (B.phase === 'plan' ? 'PLAN' : (B.stage || 'RESOLVE')), BLW / 2, 10, B.phase === 'resolve' ? '#58d854' : '#f8b800');
   const hl = heroOf('L'), hr = heroOf('R');
   txt(g, hl ? hl.name + ' ' + hl.mana + 'MP' : 'GARRISON', 3, 20, '#3cbcfc', 'left');
   txt(g, hr ? hr.name : (B.sides.R.monster ? 'NEUTRALS' : 'GARRISON'), BLW - 3, 20, '#e40058', 'right');
   const tl = s => { const t = B.tac[s].tactic; if (s === 'R' && B.tac.L.intel < 2) return '???'; return t ? TACTICS[t].name.toUpperCase() + (blunted(s) ? '-X' : '') : '-'; };
   smallTxt(g, tl('L'), 3, 8, blunted('L') ? '#888' : '#f8b800', 'left'); smallTxt(g, tl('R'), BLW - 3, 8, blunted('R') ? '#888' : '#f8b800', 'right');
-  g.fillStyle = '#00000030';
+  // checkered cells + crisp two-tone grid + frame, so tiles read clearly at any zoom
+  for (let y = 0; y < BH; y++) for (let x = 0; x < BW; x++) if ((x + y) % 2) { g.fillStyle = '#0000001a'; g.fillRect(BOX + x * CW, BOY + y * CW, CW, CW); }
+  g.fillStyle = '#00000040';
   for (let x = 0; x <= BW; x++) g.fillRect(BOX + x * CW, BOY, 1, BH * CW);
   for (let y = 0; y <= BH; y++) g.fillRect(BOX, BOY + y * CW, BW * CW, 1);
+  g.fillStyle = '#ffffff14';
+  for (let x = 0; x < BW; x++) g.fillRect(BOX + x * CW + 1, BOY, 1, BH * CW);
+  for (let y = 0; y < BH; y++) g.fillRect(BOX, BOY + y * CW + 1, BW * CW, 1);
+  g.fillStyle = '#000'; g.fillRect(BOX - 2, BOY - 1, BW * CW + 4, 1); g.fillRect(BOX - 2, BOY + BH * CW, BW * CW + 4, 2); g.fillRect(BOX - 2, BOY, 2, BH * CW); g.fillRect(BOX + BW * CW, BOY, 2, BH * CW);
+  g.fillStyle = '#0000002a'; g.fillRect(0, BOY + BH * CW + 2, BLW, BLH);
   const selU = B.sel && uById(B.sel), r = selU && B.phase === 'plan' ? reach(selU, moveOf(selU)) : null;
-  if (r) { g.fillStyle = '#fcfc5438'; for (const c of r.values()) if (c.d) g.fillRect(BOX + c.x * CW + 1, BOY + c.y * CW + 1, CW - 1, CW - 1); }
+  if (r) { for (const c of r.values()) if (c.d) { const X = BOX + c.x * CW, Y = BOY + c.y * CW; g.fillStyle = '#fcfc5440'; g.fillRect(X + 1, Y + 1, CW - 1, CW - 1); g.fillStyle = '#fcfc54a0'; g.fillRect(X + 2, Y + 2, CW - 3, 1); g.fillRect(X + 2, Y + CW - 2, CW - 3, 1); g.fillRect(X + 2, Y + 2, 1, CW - 3); g.fillRect(X + CW - 2, Y + 2, 1, CW - 3); }
+    for (const o of B.units) if (o.alive && o.side === 'R' && !o.hidden) { const X = BOX + o.x * CW, Y = BOY + o.y * CW, k = Math.floor(clock * 3) % 2; g.fillStyle = k ? '#e40058c0' : '#fc7460c0'; g.fillRect(X + 1, Y + 1, CW - 1, 2); g.fillRect(X + 1, Y + CW - 2, CW - 1, 2); g.fillRect(X + 1, Y + 1, 2, CW - 1); g.fillRect(X + CW - 2, Y + 1, 2, CW - 1); } }
   const seeTerr = t => t.side === 'L' || B.phase !== 'pre' || B.tac.L.intel >= 2, fr = Math.floor(clock * 2) % 2;
   for (const key in B.terr) { const t = B.terr[key], [x, y] = key.split(',').map(Number); if (t.k !== 'fog' && seeTerr(t)) g.drawImage(SPR.terr(t.k, fr), BOX + x * CW, BOY + y * CW); }
   if (B.phase === 'pre') {
@@ -1475,13 +1486,15 @@ function drawBattle(g) {
     const dying = u.deadAt != null && B.clock >= u.deadAt;
     if (dying) { const k = Math.min(1, (B.clock - u.deadAt) / 0.6); g.globalAlpha = 1 - k; Y += k * 6; }
     else if (u.hidden) g.globalAlpha = 0.45 + 0.1 * Math.sin(clock * 5);
-    g.fillStyle = '#00000050'; g.fillRect(Math.round(X) + 5, BOY + u.ry * CW + 19, 14, 2); g.fillRect(Math.round(X) + 7, BOY + u.ry * CW + 21, 10, 1);
-    g.drawImage((flash ? SPR.unitFlash : SPR.unit)(u.type, f, u.side === 'R'), Math.round(X), Math.round(Y));
+    const tc = u.side === 'L' ? '#3cbcfc' : '#fc4878', sy = Math.round(BOY + u.ry * CW + 18), sx = Math.round(X);
+    g.fillStyle = '#00000060'; g.fillRect(sx + 4, sy + 1, 16, 3); g.fillRect(sx + 6, sy + 4, 12, 1);
+    g.fillStyle = tc; g.fillRect(sx + 5, sy, 14, 1); g.fillRect(sx + 3, sy + 1, 2, 2); g.fillRect(sx + 19, sy + 1, 2, 2); g.fillRect(sx + 5, sy + 3, 14, 1);
+    g.drawImage(flash ? SPR.unitFlash(u.type, f, u.side === 'R') : SPR.unitTeam(u.type, f, u.side === 'R', u.side === 'L' ? '#1c5cb0' : '#9c1840'), sx, Math.round(Y));
     g.globalAlpha = 1;
     if (!dying) {
       const s = u.side === 'R' && !(B.tac.L.intel >= 1) ? rough(u.shown) : String(u.shown), w = s.length * 6 + 3, bx = Math.round(X) + (u.side === 'L' ? CW - w : 0), by = BOY + u.ry * CW + CW - 8;
-      g.fillStyle = '#000'; g.fillRect(bx, by, w, 9); g.fillStyle = u.side === 'L' ? '#2050c0' : '#a00030'; g.fillRect(bx + 1, by + 1, w - 2, 7);
-      g.font = '8px PS2P, monospace'; g.textAlign = 'left'; g.fillStyle = '#fcfcfc'; g.save(); g.translate(bx + 2, by + 8); g.scale(0.75, 0.875); g.fillText(s, 0, 0); g.restore();
+      g.fillStyle = '#000'; g.fillRect(bx - 1, by - 1, w + 2, 11); g.fillStyle = u.side === 'L' ? '#2058d0' : '#b01038'; g.fillRect(bx, by, w, 9); g.fillStyle = u.side === 'L' ? '#78c8fc' : '#fc7898'; g.fillRect(bx, by, w, 1);
+      g.font = '8px PS2P, monospace'; g.textAlign = 'left'; g.fillStyle = '#000'; g.save(); g.translate(bx + 3, by + 9); g.scale(0.75, 0.875); g.fillText(s, 0, 0); g.restore(); g.fillStyle = '#fcfcfc'; g.save(); g.translate(bx + 2, by + 8); g.scale(0.75, 0.875); g.fillText(s, 0, 0); g.restore();
       if (B.phase === 'plan' && B.plans[u.id] && B.plans[u.id].t === 'def' && u.side === 'L') { g.fillStyle = '#000'; g.fillRect(X + 1, Y + 3, 7, 8); g.fillStyle = '#f8b800'; g.fillRect(X + 2, Y + 4, 5, 5); g.fillRect(X + 3, Y + 9, 3, 1); }
     }
   }
@@ -1513,7 +1526,7 @@ function drawSpellFx(g, e) {
 function renderBattleScreen() {
   drawBattle(bctx);
   const pe = $('pre'), pre = B.phase === 'pre' && pe.style.display !== 'none', wide = pre && innerWidth >= 900, pw = wide ? pe.offsetWidth * CAM.dpr : 0, ph = pre && !wide ? pe.offsetHeight * CAM.dpr : 0;
-  const aw = CAM.w - pw, ah = CAM.h - ph, s = Math.max(1, Math.floor(Math.min(aw / BLW, ah / BLH)));
+  const aw = CAM.w - pw, ah = CAM.h - ph, fit = Math.min(aw / BLW, ah / BLH), s = Math.max(1, fit >= 3 ? Math.floor(fit) : Math.floor(fit * 4) / 4);
   BV = {s, ox: Math.floor((aw - BLW * s) / 2), oy: Math.max(0, Math.floor((ah - BLH * s) / 2))};
   ctx.imageSmoothingEnabled = false; ctx.fillStyle = '#10101e'; ctx.fillRect(0, 0, CAM.w, CAM.h);
   let sx = 0, sy = 0; for (const k of B.shake || []) { const e = B.clock - k.at; if (e >= 0 && e < 0.25) { const m = k.mag * (1 - e / 0.25) * s; sx += Math.round(Math.sin(e * 90) * m); sy += Math.round(Math.cos(e * 70) * m * 0.6); } }
@@ -1567,8 +1580,9 @@ function updateHud() {
 }
 function syncBars() {
   const b = UI.mode === 'battle';
+  document.body.classList.toggle('battle', b); if (!b) closeBook();
   $('battlebar').style.display = b ? 'contents' : 'none';
-  document.querySelectorAll('#battlebar .btn').forEach(e => e.disabled = !!(b && B && B.phase === 'pre' && e.dataset.a !== 'binfo'));
+  document.querySelectorAll('#battlebar .btn').forEach(e => e.disabled = !!(b && B && B.phase === 'pre' && e.dataset.a !== 'book'));
   $('mapbar').style.display = b ? 'none' : 'contents';
   $('zoom').style.display = b || UI.mode === 'title' ? 'none' : 'flex';
   $('chip').style.visibility = b || UI.mode === 'title' ? 'hidden' : 'visible';
@@ -1712,7 +1726,7 @@ function openMenu() {
     Capture the enemy town to win. Lose all towns and heroes and you lose.</p>
     <h3>BATTLE</h3><p>PLAN: tap your stack, then tap an empty tile (move), an enemy (attack) or the stack again (defend). Cast one spell per round with SPELL.
     PRE-BATTLE (before round 1): scout (Intel 0-2), set your formation, pick one tactic and cast terrain spells. All of these last the whole battle.
-    RESOLVE: spells, then moves (fastest first), then all attacks hit at the same time. Melee targets strike back at half damage. Attacking from the opposite side of an ally = FLANK x1.5.</p>`, {sticky: !G});
+    RESOLVE: spells, then all shooters fire together (a shooter with an enemy next to it is pinned and fights in melee at half damage), then moves (fastest first), then melee: the striker hits first and the survivor strikes back once per round at half damage. Use the BOOK button for spells, retreat and tactics. Attacking from the opposite side of an ally = FLANK x1.5.</p>`, {sticky: !G});
 }
 function openSpells() {
   const h = heroOf('L');
@@ -1722,6 +1736,24 @@ function openSpells() {
     `<div class="bar" style="margin-top:8px">${btn('NO SPELL', 'cast', '', 'alt')}${btn('CLOSE', 'close', '', 'g')}</div>`);
 }
 
+
+// ---------- battle book (Heroes 3 spellbook-style menu: everything that is not RESOLVE / AUTO / SPEED) ----------
+function closeBook() { const e = $('book'); if (e) e.classList.remove('show'); }
+function openBook() {
+  if (!B) return;
+  const h = heroOf('L'), plan = B.phase === 'plan', T = B.tac, see = T.L.intel >= 2, tn = s => { const t = T[s].tactic; return t ? TACTICS[t].name + (blunted(s) ? ' (countered)' : '') : 'none'; };
+  const sp = h && h.spells.length ? h.spells.map(k => `<div class="sp"><div><b>${SPELLS[k].name}</b> (${SPELLS[k].mana} MP)<small>${SPELLS[k].desc} - target ${SPELLS[k].target}</small></div>${btn('CAST', 'bcast', k, 'p', !plan || h.mana < SPELLS[k].mana)}</div>`).join('') : '<p>No spells known.</p>';
+  $('bkl').innerHTML = `<h2>${h ? h.name.toUpperCase() + ' - ' + h.mana + ' MP' : 'NO HERO'}</h2><h3>SPELLS</h3>${sp}${h && h.spells.length ? btn('NO SPELL THIS ROUND', 'bcast', '', 'alt', !plan) : ''}
+    <p>Spells take effect first in RESOLVE and last a few rounds. ${B.spell.L ? '<br>Queued: <b>' + SPELLS[B.spell.L.k].name + '</b>' : ''}</p>`;
+  const me = B.units.filter(u => u.alive && u.side === 'L'), foe = B.units.filter(u => u.alive && u.side === 'R');
+  $('bkr').innerHTML = `<h2>ROUND ${B.round} - WAR COUNCIL</h2>
+    <h3>STRATEGY (WHOLE BATTLE)</h3><p>Your tactic: <b>${tn('L')}</b><br>Formation: <b>${T.L.form || 'line'}</b><br>Enemy tactic: <b>${see ? tn('R') : '??? (needs Intel 2)'}</b><br>Intel: ${T.L.intel}/2</p>
+    <h3>ARMIES</h3><p>You: ${me.length} stacks, ${me.reduce((a, u) => a + u.count, 0)} creatures<br>Enemy: ${foe.length} stacks</p>
+    <h3>RESOLVE ORDER</h3><p>1 Spells - 2 RANGED volley (simultaneous; pinned shooters wait) - 3 MOVE (fastest first) - 4 MELEE: striker hits, survivor retaliates once.</p>
+    <h3>LEAVE BATTLE</h3><p>Retreat, surrender or bribe.</p>${btn('RETREAT / SURRENDER', 'bflee', '', 'y', !plan)}
+    <h3>OTHER</h3>${btn('SPEED ' + (UI.bspeed || 1) + 'X', 'speed', '', 'alt')}${btn('HELP / MENU', 'binfo', '', 'alt')}${btn('CLOSE BOOK', 'bookclose', '', 'g')}`;
+  const e = $('book'); e.classList.remove('show'); void e.offsetWidth; e.classList.add('show'); SFX.magic();
+}
 // ---------- input ----------
 const ACTIONS = {
   close: () => closePanel(),
@@ -1757,9 +1789,12 @@ const ACTIONS = {
   endday: () => endDay(), town: () => { const h = curHero(), t = (h && townAt(h.x, h.y) && townAt(h.x, h.y).owner === 'player') ? townAt(h.x, h.y) : G.towns.find(t => t.owner === 'player'); t ? openTown(t) : msg('You have no town!'); },
   hero: () => openHero(), menu: () => openMenu(),
   next: () => { const hs = myHeroes(); if (!hs.length) return; const i = hs.indexOf(curHero()); G.sel = hs[(i + 1) % hs.length].id; UI.preview = null; msg(curHero().name + ' selected'); centerOn(curHero().x, curHero().y); },
-  resolve: () => resolveRound(), spell: () => B && B.phase === 'plan' && openSpells(),
+  resolve: () => { closeBook(); resolveRound(); }, spell: () => B && B.phase === 'plan' && openSpells(),
   auto: () => { if (B && B.phase === 'plan') { planSide('L', true); B.sel = null; msg('All stacks planned. Press RESOLVE.'); } },
-  binfo: () => openMenu(),
+  binfo: () => { closeBook(); openMenu(); },
+  book: () => openBook(), bookclose: () => closeBook(),
+  bspell: () => { closeBook(); openSpells(); }, bflee: () => { closeBook(); openFlee(); },
+  bcast: k => { closeBook(); ACTIONS.cast(k); },
   speed: () => { if (B && B.phase === 'resolve') { UI.skip = true; return; } UI.bspeed = (UI.bspeed || 1) === 1 ? 2 : 1; const e = document.querySelector('[data-a=speed]'); if (e) e.textContent = 'SPEED ' + UI.bspeed + 'X'; msg('Resolve speed ' + UI.bspeed + 'x (tap during resolve to skip)'); },
   zin: () => setZoom(CAM.z + 1), zout: () => setZoom(CAM.z - 1),
   center: () => { const h = curHero(); if (h) centerOn(h.x, h.y); },
@@ -1930,7 +1965,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') { closePanel(); return; }
   if (UI.panel) return;
   if (UI.mode === 'battle' && B && B.phase === 'pre') { if (e.key === 'Enter') startFight(); return; }
-  if (UI.mode === 'battle') { if (e.key === 'Enter' || e.key === ' ') resolveRound(); if (e.key === 'a') ACTIONS.auto(); if (e.key === 's') ACTIONS.spell(); return; }
+  if (UI.mode === 'battle') { if (e.key === 'b') { $('book').classList.contains('show') ? closeBook() : openBook(); return; } if (e.key === 'Escape') { closeBook(); return; } if (e.key === 'Enter' || e.key === ' ') { closeBook(); resolveRound(); } if (e.key === 'a') ACTIONS.auto(); if (e.key === 's') ACTIONS.spell(); return; }
   if (e.key === '+' || e.key === '=') { setZoom(CAM.z + 1); return; } if (e.key === '-') { setZoom(CAM.z - 1); return; }
   if (UI.mode !== 'map') return;
   const k = e.key.toLowerCase(), d = {arrowup: [0, -1], arrowdown: [0, 1], arrowleft: [-1, 0], arrowright: [1, 0], w: [0, -1], s: [0, 1], a: [-1, 0], d: [1, 0]}[k];
