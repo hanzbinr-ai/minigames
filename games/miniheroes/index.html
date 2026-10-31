@@ -13,16 +13,16 @@ canvas{display:block;width:min(96vw,520px);aspect-ratio:4/3;background:#1a2a1a;b
 </style></head><body>
 <a class="btn alt tool back" href="../../">◀ PORTAL</a>
 <h1>MINI HEROES</h1>
-<div id="hud">GOLD <b id="gold">500</b> · HERO <b id="heroinfo">Lv1</b></div>
+<div id="hud">DAY <b id="day">1</b> · GOLD <b id="gold">500</b> · HERO <b id="heroinfo">Lv1</b></div>
 <div id="armybox"></div>
 <div id="msg"></div>
 <canvas id="c" width="480" height="360"></canvas>
-<div id="hint">Move hero onto the yellow castle (top-left) to open Town<br>In Town you can recruit units</div>
+<div id="hint">Move onto yellow castle to manage Town<br>Buildings unlock units · +50 gold every 5 moves</div>
 <div id="over"><h2 style="color:#e40058;text-shadow:3px 3px 0 #000;margin:0;font-size:22px">GAME OVER</h2><div id="why"></div><button class="btn" id="again">Play Again</button></div>
 <script>
 const c=document.getElementById('c'),x=c.getContext('2d');
 const W=20,H=15,TILE=24;
-let map=[],player,enemies=[],town,gold=500,turn=0,state='map',combat=null;
+let map=[],player,enemies=[],playerTown,enemyTown,gold=500,day=1,moves=0,state='map',combat=null;
 function showMsg(t){document.getElementById('msg').textContent=t; setTimeout(()=>document.getElementById('msg').textContent='',2500)}
 function genMap(){
   map=Array.from({length:H},()=>Array(W).fill(0));
@@ -30,12 +30,14 @@ function genMap(){
     if(Math.random()<0.1) map[y][xx]=1;
     if(Math.random()<0.03) map[y][xx]=2;
   }
-  town={x:2,y:2};
-  map[town.y][town.x]=3;
-  player={x:4,y:4,level:1,exp:0,army:[{type:'Peasant',count:8},{type:'Archer',count:4}]};
+  playerTown={x:2,y:2,owner:'player',buildings:['Fort'],gold:0};
+  enemyTown={x:17,y:12,owner:'enemy',buildings:['Fort','Barracks'],gold:0};
+  map[playerTown.y][playerTown.x]=3;
+  map[enemyTown.y][enemyTown.x]=4;
+  player={x:4,y:4,level:1,exp:0,army:[{type:'Peasant',count:6}]};
   enemies=[
-    {x:11,y:6,level:1,army:[{type:'Skeleton',count:6},{type:'Zombie',count:3}]},
-    {x:15,y:11,level:2,army:[{type:'Skeleton',count:10},{type:'Zombie',count:5}]}
+    {x:10,y:6,level:1,army:[{type:'Skeleton',count:5}]},
+    {x:14,y:9,level:2,army:[{type:'Skeleton',count:8},{type:'Zombie',count:3}]}
   ];
 }
 function drawMap(){
@@ -43,20 +45,19 @@ function drawMap(){
   for(let y=0;y<H;y++) for(let xx=0;xx<W;xx++){
     const px=xx*TILE, py=y*TILE;
     const t=map[y][xx];
-    x.fillStyle=t===0?'#2d5a2d':t===1?'#1e3d1e':t===2?'#6a6a6a':'#4a6aaa';
+    x.fillStyle=t===0?'#2d5a2d':t===1?'#1e3d1e':t===2?'#6a6a6a':t===3?'#4a6aaa':'#6a3a3a';
     x.fillRect(px+1,py+1,TILE-2,TILE-2);
     x.strokeStyle='#0004'; x.strokeRect(px,py,TILE,TILE);
     if(t===1){x.fillStyle='#0d2a0d';x.fillRect(px+8,py+6,8,14);x.fillStyle='#2a6a2a';x.fillRect(px+6,py+4,12,6)}
     if(t===2){x.fillStyle='#4a4a4a';x.fillRect(px+4,py+10,16,8)}
-    if(t===3){
-      x.fillStyle='#c9a227'; x.fillRect(px+3,py+8,18,12);
+    if(t===3||t===4){
+      x.fillStyle=t===3?'#c9a227':'#a03030'; x.fillRect(px+3,py+8,18,12);
       x.fillStyle='#e8d48b'; x.fillRect(px+8,py+3,8,8);
-      x.fillStyle='#8b1a1a'; x.fillRect(px+10,py+5,4,4);
     }
   }
-  // Town label
-  x.fillStyle='#f0c040'; x.font='bold 9px monospace'; x.textAlign='center';
-  x.fillText('TOWN',town.x*TILE+12,town.y*TILE-2);
+  x.fillStyle='#f0c040'; x.font='bold 8px monospace'; x.textAlign='center';
+  x.fillText('YOUR TOWN',playerTown.x*TILE+12,playerTown.y*TILE-2);
+  x.fillStyle='#e04040'; x.fillText('ENEMY',enemyTown.x*TILE+12,enemyTown.y*TILE-2);
   const px=player.x*TILE, py=player.y*TILE;
   x.fillStyle='#f0c040';
   x.beginPath(); x.arc(px+12,py+12,11,0,Math.PI*2); x.fill();
@@ -72,26 +73,40 @@ function drawMap(){
 }
 function drawTown(){
   x.fillStyle='#12121e'; x.fillRect(0,0,480,360);
-  x.fillStyle='#f0c040'; x.font='20px monospace'; x.textAlign='center';
-  x.fillText('TOWN',240,40);
-  x.font='14px monospace'; x.fillStyle='#fff';
-  x.fillText('Gold: '+gold,240,70);
-  const options=[
-    {name:'Peasant', cost:40, add:4},
-    {name:'Archer', cost:80, add:2},
-    {name:'Swordsman', cost:120, add:1}
+  x.fillStyle='#f0c040'; x.font='18px monospace'; x.textAlign='center';
+  x.fillText('YOUR TOWN',240,32);
+  x.font='12px monospace'; x.fillStyle='#fff';
+  x.fillText('Gold: '+gold+'   Buildings: '+playerTown.buildings.join(', '),240,54);
+  const builds=[
+    {name:'Barracks', cost:200, unlock:'Peasant'},
+    {name:'Archer Tower', cost:300, unlock:'Archer'},
+    {name:'Blacksmith', cost:250, unlock:'Swordsman'}
   ];
-  options.forEach((o,i)=>{
-    const y=100+i*48;
-    x.fillStyle=gold>=o.cost?'#2a6aaa':'#444';
-    x.fillRect(60,y,360,40);
-    x.fillStyle='#fff';
-    x.font='13px monospace';
-    x.fillText(o.name+'   +'+o.add+' units   ('+o.cost+' gold)',240,y+26);
+  builds.forEach((b,i)=>{
+    const y=80+i*42;
+    const has=playerTown.buildings.includes(b.name);
+    x.fillStyle=has?'#2a5a2a':(gold>=b.cost?'#2a6aaa':'#444');
+    x.fillRect(40,y,400,36);
+    x.fillStyle='#fff'; x.font='12px monospace';
+    x.fillText(has?b.name+' (Built)':b.name+'  '+b.cost+'g  → '+b.unlock,240,y+24);
   });
-  x.fillStyle='#666'; x.fillRect(150,290,180,40);
-  x.fillStyle='#fff'; x.font='14px monospace';
-  x.fillText('LEAVE TOWN',240,316);
+  x.fillStyle='#f0c040'; x.font='13px monospace'; x.fillText('RECRUIT',240,220);
+  const recs=[
+    {name:'Peasant', cost:40, add:4, need:'Barracks'},
+    {name:'Archer', cost:80, add:2, need:'Archer Tower'},
+    {name:'Swordsman', cost:120, add:1, need:'Blacksmith'}
+  ];
+  recs.forEach((r,i)=>{
+    const y=240+i*32;
+    const can=playerTown.buildings.includes(r.need) && gold>=r.cost;
+    x.fillStyle=can?'#3a5a8a':'#333';
+    x.fillRect(60,y,360,28);
+    x.fillStyle='#fff'; x.font='11px monospace';
+    x.fillText(r.name+' +'+r.add+' ('+r.cost+'g) '+(playerTown.buildings.includes(r.need)?'':'[Need '+r.need+']'),240,y+19);
+  });
+  x.fillStyle='#666'; x.fillRect(160,340,160,28);
+  x.fillStyle='#fff'; x.font='12px monospace';
+  x.fillText('LEAVE',240,358);
   x.textAlign='left';
 }
 function canMove(nx,ny){
@@ -106,33 +121,58 @@ function moveTo(tx,ty){
   const nx=player.x+dx, ny=player.y+dy;
   if(!canMove(nx,ny)) return;
   player.x=nx; player.y=ny;
-  turn++;
+  moves++;
+  if(moves%5===0){
+    gold+=50;
+    day++;
+    showMsg('Day '+day+'! +50 Gold');
+    enemyIncome();
+  }
   checkEvents();
   if(state==='map') enemyTurn();
+  updateHUD();
+}
+function enemyIncome(){
+  // Enemy recruits if possible
+  if(enemyTown.buildings.includes('Barracks') && Math.random()<0.6){
+    let e=enemies[0];
+    if(e){
+      let u=e.army.find(a=>a.type==='Skeleton');
+      if(u) u.count+=2; else e.army.push({type:'Skeleton',count:2});
+    }
+  }
 }
 function checkEvents(){
-  if(player.x===town.x && player.y===town.y){
+  if(player.x===playerTown.x && player.y===playerTown.y){
     state='town';
-    showMsg('Town opened! Recruit units.');
+    showMsg('Town opened');
     draw();
     return;
   }
   const enemy=enemies.find(e=>e.x===player.x && e.y===player.y);
   if(enemy) startCombat(enemy);
 }
-function recruit(type,cost,add){
+function build(name,cost){
+  if(gold<cost){ showMsg('Not enough gold!'); return; }
+  if(playerTown.buildings.includes(name)) return;
+  gold-=cost;
+  playerTown.buildings.push(name);
+  showMsg(name+' built!');
+  updateHUD(); draw();
+}
+function recruit(type,cost,add,need){
+  if(!playerTown.buildings.includes(need)){ showMsg('Need '+need+' first!'); return; }
   if(gold<cost){ showMsg('Not enough gold!'); return; }
   gold-=cost;
   let u=player.army.find(a=>a.type===type);
   if(u) u.count+=add; else player.army.push({type,count:add});
-  showMsg('Recruited +'+add+' '+type);
-  updateHUD();
-  draw();
+  showMsg('+'+add+' '+type);
+  updateHUD(); draw();
 }
 function enemyTurn(){
   enemies.forEach(e=>{
     const dx=Math.sign(player.x-e.x), dy=Math.sign(player.y-e.y);
-    if(Math.random()<0.5 && canMove(e.x+dx,e.y+dy)){
+    if(Math.random()<0.45 && canMove(e.x+dx,e.y+dy)){
       e.x+=dx; e.y+=dy;
     }
   });
@@ -143,7 +183,7 @@ function enemyTurn(){
 function startCombat(enemy){
   state='combat';
   combat={enemy,playerUnits:JSON.parse(JSON.stringify(player.army)),enemyUnits:JSON.parse(JSON.stringify(enemy.army)),turn:'player'};
-  showMsg('Combat started! Click enemy.');
+  showMsg('Combat!');
   draw();
 }
 function drawCombat(){
@@ -162,20 +202,19 @@ function drawCombat(){
     x.fillStyle='#fff'; x.fillText(u.type+'  x'+u.count,360,92+i*42);
   });
   x.fillStyle='#f0c040'; x.font='13px monospace';
-  x.fillText(combat.turn==='player'?'Your turn — click an enemy':'Enemy is attacking...',240,330);
+  x.fillText(combat.turn==='player'?'Your turn — click enemy':'Enemy turn...',240,330);
   x.textAlign='left';
 }
 function doCombatClick(mx,my){
   if(combat.turn!=='player') return;
   combat.enemyUnits.forEach((u,i)=>{
     if(mx>270 && mx<450 && my>70+i*42 && my<106+i*42){
-      const dmg=6+Math.floor(Math.random()*5);
+      const dmg=5+Math.floor(Math.random()*6);
       u.count=Math.max(0,u.count-dmg);
-      showMsg('Dealt '+dmg+' damage!');
       if(u.count<=0) combat.enemyUnits.splice(i,1);
       if(!combat.enemyUnits.length){ endCombat(true); return; }
       combat.turn='enemy';
-      setTimeout(enemyCombatTurn,700);
+      setTimeout(enemyCombatTurn,600);
       draw();
     }
   });
@@ -183,9 +222,8 @@ function doCombatClick(mx,my){
 function enemyCombatTurn(){
   if(!combat.playerUnits.length){ endCombat(false); return; }
   const target=combat.playerUnits[0];
-  const dmg=4+Math.floor(Math.random()*4);
+  const dmg=3+Math.floor(Math.random()*5);
   target.count=Math.max(0,target.count-dmg);
-  showMsg('Enemy dealt '+dmg+' damage!');
   if(target.count<=0) combat.playerUnits.shift();
   if(!combat.playerUnits.length){ endCombat(false); return; }
   if(!combat.enemyUnits.length){ endCombat(true); return; }
@@ -194,30 +232,28 @@ function enemyCombatTurn(){
 }
 function endCombat(win){
   if(win){
-    gold+=100;
-    player.exp+=25;
-    if(player.exp>=50){ player.level++; player.exp=0; showMsg('Level Up!'); }
+    gold+=80;
+    player.exp+=20;
+    if(player.exp>=40){ player.level++; player.exp=0; showMsg('Level Up!'); }
     player.army=combat.playerUnits.filter(u=>u.count>0);
     enemies=enemies.filter(e=>e!==combat.enemy);
-    showMsg('Victory! +100 Gold');
+    showMsg('Victory! +80 Gold');
     if(!enemies.length){ gameOver(true); return; }
   } else {
     gameOver(false); return;
   }
-  state='map';
-  combat=null;
-  updateHUD();
-  draw();
+  state='map'; combat=null; updateHUD(); draw();
 }
 function gameOver(win){
   state='over';
-  document.getElementById('why').textContent=win?'Victory! All enemies defeated.':'Your army was destroyed.';
+  document.getElementById('why').textContent=win?'Victory!':'Defeat';
   document.getElementById('over').classList.add('show');
 }
 function updateHUD(){
+  document.getElementById('day').textContent=day;
   document.getElementById('gold').textContent=gold;
   document.getElementById('heroinfo').textContent='Lv'+player.level;
-  document.getElementById('armybox').textContent=player.army.map(a=>a.type+': '+a.count).join('   |   ') || 'No army';
+  document.getElementById('armybox').textContent=player.army.map(a=>a.type+':'+a.count).join(' | ') || 'No army';
 }
 function draw(){
   if(state==='map') drawMap();
@@ -232,21 +268,24 @@ c.onclick=e=>{
     const tx=Math.floor(mx/TILE), ty=Math.floor(my/TILE);
     moveTo(tx,ty);
   } else if(state==='town'){
-    const options=[{name:'Peasant',cost:40,add:4},{name:'Archer',cost:80,add:2},{name:'Swordsman',cost:120,add:1}];
-    options.forEach((o,i)=>{
-      const y=100+i*48;
-      if(mx>60 && mx<420 && my>y && my<y+40) recruit(o.name,o.cost,o.add);
+    const builds=[{name:'Barracks',cost:200},{name:'Archer Tower',cost:300},{name:'Blacksmith',cost:250}];
+    builds.forEach((b,i)=>{
+      const y=80+i*42;
+      if(mx>40 && mx<440 && my>y && my<y+36) build(b.name,b.cost);
     });
-    if(mx>150 && mx<330 && my>290 && my<330){
-      state='map';
-      showMsg('Left Town');
-      draw();
+    const recs=[{name:'Peasant',cost:40,add:4,need:'Barracks'},{name:'Archer',cost:80,add:2,need:'Archer Tower'},{name:'Swordsman',cost:120,add:1,need:'Blacksmith'}];
+    recs.forEach((r,i)=>{
+      const y=240+i*32;
+      if(mx>60 && mx<420 && my>y && my<y+28) recruit(r.name,r.cost,r.add,r.need);
+    });
+    if(mx>160 && mx<320 && my>340 && my<368){
+      state='map'; showMsg('Left Town'); draw();
     }
   } else if(state==='combat'){
     doCombatClick(mx,my);
   }
 };
 document.getElementById('again').onclick=()=>{document.getElementById('over').classList.remove('show'); init();};
-function init(){ gold=500; genMap(); updateHUD(); state='map'; showMsg('Move onto the yellow castle to open Town'); draw(); }
+function init(){ gold=500; day=1; moves=0; genMap(); updateHUD(); state='map'; showMsg('Build Barracks to recruit Peasants'); draw(); }
 init();
 </script></body></html>
