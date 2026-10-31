@@ -17,7 +17,7 @@ canvas{display:block;width:min(96vw,520px);aspect-ratio:4/3;background:#1a2a1a;b
 <div id="armybox"></div>
 <div id="msg"></div>
 <canvas id="c" width="480" height="360"></canvas>
-<div id="hint">Enter your town to build/recruit/garrison<br>Enter enemy town to view (or fight garrison)</div>
+<div id="hint">Enter your town to build/recruit/garrison<br>Enter enemy town to view or attack garrison</div>
 <div id="over"><h2 style="color:#e40058;text-shadow:3px 3px 0 #000;margin:0;font-size:22px">GAME OVER</h2><div id="why"></div><button class="btn" id="again">Play Again</button></div>
 <script>
 const c=document.getElementById('c'),x=c.getContext('2d');
@@ -74,7 +74,7 @@ function drawMap(){
     const ex=e.x*TILE, ey=e.y*TILE;
     x.fillStyle='#d04040';
     x.beginPath(); x.arc(ex+12,ey+12,11,0,Math.PI*2); x.fill();
-    x.fillStyle('#fff'; x.fillText('☠',ex+12,ey+17);
+    x.fillStyle='#fff'; x.fillText('☠',ex+12,ey+17);
   });
   x.textAlign='left';
 }
@@ -227,7 +227,8 @@ function startCombat(enemy){
   player.army.forEach((u,i)=>{
     if(i<3) combat.grid[1+i][1]={side:'player',type:u.type,count:u.count,hp:UNIT[u.type].hp*u.count,id:'p'+i};
   });
-  enemy.army.forEach((u,i)=>{
+  const enemyArmy=enemy.army||enemyTown.garrison;
+  enemyArmy.forEach((u,i)=>{
     if(i<3) combat.grid[1+i][6]={side:'enemy',type:u.type,count:u.count,hp:UNIT[u.type].hp*u.count,id:'e'+i};
   });
   showMsg('PLAN phase');
