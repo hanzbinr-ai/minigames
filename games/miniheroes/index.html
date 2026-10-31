@@ -17,12 +17,12 @@ canvas{display:block;width:min(96vw,520px);aspect-ratio:4/3;background:#1a2a1a;b
 <div id="armybox"></div>
 <div id="msg"></div>
 <canvas id="c" width="480" height="360"></canvas>
-<div id="hint">Battle: click your unit, then click empty tile to move or enemy to attack<br>Adjacent attack only</div>
+<div id="hint">Battle: click unit → move or attack<br>Archer can shoot from distance (range 4)</div>
 <div id="over"><h2 style="color:#e40058;text-shadow:3px 3px 0 #000;margin:0;font-size:22px">GAME OVER</h2><div id="why"></div><button class="btn" id="again">Play Again</button></div>
 <script>
 const c=document.getElementById('c'),x=c.getContext('2d');
 const W=20,H=15,TILE=24;
-const UNIT={Peasant:{atk:1,def:1,hp:1,dmg:[1,1]},Archer:{atk:2,def:1,hp:2,dmg:[2,3]},Swordsman:{atk:4,def:3,hp:4,dmg:[3,5]},Skeleton:{atk:2,def:1,hp:2,dmg:[1,2]},Zombie:{atk:2,def:2,hp:3,dmg:[2,3]}};
+const UNIT={Peasant:{atk:1,def:1,hp:1,dmg:[1,1],range:1},Archer:{atk:2,def:1,hp:2,dmg:[2,3],range:4},Swordsman:{atk:4,def:3,hp:4,dmg:[3,5],range:1},Skeleton:{atk:2,def:1,hp:2,dmg:[1,2],range:1},Zombie:{atk:2,def:2,hp:3,dmg:[2,3],range:1}};
 let map=[],player,enemies=[],playerTown,enemyTown,gold=500,day=1,moves=0,state='map',combat=null;
 function showMsg(t){document.getElementById('msg').textContent=t; setTimeout(()=>document.getElementById('msg').textContent='',2500)}
 function genMap(){
@@ -191,7 +191,7 @@ function startCombat(enemy){
   enemy.army.forEach((u,i)=>{
     if(i<3) combat.grid[1+i][6]={side:'enemy',type:u.type,count:u.count,hp:UNIT[u.type].hp*u.count};
   });
-  showMsg('Tactical Battle! Select your unit.');
+  showMsg('Select unit. Archer can shoot far.');
   draw();
 }
 function drawCombat(){
@@ -218,7 +218,7 @@ function drawCombat(){
     x.lineWidth=1;
   }
   x.fillStyle='#aaa'; x.font='10px monospace';
-  x.fillText(combat.turn==='player'?'Select unit → click tile to move / enemy to attack':'Enemy thinking...',240,340);
+  x.fillText(combat.turn==='player'?'Select unit → move or attack (Archer range 4)':'Enemy thinking...',240,340);
   x.textAlign='left';
 }
 function calcDmg(atk,def){
@@ -226,6 +226,10 @@ function calcDmg(atk,def){
   const base=uA.dmg[0]+Math.random()*(uA.dmg[1]-uA.dmg[0]);
   const ratio=uA.atk/(uA.atk+uD.def);
   return Math.max(1,Math.round(base*ratio*atk.count*0.6));
+}
+function canAttack(unit,dist){
+  const range=UNIT[unit.type].range||1;
+  return dist>=1 && dist<=range;
 }
 function doCombatClick(mx,my){
   if(combat.turn!=='player') return;
@@ -236,18 +240,18 @@ function doCombatClick(mx,my){
   if(!combat.selected){
     if(cell && cell.side==='player'){
       combat.selected={x:gx,y:gy};
-      showMsg('Unit selected');
+      showMsg(cell.type+' selected');
       draw();
     }
     return;
   }
   const sel=combat.grid[combat.selected.y][combat.selected.x];
   const dist=Math.abs(gx-combat.selected.x)+Math.abs(gy-combat.selected.y);
-  if(cell && cell.side==='enemy' && dist===1){
+  if(cell && cell.side==='enemy' && canAttack(sel,dist)){
     const dmg=calcDmg(sel,cell);
     cell.hp-=dmg;
     cell.count=Math.max(0,Math.ceil(cell.hp/UNIT[cell.type].hp));
-    showMsg('Dealt '+dmg+' dmg');
+    showMsg(sel.type+' dealt '+dmg+' dmg');
     if(cell.count<=0) combat.grid[gy][gx]=null;
     combat.selected=null;
     if(!hasUnits('enemy')){ endCombat(true); return; }
@@ -275,14 +279,14 @@ function enemyCombatAI(){
   for(let y=0;y<6;y++) for(let xx=0;xx<8;xx++){
     const u=combat.grid[y][xx];
     if(!u || u.side!=='enemy') continue;
-    for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++){
-      if(dx===0&&dy===0) continue;
-      const nx=xx+dx, ny=y+dy;
-      if(nx<0||ny<0||nx>=8||ny>=6) continue;
-      const t=combat.grid[ny][nx];
-      if(t && t.side==='player'){
+    const range=UNIT[u.type].range||1;
+    for(let ty=0;ty<6;ty++) for(let tx=0;tx<8;tx++){
+      const t=combat.grid[ty][tx];
+      if(!t || t.side!=='player') continue;
+      const dist=Math.abs(tx-xx)+Math.abs(ty-y);
+      if(dist>=1 && dist<=range){
         const score=calcDmg(u,t);
-        if(score>bestScore){ bestScore=score; best={ex:xx,ey:y,tx:nx,ty:ny,attack:true}; }
+        if(score>bestScore){ bestScore=score; best={ex:xx,ey:y,tx,ty,attack:true}; }
       }
     }
     if(!best){
@@ -370,6 +374,6 @@ c.onclick=e=>{
   }
 };
 document.getElementById('again').onclick=()=>{document.getElementById('over').classList.remove('show'); init();};
-function init(){ gold=500; day=1; moves=0; genMap(); updateHUD(); state='map'; showMsg('Build Barracks to recruit'); draw(); }
+function init(){ gold=500; day=1; moves=0; genMap(); updateHUD(); state='map'; showMsg('Build Archer Tower for ranged units'); draw(); }
 init();
 </script></body></html>
