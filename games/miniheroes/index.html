@@ -17,7 +17,7 @@ canvas{display:block;width:min(96vw,520px);aspect-ratio:4/3;background:#1a2a1a;b
 <div id="armybox"></div>
 <div id="msg"></div>
 <canvas id="c" width="480" height="360"></canvas>
-<div id="hint">Battle: plan all actions first, then RESOLVE<br>Enemy town also builds over time</div>
+<div id="hint">Enter your town to build/recruit/garrison<br>Enter enemy town to view (or fight garrison)</div>
 <div id="over"><h2 style="color:#e40058;text-shadow:3px 3px 0 #000;margin:0;font-size:22px">GAME OVER</h2><div id="why"></div><button class="btn" id="again">Play Again</button></div>
 <script>
 const c=document.getElementById('c'),x=c.getContext('2d');
@@ -29,7 +29,7 @@ const UNIT={
   Skeleton:{atk:2,def:1,hp:2,spd:4,dmg:[1,2],range:1,skill:'Undead'},
   Zombie:{atk:2,def:2,hp:3,spd:2,dmg:[2,3],range:1,skill:'Tough'}
 };
-let map=[],player,enemies=[],playerTown,enemyTown,gold=500,day=1,moves=0,state='map',combat=null;
+let map=[],player,enemies=[],playerTown,enemyTown,gold=500,day=1,moves=0,state='map',combat=null,viewTown=null;
 function showMsg(t){document.getElementById('msg').textContent=t; setTimeout(()=>document.getElementById('msg').textContent='',2500)}
 function genMap(){
   map=Array.from({length:H},()=>Array(W).fill(0));
@@ -37,8 +37,8 @@ function genMap(){
     if(Math.random()<0.1) map[y][xx]=1;
     if(Math.random()<0.03) map[y][xx]=2;
   }
-  playerTown={x:2,y:2,owner:'player',buildings:['Fort'],gold:0};
-  enemyTown={x:17,y:12,owner:'enemy',buildings:['Fort'],gold:200};
+  playerTown={x:2,y:2,owner:'player',buildings:['Fort'],gold:0,garrison:[]};
+  enemyTown={x:17,y:12,owner:'enemy',buildings:['Fort'],gold:200,garrison:[{type:'Skeleton',count:3}]};
   map[playerTown.y][playerTown.x]=3;
   map[enemyTown.y][enemyTown.x]=4;
   player={x:4,y:4,level:1,exp:0,army:[{type:'Peasant',count:6}]};
@@ -74,46 +74,50 @@ function drawMap(){
     const ex=e.x*TILE, ey=e.y*TILE;
     x.fillStyle='#d04040';
     x.beginPath(); x.arc(ex+12,ey+12,11,0,Math.PI*2); x.fill();
-    x.fillStyle='#fff'; x.fillText('☠',ex+12,ey+17);
+    x.fillStyle('#fff'; x.fillText('☠',ex+12,ey+17);
   });
   x.textAlign='left';
 }
 function drawTown(){
+  const town=viewTown||playerTown;
+  const isPlayer=town.owner==='player';
   x.fillStyle='#12121e'; x.fillRect(0,0,480,360);
-  x.fillStyle='#f0c040'; x.font='18px monospace'; x.textAlign='center';
-  x.fillText('YOUR TOWN',240,32);
+  x.fillStyle=isPlayer?'#f0c040':'#e04040'; x.font='18px monospace'; x.textAlign='center';
+  x.fillText(isPlayer?'YOUR TOWN':'ENEMY TOWN',240,32);
   x.font='12px monospace'; x.fillStyle='#fff';
-  x.fillText('Gold: '+gold+'   Buildings: '+playerTown.buildings.join(', '),240,54);
-  const builds=[
-    {name:'Barracks', cost:200, unlock:'Peasant'},
-    {name:'Archer Tower', cost:300, unlock:'Archer'},
-    {name:'Blacksmith', cost:250, unlock:'Swordsman'}
-  ];
-  builds.forEach((b,i)=>{
-    const y=80+i*42;
-    const has=playerTown.buildings.includes(b.name);
-    x.fillStyle=has?'#2a5a2a':(gold>=b.cost?'#2a6aaa':'#444');
-    x.fillRect(40,y,400,36);
-    x.fillStyle='#fff'; x.font='12px monospace';
-    x.fillText(has?b.name+' (Built)':b.name+'  '+b.cost+'g  → '+b.unlock,240,y+24);
-  });
-  x.fillStyle='#f0c040'; x.font='13px monospace'; x.fillText('RECRUIT',240,220);
-  const recs=[
-    {name:'Peasant', cost:40, add:4, need:'Barracks'},
-    {name:'Archer', cost:80, add:2, need:'Archer Tower'},
-    {name:'Swordsman', cost:120, add:1, need:'Blacksmith'}
-  ];
-  recs.forEach((r,i)=>{
-    const y=240+i*32;
-    const can=playerTown.buildings.includes(r.need) && gold>=r.cost;
-    x.fillStyle=can?'#3a5a8a':'#333';
-    x.fillRect(60,y,360,28);
+  x.fillText('Buildings: '+town.buildings.join(', '),240,54);
+  if(isPlayer){
+    const builds=[
+      {name:'Barracks', cost:200, unlock:'Peasant'},
+      {name:'Archer Tower', cost:300, unlock:'Archer'},
+      {name:'Blacksmith', cost:250, unlock:'Swordsman'}
+    ];
+    builds.forEach((b,i)=>{
+      const y=75+i*38;
+      const has=town.buildings.includes(b.name);
+      x.fillStyle=has?'#2a5a2a':(gold>=b.cost?'#2a6aaa':'#444');
+      x.fillRect(40,y,400,32);
+      x.fillStyle='#fff'; x.font='11px monospace';
+      x.fillText(has?b.name+' (Built)':b.name+'  '+b.cost+'g',240,y+20);
+    });
+    x.fillStyle='#f0c040'; x.font='12px monospace'; x.fillText('GARRISON',240,200);
+    const gar=town.garrison.map(g=>g.type+':'+g.count).join(' | ')||'Empty';
+    x.fillStyle='#aaa'; x.font='10px monospace'; x.fillText(gar,240,218);
+    x.fillStyle='#3a5a8a'; x.fillRect(60,230,160,28);
     x.fillStyle='#fff'; x.font='11px monospace';
-    x.fillText(r.name+' +'+r.add+' ('+r.cost+'g) '+(playerTown.buildings.includes(r.need)?'':'[Need '+r.need+']'),240,y+19);
-  });
-  x.fillStyle='#666'; x.fillRect(160,340,160,28);
+    x.fillText('STATION 2',140,248);
+    x.fillStyle='#3a5a8a'; x.fillRect(260,230,160,28);
+    x.fillText('TAKE 2',340,248);
+  } else {
+    x.fillStyle='#aaa'; x.font='12px monospace';
+    x.fillText('Garrison: '+(town.garrison.map(g=>g.type+':'+g.count).join(', ')||'None'),240,120);
+    x.fillStyle='#7a3a3a'; x.fillRect(140,180,200,36);
+    x.fillStyle='#fff'; x.font='13px monospace';
+    x.fillText('ATTACK GARRISON',240,202);
+  }
+  x.fillStyle='#666'; x.fillRect(160,320,160,28);
   x.fillStyle='#fff'; x.font='12px monospace';
-  x.fillText('LEAVE',240,358);
+  x.fillText('LEAVE',240,338);
   x.textAlign='left';
 }
 function canMove(nx,ny){
@@ -151,16 +155,23 @@ function enemyDevelop(){
       break;
     }
   }
-  if(enemyTown.buildings.includes('Barracks') && enemies.length){
-    let e=enemies[0];
-    let u=e.army.find(a=>a.type==='Skeleton');
-    if(u) u.count+=2; else e.army.push({type:'Skeleton',count:2});
+  if(enemyTown.buildings.includes('Barracks')){
+    let g=enemyTown.garrison.find(a=>a.type==='Skeleton');
+    if(g) g.count+=1; else enemyTown.garrison.push({type:'Skeleton',count:1});
   }
 }
 function checkEvents(){
   if(player.x===playerTown.x && player.y===playerTown.y){
+    viewTown=playerTown;
     state='town';
-    showMsg('Town opened');
+    showMsg('Your town');
+    draw();
+    return;
+  }
+  if(player.x===enemyTown.x && player.y===enemyTown.y){
+    viewTown=enemyTown;
+    state='town';
+    showMsg('Enemy town');
     draw();
     return;
   }
@@ -175,13 +186,26 @@ function build(name,cost){
   showMsg(name+' built!');
   updateHUD(); draw();
 }
-function recruit(type,cost,add,need){
-  if(!playerTown.buildings.includes(need)){ showMsg('Need '+need+' first!'); return; }
-  if(gold<cost){ showMsg('Not enough gold!'); return; }
-  gold-=cost;
-  let u=player.army.find(a=>a.type===type);
-  if(u) u.count+=add; else player.army.push({type,count:add});
-  showMsg('+'+add+' '+type);
+function stationUnits(){
+  if(!player.army.length){ showMsg('No units to station'); return; }
+  const u=player.army[0];
+  const amt=Math.min(2,u.count);
+  u.count-=amt;
+  if(u.count<=0) player.army.shift();
+  let g=playerTown.garrison.find(a=>a.type===u.type);
+  if(g) g.count+=amt; else playerTown.garrison.push({type:u.type,count:amt});
+  showMsg('Stationed '+amt+' '+u.type);
+  updateHUD(); draw();
+}
+function takeUnits(){
+  if(!playerTown.garrison.length){ showMsg('Garrison empty'); return; }
+  const g=playerTown.garrison[0];
+  const amt=Math.min(2,g.count);
+  g.count-=amt;
+  if(g.count<=0) playerTown.garrison.shift();
+  let u=player.army.find(a=>a.type===g.type);
+  if(u) u.count+=amt; else player.army.push({type:g.type,count:amt});
+  showMsg('Took '+amt+' '+g.type);
   updateHUD(); draw();
 }
 function enemyTurn(){
@@ -206,7 +230,7 @@ function startCombat(enemy){
   enemy.army.forEach((u,i)=>{
     if(i<3) combat.grid[1+i][6]={side:'enemy',type:u.type,count:u.count,hp:UNIT[u.type].hp*u.count,id:'e'+i};
   });
-  showMsg('PLAN phase: set actions, then click RESOLVE');
+  showMsg('PLAN phase');
   draw();
 }
 function drawCombat(){
@@ -376,9 +400,13 @@ function endCombat(win){
       if(u && u.side==='player' && u.count>0) remaining.push({type:u.type,count:u.count});
     }
     player.army=remaining;
-    enemies=enemies.filter(e=>e!==combat.enemy);
+    if(combat.enemy.garrison){
+      enemyTown.garrison=[];
+    } else {
+      enemies=enemies.filter(e=>e!==combat.enemy);
+    }
     showMsg('Victory! +80 Gold');
-    if(!enemies.length){ gameOver(true); return; }
+    if(!enemies.length && !enemyTown.garrison.length){ gameOver(true); return; }
   } else {
     gameOver(false); return;
   }
@@ -408,24 +436,28 @@ c.onclick=e=>{
     const tx=Math.floor(mx/TILE), ty=Math.floor(my/TILE);
     moveTo(tx,ty);
   } else if(state==='town'){
-    const builds=[{name:'Barracks',cost:200},{name:'Archer Tower',cost:300},{name:'Blacksmith',cost:250}];
-    builds.forEach((b,i)=>{
-      const y=80+i*42;
-      if(mx>40 && mx<440 && my>y && my<y+36) build(b.name,b.cost);
-    });
-    const recs=[{name:'Peasant',cost:40,add:4,need:'Barracks'},{name:'Archer',cost:80,add:2,need:'Archer Tower'},{name:'Swordsman',cost:120,add:1,need:'Blacksmith'}];
-    recs.forEach((r,i)=>{
-      const y=240+i*32;
-      if(mx>60 && mx<420 && my>y && my<y+28) recruit(r.name,r.cost,r.add,r.need);
-    });
-    if(mx>160 && mx<320 && my>340 && my<368){
-      state='map'; showMsg('Left Town'); draw();
+    const town=viewTown||playerTown;
+    if(town.owner==='player'){
+      const builds=[{name:'Barracks',cost:200},{name:'Archer Tower',cost:300},{name:'Blacksmith',cost:250}];
+      builds.forEach((b,i)=>{
+        const y=75+i*38;
+        if(mx>40 && mx<440 && my>y && my<y+32) build(b.name,b.cost);
+      });
+      if(mx>60 && mx<220 && my>230 && my<258) stationUnits();
+      if(mx>260 && mx<420 && my>230 && my<258) takeUnits();
+    } else {
+      if(mx>140 && mx<340 && my>180 && my<216){
+        startCombat({army:enemyTown.garrison,garrison:true});
+      }
+    }
+    if(mx>160 && mx<320 && my>320 && my<348){
+      state='map'; viewTown=null; showMsg('Left Town'); draw();
     }
   } else if(state==='combat'){
     doCombatClick(mx,my);
   }
 };
 document.getElementById('again').onclick=()=>{document.getElementById('over').classList.remove('show'); init();};
-function init(){ gold=500; day=1; moves=0; genMap(); updateHUD(); state='map'; showMsg('Plan all actions then RESOLVE'); draw(); }
+function init(){ gold=500; day=1; moves=0; genMap(); updateHUD(); state='map'; showMsg('Enter towns to manage'); draw(); }
 init();
 </script></body></html>
