@@ -836,7 +836,7 @@ function resolveRound() {
   if (B.noPlan !== 'R' || B.round > 1) planSide('R');
   if (B.noPlan && B.round === 1) { B.units.forEach(u => { if (u.side === B.noPlan) delete B.plans[u.id]; }); B.spell[B.noPlan] = null; }
   B.phase = 'resolve'; B.sel = null; B.spellPick = null;
-  B.clock = 0; B.ev = []; B.proj = []; B.eff = []; UI.fx = [];
+  B.clock = 0; B.ev = []; B.proj = []; B.eff = []; B.shake = []; UI.fx = [];
   B.units.forEach(u => { if (!u.alive) u.gone = true; u.atk = []; u.hit = []; });
   if (B.siege) { B.siege.fire = []; B.siege.shots = []; }
   const out = [];
@@ -846,95 +846,135 @@ function resolveRound() {
   for (const u of B.units) { const l = moraleChance(u.side); if (u.alive && !hasAb(u, 'Undead') && !hasAb(u, 'Machine') && l && Math.random() * 100 < l) { u.morale = 1; fx(u, 'MORALE!', '#58f8f8', 0.5); } }
   const afterSpell = B.units.map(u => [u, u.count, u.alive]);
   later(0.5, () => afterSpell.forEach(([u, c, a]) => { u.shown = c; if (!a && u.deadAt == null) u.deadAt = B.clock; }));
-  // 2. movement, fastest first (ties random)
-  const order = B.units.filter(u => u.alive).sort((a, b) => moveOf(b) - moveOf(a) || Math.random() - 0.5);
-  for (const u of order) {
-    const p = B.plans[u.id]; if (!p || !u.alive) continue;
-    if (p.t === 'move') {
-      const r = reach(u, moveOf(u)), c = r.get(p.x + ',' + p.y);
-      if (c) moveAlong(u, c);
-    } else if (p.t === 'atk') {
-      const t = uById(p.target); if (!t || !t.alive || md(u, t) === 1) continue;
-      if (US(u).range && !enemyNear(u)) continue;
-      if (hasAb(u, 'Teleport')) { const c = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy]) => ({x: t.x + dx, y: t.y + dy})).filter(c => free(c.x, c.y, u.side)).sort((p, q) => md(p, u) - md(q, u))[0]; if (c) { u.moved = md(c, u); u.x = c.x; u.y = c.y; fx(u, 'TELEPORT', '#e40058', 0.5); continue; } }
-      let best = null;
-      for (const c of reach(u, moveOf(u)).values()) { const score = md(c, t) * 10 + c.d; if (!best || score < best.s) best = {c, s: score}; }
-      if (best) moveAlong(u, best.c);
-    }
-  }
-  later(0.55, () => B.units.forEach(u => { u.gx = u.x; u.gy = u.y; }));
-  // 3. attacks - all damage computed from the same snapshot, then applied together
-  const hits = [];
+  // Resolve order: 1) ranged volley (simultaneous)  2) movement  3) melee exchanges (striker first, then retaliation)
+  const hits = [], up = u => u.alive && u.tot > 0;
   const strikes = u => hasAb(u, 'Triple') ? 3 : (hasAb(u, 'Double') || (B.round === 1 && techCap(ownerOfU(u), 'fury'))) ? 2 : 1;
-  const adjFoeWith = (u, k) => B.units.some(o => o.alive && o.side !== u.side && md(o, u) === 1 && hasAb(o, k));
-  const strike = (u, t, d, tags, melee, n) => { // one blow + its ability side effects (Ethereal, Fire Shield, Splash)
-    if (melee && hasAb(t, 'Ethereal') && Math.random() < 0.3) { fx(t, 'PHASED', '#a8a8fc', 1.2 + n * 0.3); return; }
-    hits.push({a: u, t, d, tags: n ? tags.concat('x' + (n + 1)) : tags, n});
-    if (melee && hasAb(t, 'FireShield')) hits.push({a: t, t: u, d: Math.max(1, Math.round(d * 0.2)), tags: ['FIRE'], n});
-    if (!n && hasAb(u, 'Splash')) B.units.filter(o => o.alive && o.side === t.side && o !== t && md(o, t) === 1).forEach(o => hits.push({a: u, t: o, d: Math.max(1, Math.round(d * 0.5)), tags: ['SPLASH'], n, splash: 1}));
+  const adjFoeWith = (u, k) => B.units.some(o => up(o) && o.side !== u.side && md(o, u) === 1 && hasAb(o, k));
+  const settle = u => { // apply death / Endless Night right after a hit lands
+    if (!u.alive) return; const hp = US(u).hp;
+    if (u.tot <= 0 && techCap(ownerOfU(u), 'endless') && !u.rose && u.src >= 0) { u.rose = 1; u.tot = Math.ceil(u.start / 2) * hp; fx(u, 'RISES AGAIN!', '#d858f8', T + 0.3); out.push(u.type + ' rises (Endless Night)'); }
+    if (u.tot <= 0) { u.alive = false; u.tot = 0; out.push(u.type + ' destroyed'); }
+    u.count = Math.ceil(u.tot / hp);
   };
-  for (const u of B.units) {
-    const p = B.plans[u.id]; if (!u.alive || !p || p.t !== 'atk') continue;
-    const t = uById(p.target); if (!t || !t.alive) continue;
-    const ranged = US(u).range > 0, dist = md(u, t);
-    if (!fearImm(u) && adjFoeWith(u, 'Fear') && Math.random() < 0.15) { fx(u, 'COWERS', '#a0a0a0', 1.0); out.push(u.type + ' cowers in fear'); continue; }
-    if (!hasAb(u, 'Undead') && !hasAb(u, 'Machine') && adjFoeWith(u, 'Blind') && Math.random() < 0.2) { fx(u, 'BLINDED', '#fcfcfc', 1.0); out.push(u.type + ' is blinded'); continue; }
-    if (ranged && dist > 1) {
-      if (enemyNear(u)) { out.push(u.type + ' blocked'); continue; }
-      const r = calcDmg(u, t, true); let d = r.dmg;
-      if (dist > rangeOf(u)) d = Math.ceil(d / 2);
-      const behindWall = B.siege && u.side === B.siege.att && (B.siege.def === 'R' ? t.x > B.siege.x : t.x < B.siege.x) && B.siege.cells[t.y].hp > 0;
-      if (behindWall && hasAb(u, 'RockThrow')) { if (Math.random() < 0.35 && wallIntact(t.y)) { const c = B.siege.cells[t.y]; c.hp--; const hp = c.hp; later(1.4, () => { c.shown = hp; }); fx({x: B.siege.x, y: t.y}, hp <= 0 ? 'SMASHED!' : 'CRACK', '#f8b800', 1.4); out.push(u.type + ' cracked the ' + c.kind); } }
-      else if (behindWall) { d = Math.ceil(d / 2); r.tags.push('WALL'); }
-      for (let n = 0; n < strikes(u); n++) strike(u, t, d, r.tags, false, n);
-    } else if (dist === 1) {
-      const r = calcDmg(u, t, false); let d = ranged ? Math.ceil(r.dmg / 2) : r.dmg;
-      for (let n = 0; n < strikes(u); n++) strike(u, t, d, r.tags, true, n);
-      const noRet = hasAb(u, 'NoRetal') || techCap(ownerOfU(u), 'wildhunt') || (u.hidden && tac(u.side, 'ambush'));
-      if (!t.retal && !noRet) { t.retal = true; const rr = calcDmg(t, u, false); strike(t, u, tac(t.side, 'riposte') ? rr.dmg : Math.ceil(rr.dmg / 2), ['RETAL'], true, 0); hits[hits.length - 1] && hits[hits.length - 1].a === t && (hits[hits.length - 1].ret = 1); }
-    }
-  }
-  if (B.siege) for (const ty of B.siege.towers) { // arrow towers shoot in the same attack step
-    const foes = B.units.filter(u => u.alive && u.side === B.siege.att); if (!foes.length) break;
-    const t = foes.reduce((b, o) => !b || o.tot * US(o).att > b.tot * US(b).att ? o : b, null);
-    hits.push({a: null, tower: ty, t, d: B.siege.towerDmg, tags: ['TOWER']});
-  }
-  B.lastHits = hits.map(h => ({a: h.a && h.a.id, t: h.t.id, d: h.d, tags: h.tags}));
-  for (const u of B.units) if (u.hidden && B.plans[u.id] && B.plans[u.id].t !== 'def') { u.hidden = false; fx(u, 'AMBUSH!', '#d858f8', 0.9); }
-  for (const h of hits) {
-    h.t.tot -= h.d;
+  const show = (u, at) => { const c = u.count, a = u.alive; later(at, () => { u.shown = c; if (!a && u.deadAt == null) u.deadAt = B.clock; }); };
+  const projKind = a => hasAb(a, 'RockThrow') || hasAb(a, 'Machine') ? 'boulder' : /bow|Elf|Engineer|Arbalest/.test(a.type) ? 'arrow' : 'orb';
+  const land = (h, at, shot) => { // visuals + on-hit abilities for one blow (damage already applied)
+    const imp = at + (shot ? 0.35 : 0.15), tmax = h.t.start * US(h.t).hp;
+    if (h.a) {
+      h.a.atk.push({at, dx: shot ? 0 : Math.sign(h.t.x - h.a.x), dy: shot ? 0 : Math.sign(h.t.y - h.a.y)});
+      if (shot) B.proj.push({at, dur: 0.35, fx: h.a.x, fy: h.a.y, tx: h.t.x, ty: h.t.y, kind: projKind(h.a), col: US(h.a).col});
+    } else { B.siege.shots.push({at, y: h.tower}); B.proj.push({at, dur: 0.35, fx: B.siege.x, fy: h.tower, tx: h.t.x, ty: h.t.y, kind: 'arrow'}); }
+    h.t.hit.push(imp); const ret = h.tags.includes('RETAL');
+    fx(h.t, '-' + h.d + (h.tags.length ? ' ' + h.tags[0] : ''), ret ? '#f8b800' : h.tags.includes('FIRE') ? '#fc7430' : '#fcfcfc', imp);
+    later(imp, SFX.hit);
+    if (h.d >= tmax * 0.25 || h.t.tot <= 0) B.shake.push({at: imp, mag: h.t.tot <= 0 ? 3 : 2});
     if (h.a && h.d > 0) {
       if (hasAb(h.a, 'Drain') && !hasAb(h.t, 'Machine') && !hasAb(h.t, 'Undead')) h.a.tot = Math.min(h.a.start * US(h.a).hp, h.a.tot + Math.round(h.d * 0.25));
       if (hasAb(h.a, 'Shred') && !h.splash) h.t.shred = Math.min(9, (h.t.shred || 0) + 3);
       if (hasAb(h.a, 'Plague') && !h.splash) h.t.plague = Math.min(4, (h.t.plague || 0) + 2);
     }
-    if (!h.a) { const at = 1.05, imp = 1.45; B.siege.shots.push({at, y: h.tower}); B.proj.push({at, dur: 0.4, fx: B.siege.x, fy: h.tower, tx: h.t.x, ty: h.t.y, kind: 'arrow'}); h.t.hit.push(imp); fx(h.t, '-' + h.d + ' TOWER', '#fc7460', imp); later(imp, SFX.hit); continue; }
-    const ret = h.tags.includes('RETAL') || h.tags.includes('FIRE'), at = (ret ? 1.6 : 1.05) + (h.n || 0) * 0.3, shot = !ret && US(h.a).range > 0 && md(h.a, h.t) > 1, imp = at + (shot ? 0.35 : 0.15);
-    h.a.atk.push({at, dx: shot ? 0 : Math.sign(h.t.x - h.a.x), dy: shot ? 0 : Math.sign(h.t.y - h.a.y)});
-    if (shot) B.proj.push({at, dur: 0.35, fx: h.a.x, fy: h.a.y, tx: h.t.x, ty: h.t.y, kind: hasAb(h.a, 'RockThrow') || hasAb(h.a, 'Machine') ? 'boulder' : /bow|Elf|Engineer|Arbalest/.test(h.a.type) ? 'arrow' : 'orb', col: US(h.a).col});
-    h.t.hit.push(imp); fx(h.t, '-' + h.d + (h.tags.length ? ' ' + h.tags[0] : ''), ret ? '#f8b800' : '#fcfcfc', imp);
-    later(imp, SFX.hit);
+    h.at = at; h.shot = shot; hits.push(h); return imp;
+  };
+  const cantAct = u => {
+    if (!fearImm(u) && adjFoeWith(u, 'Fear') && Math.random() < 0.15) { fx(u, 'COWERS', '#a0a0a0', T); out.push(u.type + ' cowers in fear'); return true; }
+    if (!hasAb(u, 'Undead') && !hasAb(u, 'Machine') && adjFoeWith(u, 'Blind') && Math.random() < 0.2) { fx(u, 'BLINDED', '#fcfcfc', T); out.push(u.type + ' is blinded'); return true; }
+    return false;
+  };
+  let T = 0.6; // timeline cursor (seconds of battle clock)
+  B.order = [];
+  for (const u of B.units) if (u.hidden && B.plans[u.id] && B.plans[u.id].t !== 'def') { u.hidden = false; fx(u, 'AMBUSH!', '#d858f8', 0.5); }
+  // --- 1. RANGED PHASE: every shooter not pinned by an adjacent enemy fires; damage from one snapshot, applied together
+  const volley = [];
+  for (const u of B.units) {
+    const p = B.plans[u.id]; if (!up(u) || !p || p.t !== 'atk' || !US(u).range) continue;
+    const t = uById(p.target); if (!t || !up(t) || md(u, t) <= 1) continue;
+    if (enemyNear(u)) { fx(u, 'PINNED', '#bcbcbc', T); out.push(u.type + ' pinned - fights in melee'); continue; }
+    if (cantAct(u)) { u.acted = 1; continue; }
+    u.acted = 1;
+    const r = calcDmg(u, t, true); let d = r.dmg; const dist = md(u, t);
+    if (dist > rangeOf(u)) { d = Math.ceil(d / 2); r.tags.push('FAR'); }
+    const behindWall = B.siege && u.side === B.siege.att && (B.siege.def === 'R' ? t.x > B.siege.x : t.x < B.siege.x) && B.siege.cells[t.y].hp > 0;
+    if (behindWall && hasAb(u, 'RockThrow')) { if (Math.random() < 0.35 && wallIntact(t.y)) { const c = B.siege.cells[t.y]; c.hp--; const hp = c.hp; later(T + 0.35, () => { c.shown = hp; }); fx({x: B.siege.x, y: t.y}, hp <= 0 ? 'SMASHED!' : 'CRACK', '#f8b800', T + 0.35); out.push(u.type + ' cracked the ' + c.kind); } }
+    else if (behindWall) { d = Math.ceil(d / 2); r.tags.push('WALL'); }
+    for (let n = 0; n < strikes(u); n++) {
+      volley.push({a: u, t, d, tags: n ? r.tags.concat('x' + (n + 1)) : r.tags, n});
+      if (!n && hasAb(u, 'Splash')) B.units.filter(o => up(o) && o.side === t.side && o !== t && md(o, t) === 1).forEach(o => volley.push({a: u, t: o, d: Math.max(1, Math.round(d * 0.5)), tags: ['SPLASH'], n, splash: 1}));
+    }
   }
-  for (const u of B.units) { // Heal: end of round, before deaths are counted
-    if (!u.alive || u.tot <= 0 || !hasAb(u, 'Heal')) continue;
-    for (const o of B.units) if (o.alive && o !== u && o.side === u.side && md(o, u) === 1 && o.tot > 0) { const mx = o.start * US(o).hp, v = Math.min(mx - o.tot, Math.max(5, Math.ceil(u.tot / US(u).hp) * 2)); if (v > 0) { o.tot += v; fx(o, '+' + v, '#58d854', 1.9); } }
+  if (B.siege) for (const ty of B.siege.towers) {
+    const foes = B.units.filter(u => up(u) && u.side === B.siege.att); if (!foes.length) break;
+    const t = foes.reduce((b, o) => !b || o.tot * US(o).att > b.tot * US(b).att ? o : b, null);
+    volley.push({a: null, tower: ty, t, d: B.siege.towerDmg, tags: ['TOWER']});
+  }
+  if (volley.length) {
+    B.order.push('ranged');
+    volley.forEach(h => h.t.tot -= h.d); // simultaneous: everyone shot before anyone fell
+    let end = T; volley.forEach((h, i) => { end = Math.max(end, land(h, T + (h.n || 0) * 0.25 + (i % 4) * 0.04, true)); });
+    B.units.forEach(u => { settle(u); show(u, end); });
+    T = end + 0.45;
+  }
+  // --- 2. MOVEMENT PHASE: fastest first (ties random)
+  const order = B.units.filter(up).sort((a, b) => moveOf(b) - moveOf(a) || Math.random() - 0.5);
+  let anyMove = false;
+  for (const u of order) {
+    const p = B.plans[u.id]; if (!p || !up(u)) continue;
+    const ox = u.x, oy = u.y;
+    if (p.t === 'move') {
+      const r = reach(u, moveOf(u)), c = r.get(p.x + ',' + p.y);
+      if (c) moveAlong(u, c);
+    } else if (p.t === 'atk' && !u.acted) {
+      const t = uById(p.target); if (!t || !up(t) || md(u, t) === 1) continue;
+      if (US(u).range && !enemyNear(u)) continue;
+      if (hasAb(u, 'Teleport')) { const c = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy]) => ({x: t.x + dx, y: t.y + dy})).filter(c => free(c.x, c.y, u.side)).sort((p, q) => md(p, u) - md(q, u))[0]; if (c) { u.moved = md(c, u); u.x = c.x; u.y = c.y; fx(u, 'TELEPORT', '#e40058', T); } }
+      else { let best = null; for (const c of reach(u, moveOf(u)).values()) { const score = md(c, t) * 10 + c.d; if (!best || score < best.s) best = {c, s: score}; } if (best) moveAlong(u, best.c); }
+    }
+    if (u.x !== ox || u.y !== oy) { anyMove = true; const x = u.x, y = u.y, c = u.count, a = u.alive; later(T, () => { u.gx = x; u.gy = y; u.shown = c; if (!a && u.deadAt == null) u.deadAt = B.clock; }); }
+  }
+  if (anyMove) { B.order.push('move'); T += 0.6; }
+  // --- 3. MELEE PHASE: units that moved strike first; striker hits, then the surviving defender retaliates with what is left
+  const mel = B.units.filter(u => { const p = B.plans[u.id]; return up(u) && !u.acted && p && p.t === 'atk'; })
+    .sort((a, b) => (b.moved ? 1 : 0) - (a.moved ? 1 : 0) || moveOf(b) - moveOf(a) || Math.random() - 0.5);
+  for (const u of mel) {
+    if (!up(u)) continue;
+    const t = uById(B.plans[u.id].target); if (!t || !up(t) || md(u, t) !== 1) continue;
+    if (cantAct(u)) { T += 0.3; continue; }
+    if (!B.order.includes('melee')) B.order.push('melee');
+    let imp = T;
+    for (let n = 0; n < strikes(u) && up(u) && up(t); n++) {
+      const at = T + n * 0.3;
+      if (hasAb(t, 'Ethereal') && Math.random() < 0.3) { fx(t, 'PHASED', '#a8a8fc', at + 0.15); continue; }
+      const r = calcDmg(u, t, false), d = US(u).range ? Math.ceil(r.dmg / 2) : r.dmg, tags = (US(u).range ? ['PINNED'] : []).concat(r.tags, n ? ['x' + (n + 1)] : []);
+      t.tot -= d; imp = land({a: u, t, d, tags, n, melee: 1}, at, false);
+      if (hasAb(t, 'FireShield')) { const fd = Math.max(1, Math.round(d * 0.2)); u.tot -= fd; land({a: t, t: u, d: fd, tags: ['FIRE'], n}, at + 0.05, false); }
+      if (!n && hasAb(u, 'Splash')) B.units.filter(o => up(o) && o.side === t.side && o !== t && md(o, t) === 1).forEach(o => { const sd = Math.max(1, Math.round(d * 0.5)); o.tot -= sd; land({a: u, t: o, d: sd, tags: ['SPLASH'], n, splash: 1}, at, false); settle(o); show(o, at + 0.15); });
+      settle(t); settle(u); show(t, imp); show(u, imp);
+    }
+    T = imp + 0.2;
+    const noRet = hasAb(u, 'NoRetal') || techCap(ownerOfU(u), 'wildhunt') || (u.hidden && tac(u.side, 'ambush'));
+    if (up(t) && up(u) && !t.retal && !noRet && md(u, t) === 1) { // retaliation uses the defender's surviving count
+      t.retal = true; const rr = calcDmg(t, u, false), d = tac(t.side, 'riposte') ? rr.dmg : Math.ceil(rr.dmg / 2);
+      u.tot -= d; const ri = land({a: t, t: u, d, tags: ['RETAL'], n: 0, ret: 1}, T, false);
+      settle(u); show(u, ri); show(t, ri); T = ri + 0.2;
+    }
+    T += 0.25;
+  }
+  B.lastHits = hits.map(h => ({a: h.a && h.a.id, t: h.t.id, d: h.d, tags: h.tags, at: h.at, kind: h.shot ? 'ranged' : h.ret ? 'retal' : 'melee'}));
+  for (const u of B.units) { // Heal: end of round
+    if (!up(u) || !hasAb(u, 'Heal')) continue;
+    for (const o of B.units) if (up(o) && o !== u && o.side === u.side && md(o, u) === 1) { const mx = o.start * US(o).hp, v = Math.min(mx - o.tot, Math.max(5, Math.ceil(u.tot / US(u).hp) * 2)); if (v > 0) { o.tot += v; fx(o, '+' + v, '#58d854', T); } }
   }
   for (const u of B.units) {
-    if (!u.alive) continue;
-    const hp = US(u).hp;
-    if (u.tot <= 0 && techCap(ownerOfU(u), 'endless') && !u.rose && u.src >= 0) { u.rose = 1; u.tot = Math.ceil(u.start / 2) * hp; fx(u, 'RISES AGAIN!', '#d858f8', 2.0); out.push(u.type + ' rises (Endless Night)'); }
-    if (u.tot <= 0) { u.alive = false; u.tot = 0; out.push(u.type + ' destroyed'); }
-    else if (hasAb(u, 'Regen')) u.tot = Math.ceil(u.tot / hp) * hp;
-    u.count = Math.ceil(u.tot / hp);
-    u.retal = u.haste = u.slow = u.morale = 0; u.moved = 0;
+    if (u.alive) { const hp = US(u).hp; if (hasAb(u, 'Regen')) u.tot = Math.ceil(u.tot / hp) * hp; u.count = Math.ceil(u.tot / hp); }
+    u.retal = u.haste = u.slow = u.morale = 0; u.moved = 0; u.acted = 0;
   }
+  T += 0.3;
   B.plans = {}; B.spell = {L: null, R: null}; B.round++;
   B.log = hits.length + ' hits. ' + out.join('. ');
   const lAlive = B.units.some(u => u.alive && u.side === 'L'), rAlive = B.units.some(u => u.alive && u.side === 'R');
   const fin = B.units.map(u => [u, u.count, u.alive]);
-  later(2.0, () => { fin.forEach(([u, c, a]) => { u.shown = c; if (!a && u.deadAt == null) u.deadAt = B.clock; }); msg(B.log); });
-  if (!lAlive || !rAlive || B.round > 30) { later(2.8, () => endBattle(lAlive && !rAlive)); return; }
-  later(2.5, () => { if (aiShouldRetreat()) { doRetreat('R'); return; } B.phase = 'plan'; B.sel = firstUnplanned(); msg('Round ' + B.round + ' - PLAN. ' + B.log); });
+  later(T, () => { fin.forEach(([u, c, a]) => { u.shown = c; if (!a && u.deadAt == null) u.deadAt = B.clock; }); msg(B.log); });
+  if (!lAlive || !rAlive || B.round > 30) { later(T + 0.8, () => endBattle(lAlive && !rAlive)); return; }
+  later(T + 0.5, () => { if (aiShouldRetreat()) { doRetreat('R'); return; } B.phase = 'plan'; B.sel = firstUnplanned(); msg('Round ' + B.round + ' - PLAN. ' + B.log); });
 }
 function endBattle(playerWon) {
   const ctx = B.ctx, killed = side => B.units.filter(u => u.side !== side).reduce((s, u) => s + Math.max(0, u.start * US(u).hp - u.tot), 0);
@@ -1430,7 +1470,7 @@ function drawBattle(g) {
   const vis = B.units.filter(u => !u.gone && !(u.hidden && u.side === 'R') && (u.alive || u.deadAt == null || B.clock < u.deadAt + 0.6)).sort((a, b) => a.ry - b.ry);
   for (const u of vis) {
     let X = BOX + u.rx * CW, Y = BOY + u.ry * CW - 4, f = Math.floor(clock * 2 + u.ph) % 2, flash = false;
-    for (const a of u.atk) { const k = (B.clock - a.at) / 0.3; if (k >= 0 && k <= 1) { f = 2; X += a.dx * Math.sin(k * Math.PI) * 7; Y += a.dy * Math.sin(k * Math.PI) * 7; } }
+    for (const a of u.atk) { const k = (B.clock - a.at) / 0.3; if (k >= 0 && k <= 1) { f = 2; const e = k < 0.6 ? k / 0.6 : (1 - k) / 0.4; X += a.dx * e * 9; Y += a.dy * e * 9; } }
     for (const h of u.hit) { const k = B.clock - h; if (k >= 0 && k < 0.22) { flash = Math.floor(k * 20) % 2 === 0; X += Math.floor(k * 40) % 2 ? 1 : -1; } }
     const dying = u.deadAt != null && B.clock >= u.deadAt;
     if (dying) { const k = Math.min(1, (B.clock - u.deadAt) / 0.6); g.globalAlpha = 1 - k; Y += k * 6; }
@@ -1476,7 +1516,8 @@ function renderBattleScreen() {
   const aw = CAM.w - pw, ah = CAM.h - ph, s = Math.max(1, Math.floor(Math.min(aw / BLW, ah / BLH)));
   BV = {s, ox: Math.floor((aw - BLW * s) / 2), oy: Math.max(0, Math.floor((ah - BLH * s) / 2))};
   ctx.imageSmoothingEnabled = false; ctx.fillStyle = '#10101e'; ctx.fillRect(0, 0, CAM.w, CAM.h);
-  ctx.drawImage(bcv, BV.ox, BV.oy, BLW * s, BLH * s);
+  let sx = 0, sy = 0; for (const k of B.shake || []) { const e = B.clock - k.at; if (e >= 0 && e < 0.25) { const m = k.mag * (1 - e / 0.25) * s; sx += Math.round(Math.sin(e * 90) * m); sy += Math.round(Math.cos(e * 70) * m * 0.6); } }
+  ctx.drawImage(bcv, BV.ox + sx, BV.oy + sy, BLW * s, BLH * s);
 }
 function renderTitle() {
   const g = bctx; g.imageSmoothingEnabled = false;
@@ -1546,9 +1587,11 @@ function loop(now) {
     if (UI.ai && UI.mode === 'aiturn') { UI.ai.t += dt; while (UI.ai && UI.mode === 'aiturn' && !UI.panel && UI.ai.t >= STEP * 0.7) { UI.ai.t -= STEP * 0.7; aiStep(); } }
     nextLevelUp();
   }
-  if (B) { B.clock += dt; while (B && B.ev.length && B.ev[0].at <= B.clock) B.ev.shift().fn(); }
+  const bdt = B && B.phase === 'resolve' ? (UI.skip ? 30 : dt * (UI.bspeed || 1)) : dt;
+  if (B && B.phase !== 'resolve') UI.skip = false;
+  if (B) { B.clock += bdt; while (B && B.ev.length && B.ev[0].at <= B.clock) B.ev.shift().fn(); }
   if (B) for (const u of B.units) { const k = 1 - Math.exp(-dt * 9); u.rx += (u.gx - u.rx) * k; u.ry += (u.gy - u.ry) * k; }
-  UI.fx = UI.fx.filter(f => (f.t += dt) < f.life);
+  UI.fx = UI.fx.filter(f => (f.t += B ? bdt : dt) < f.life);
   if (G) {
     const spd = dt / STEP * 1.05;
     for (const h of G.heroes) {
@@ -1717,6 +1760,7 @@ const ACTIONS = {
   resolve: () => resolveRound(), spell: () => B && B.phase === 'plan' && openSpells(),
   auto: () => { if (B && B.phase === 'plan') { planSide('L', true); B.sel = null; msg('All stacks planned. Press RESOLVE.'); } },
   binfo: () => openMenu(),
+  speed: () => { if (B && B.phase === 'resolve') { UI.skip = true; return; } UI.bspeed = (UI.bspeed || 1) === 1 ? 2 : 1; const e = document.querySelector('[data-a=speed]'); if (e) e.textContent = 'SPEED ' + UI.bspeed + 'X'; msg('Resolve speed ' + UI.bspeed + 'x (tap during resolve to skip)'); },
   zin: () => setZoom(CAM.z + 1), zout: () => setZoom(CAM.z - 1),
   center: () => { const h = curHero(); if (h) centerOn(h.x, h.y); },
   selhero: id => { G.sel = +id; UI.preview = null; const h = curHero(); if (h) centerOn(h.x, h.y); },
