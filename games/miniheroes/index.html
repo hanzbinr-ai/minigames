@@ -17,7 +17,7 @@ canvas{display:block;width:min(96vw,520px);aspect-ratio:4/3;background:#1a2a1a;b
 <div id="armybox"></div>
 <div id="msg"></div>
 <canvas id="c" width="480" height="360"></canvas>
-<div id="hint">Battle: click unit → move/attack<br>Flanking +50% dmg · Archer range 4 · Skills active</div>
+<div id="hint">Battle: plan all actions first, then RESOLVE<br>Enemy town also builds over time</div>
 <div id="over"><h2 style="color:#e40058;text-shadow:3px 3px 0 #000;margin:0;font-size:22px">GAME OVER</h2><div id="why"></div><button class="btn" id="again">Play Again</button></div>
 <script>
 const c=document.getElementById('c'),x=c.getContext('2d');
@@ -38,13 +38,13 @@ function genMap(){
     if(Math.random()<0.03) map[y][xx]=2;
   }
   playerTown={x:2,y:2,owner:'player',buildings:['Fort'],gold:0};
-  enemyTown={x:17,y:12,owner:'enemy',buildings:['Fort','Barracks'],gold:0};
+  enemyTown={x:17,y:12,owner:'enemy',buildings:['Fort'],gold:200};
   map[playerTown.y][playerTown.x]=3;
   map[enemyTown.y][enemyTown.x]=4;
   player={x:4,y:4,level:1,exp:0,army:[{type:'Peasant',count:6}]};
   enemies=[
-    {x:10,y:6,level:1,army:[{type:'Skeleton',count:5}]},
-    {x:14,y:9,level:2,army:[{type:'Skeleton',count:8},{type:'Zombie',count:3}]}
+    {x:10,y:6,level:1,army:[{type:'Skeleton',count:4}]},
+    {x:14,y:9,level:2,army:[{type:'Skeleton',count:5}]}
   ];
 }
 function drawMap(){
@@ -133,19 +133,28 @@ function moveTo(tx,ty){
     gold+=50;
     day++;
     showMsg('Day '+day+'! +50 Gold');
-    enemyIncome();
+    enemyDevelop();
   }
   checkEvents();
   if(state==='map') enemyTurn();
   updateHUD();
 }
-function enemyIncome(){
-  if(enemyTown.buildings.includes('Barracks') && Math.random()<0.6){
-    let e=enemies[0];
-    if(e){
-      let u=e.army.find(a=>a.type==='Skeleton');
-      if(u) u.count+=2; else e.army.push({type:'Skeleton',count:2});
+function enemyDevelop(){
+  enemyTown.gold+=40;
+  const builds=['Barracks','Archer Tower','Blacksmith'];
+  for(const b of builds){
+    const cost=b==='Barracks'?180:b==='Archer Tower'?280:230;
+    if(!enemyTown.buildings.includes(b) && enemyTown.gold>=cost && Math.random()<0.5){
+      enemyTown.gold-=cost;
+      enemyTown.buildings.push(b);
+      showMsg('Enemy built '+b+'!');
+      break;
     }
+  }
+  if(enemyTown.buildings.includes('Barracks') && enemies.length){
+    let e=enemies[0];
+    let u=e.army.find(a=>a.type==='Skeleton');
+    if(u) u.count+=2; else e.army.push({type:'Skeleton',count:2});
   }
 }
 function checkEvents(){
@@ -178,7 +187,7 @@ function recruit(type,cost,add,need){
 function enemyTurn(){
   enemies.forEach(e=>{
     const dx=Math.sign(player.x-e.x), dy=Math.sign(player.y-e.y);
-    if(Math.random()<0.45 && canMove(e.x+dx,e.y+dy)){
+    if(Math.random()<0.4 && canMove(e.x+dx,e.y+dy)){
       e.x+=dx; e.y+=dy;
     }
   });
@@ -189,21 +198,21 @@ function enemyTurn(){
 function startCombat(enemy){
   state='combat';
   const BW=8, BH=6;
-  combat={enemy,grid:[],selected:null,turn:'player'};
+  combat={enemy,grid:[],plans:[],phase:'plan',selected:null};
   for(let y=0;y<BH;y++) combat.grid[y]=Array(BW).fill(null);
   player.army.forEach((u,i)=>{
-    if(i<3) combat.grid[1+i][1]={side:'player',type:u.type,count:u.count,hp:UNIT[u.type].hp*u.count,acted:false};
+    if(i<3) combat.grid[1+i][1]={side:'player',type:u.type,count:u.count,hp:UNIT[u.type].hp*u.count,id:'p'+i};
   });
   enemy.army.forEach((u,i)=>{
-    if(i<3) combat.grid[1+i][6]={side:'enemy',type:u.type,count:u.count,hp:UNIT[u.type].hp*u.count,acted:false};
+    if(i<3) combat.grid[1+i][6]={side:'enemy',type:u.type,count:u.count,hp:UNIT[u.type].hp*u.count,id:'e'+i};
   });
-  showMsg('Select unit. Flank for +50% dmg.');
+  showMsg('PLAN phase: set actions, then click RESOLVE');
   draw();
 }
 function drawCombat(){
   x.fillStyle='#1a1a2e'; x.fillRect(0,0,480,360);
   x.fillStyle='#f0c040'; x.font='14px monospace'; x.textAlign='center';
-  x.fillText('TACTICAL BATTLE',240,22);
+  x.fillText(combat.phase==='plan'?'PLAN PHASE':'RESOLVE',240,22);
   const TW=40, TH=36, ox=80, oy=40;
   for(let y=0;y<6;y++) for(let xx=0;xx<8;xx++){
     const px=ox+xx*TW, py=oy+y*TH;
@@ -214,19 +223,29 @@ function drawCombat(){
       x.fillStyle=u.side==='player'?'#3a7a3a':'#7a3a3a';
       x.fillRect(px+4,py+4,TW-8,TH-8);
       x.fillStyle='#fff'; x.font='8px monospace';
-      x.fillText(u.type.slice(0,4),px+TW/2,py+14);
-      x.fillText(u.count,px+TW/2,py+24);
-      x.font='7px monospace'; x.fillStyle='#f0c040';
-      x.fillText(UNIT[u.type].skill.slice(0,3),px+TW/2,py+32);
+      x.fillText(u.type.slice(0,4),px+TW/2,py+16);
+      x.fillText(u.count,px+TW/2,py+26);
     }
   }
+  combat.plans.forEach(p=>{
+    if(p.side==='player'){
+      x.strokeStyle='#58d854'; x.lineWidth=2;
+      x.strokeRect(ox+p.tx*TW+4, oy+p.ty*TH+4, TW-8, TH-8);
+      x.lineWidth=1;
+    }
+  });
   if(combat.selected){
     x.strokeStyle='#f0c040'; x.lineWidth=2;
     x.strokeRect(ox+combat.selected.x*TW, oy+combat.selected.y*TH, TW, TH);
     x.lineWidth=1;
   }
-  x.fillStyle='#aaa'; x.font='10px monospace';
-  x.fillText(combat.turn==='player'?'Select → move/attack | Flank +50%':'Enemy turn...',240,340);
+  if(combat.phase==='plan'){
+    x.fillStyle='#2a6aaa'; x.fillRect(160,310,160,28);
+    x.fillStyle='#fff'; x.font='12px monospace';
+    x.fillText('RESOLVE',240,328);
+  }
+  x.fillStyle='#aaa'; x.font='9px monospace';
+  x.fillText(combat.phase==='plan'?'Set actions then RESOLVE':'Resolving...',240,350);
   x.textAlign='left';
 }
 function isFlanked(defX,defY,atkX,atkY){
@@ -234,7 +253,7 @@ function isFlanked(defX,defY,atkX,atkY){
   const behindX=defX-dx, behindY=defY-dy;
   if(behindX<0||behindY<0||behindX>=8||behindY>=6) return false;
   const behind=combat.grid[behindY][behindX];
-  return behind && behind.side!==combat.grid[defY][defX].side;
+  return behind && behind.side!==combat.grid[defY][defX]?.side;
 }
 function calcDmg(atk,def,atkPos,defPos){
   const uA=UNIT[atk.type], uD=UNIT[def.type];
@@ -251,87 +270,100 @@ function canAttack(unit,dist){
   return dist>=1 && dist<=range;
 }
 function doCombatClick(mx,my){
-  if(combat.turn!=='player') return;
+  if(combat.phase!=='plan') return;
   const TW=40, TH=36, ox=80, oy=40;
+  if(mx>160 && mx<320 && my>310 && my<338){
+    resolveCombat();
+    return;
+  }
   const gx=Math.floor((mx-ox)/TW), gy=Math.floor((my-oy)/TH);
   if(gx<0||gy<0||gx>=8||gy>=6) return;
   const cell=combat.grid[gy][gx];
   if(!combat.selected){
     if(cell && cell.side==='player'){
       combat.selected={x:gx,y:gy};
-      showMsg(cell.type+' ('+UNIT[cell.type].skill+')');
+      showMsg(cell.type+' selected');
       draw();
     }
     return;
   }
   const sel=combat.grid[combat.selected.y][combat.selected.x];
   const dist=Math.abs(gx-combat.selected.x)+Math.abs(gy-combat.selected.y);
+  combat.plans=combat.plans.filter(p=>p.id!==sel.id);
   if(cell && cell.side==='enemy' && canAttack(sel,dist)){
-    const dmg=calcDmg(sel,cell,combat.selected,{x:gx,y:gy});
-    cell.hp-=dmg;
-    cell.count=Math.max(0,Math.ceil(cell.hp/UNIT[cell.type].hp));
-    const flank=isFlanked(gx,gy,combat.selected.x,combat.selected.y)?' (Flank!)':'';
-    showMsg(sel.type+' dealt '+dmg+flank);
-    if(cell.count<=0) combat.grid[gy][gx]=null;
-    combat.selected=null;
-    if(!hasUnits('enemy')){ endCombat(true); return; }
-    combat.turn='enemy';
-    setTimeout(enemyCombatAI,700);
-    draw();
+    combat.plans.push({id:sel.id,side:'player',type:'attack',sx:combat.selected.x,sy:combat.selected.y,tx:gx,ty:gy});
+    showMsg('Attack planned');
   } else if(!cell && dist<=UNIT[sel.type].spd){
-    combat.grid[gy][gx]=sel;
-    combat.grid[combat.selected.y][combat.selected.x]=null;
-    combat.selected=null;
-    combat.turn='enemy';
-    setTimeout(enemyCombatAI,700);
-    draw();
-  } else {
-    combat.selected=null;
-    draw();
+    combat.plans.push({id:sel.id,side:'player',type:'move',sx:combat.selected.x,sy:combat.selected.y,tx:gx,ty:gy});
+    showMsg('Move planned');
   }
+  combat.selected=null;
+  draw();
 }
-function hasUnits(side){
-  for(let y=0;y<6;y++) for(let xx=0;xx<8;xx++) if(combat.grid[y][xx]?.side===side) return true;
-  return false;
+function resolveCombat(){
+  combat.phase='resolve';
+  planEnemy();
+  const all=combat.plans.slice();
+  all.forEach(p=>{
+    const u=findUnit(p.id);
+    if(!u) return;
+    if(p.type==='move'){
+      if(!combat.grid[p.ty][p.tx]){
+        combat.grid[p.ty][p.tx]=u.unit;
+        combat.grid[u.y][u.x]=null;
+      }
+    } else if(p.type==='attack'){
+      const target=combat.grid[p.ty][p.tx];
+      if(target){
+        const dmg=calcDmg(u.unit,target,{x:p.sx,y:p.sy},{x:p.tx,y:p.ty});
+        target.hp-=dmg;
+        target.count=Math.max(0,Math.ceil(target.hp/UNIT[target.type].hp));
+        if(target.count<=0) combat.grid[p.ty][p.tx]=null;
+      }
+    }
+  });
+  combat.plans=[];
+  if(!hasUnits('enemy')){ endCombat(true); return; }
+  if(!hasUnits('player')){ endCombat(false); return; }
+  combat.phase='plan';
+  showMsg('Next PLAN phase');
+  draw();
 }
-function enemyCombatAI(){
-  let best=null, bestScore=-1;
+function planEnemy(){
   for(let y=0;y<6;y++) for(let xx=0;xx<8;xx++){
     const u=combat.grid[y][xx];
     if(!u || u.side!=='enemy') continue;
     const range=UNIT[u.type].range||1;
+    let best=null, bestScore=-1;
     for(let ty=0;ty<6;ty++) for(let tx=0;tx<8;tx++){
       const t=combat.grid[ty][tx];
       if(!t || t.side!=='player') continue;
       const dist=Math.abs(tx-xx)+Math.abs(ty-y);
       if(dist>=1 && dist<=range){
         const score=calcDmg(u,t,{x:xx,y},{x:tx,y:ty});
-        if(score>bestScore){ bestScore=score; best={ex:xx,ey:y,tx,ty,attack:true}; }
+        if(score>bestScore){ bestScore=score; best={tx,ty,attack:true}; }
       }
     }
-    if(!best){
-      const tx=xx-1;
-      if(tx>=0 && !combat.grid[y][tx]) best={ex:xx,ey:y,tx,ty:y,attack:false};
-    }
-  }
-  if(best){
-    const u=combat.grid[best.ey][best.ex];
-    if(best.attack){
-      const t=combat.grid[best.ty][best.tx];
-      const dmg=calcDmg(u,t,{x:best.ex,y:best.ey},{x:best.tx,y:best.ty});
-      t.hp-=dmg;
-      t.count=Math.max(0,Math.ceil(t.hp/UNIT[t.type].hp));
-      if(t.count<=0) combat.grid[best.ty][best.tx]=null;
-      showMsg('Enemy dealt '+dmg);
+    if(best){
+      combat.plans.push({id:u.id,side:'enemy',type:'attack',sx:xx,sy:y,tx:best.tx,ty:best.ty});
     } else {
-      combat.grid[best.ty][best.tx]=u;
-      combat.grid[best.ey][best.ex]=null;
+      const tx=xx-1;
+      if(tx>=0 && !combat.grid[y][tx]){
+        combat.plans.push({id:u.id,side:'enemy',type:'move',sx:xx,sy:y,tx,ty:y});
+      }
     }
   }
-  if(!hasUnits('player')){ endCombat(false); return; }
-  if(!hasUnits('enemy')){ endCombat(true); return; }
-  combat.turn='player';
-  draw();
+}
+function findUnit(id){
+  for(let y=0;y<6;y++) for(let xx=0;xx<8;xx++){
+    const u=combat.grid[y][xx];
+    if(u && u.id===id) return {unit:u,x:xx,y};
+  }
+  return null;
+}
+function hasUnits(side){
+  for(let y=0;y<6;y++) for(let xx=0;xx<8;xx++) if(combat.grid[y][xx]?.side===side) return true;
+  return false;
 }
 function endCombat(win){
   if(win){
@@ -394,6 +426,6 @@ c.onclick=e=>{
   }
 };
 document.getElementById('again').onclick=()=>{document.getElementById('over').classList.remove('show'); init();};
-function init(){ gold=500; day=1; moves=0; genMap(); updateHUD(); state='map'; showMsg('Flank enemies for bonus damage'); draw(); }
+function init(){ gold=500; day=1; moves=0; genMap(); updateHUD(); state='map'; showMsg('Plan all actions then RESOLVE'); draw(); }
 init();
 </script></body></html>
