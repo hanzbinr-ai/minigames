@@ -35,6 +35,7 @@ const BUILDINGS = {
   fort:    {name: 'Fort',          cost: {gold: 1000, wood: 5, ore: 5},           req: [],                 desc: 'Defenders get +3 defense'},
   tavern:  {name: 'Tavern',        cost: {gold: 500, wood: 5},                    req: [],                 desc: 'Hire a 2nd hero (2500 gold)'},
   hall:    {name: 'Town Hall',     cost: {gold: 2500},                            req: ['tavern'],         desc: '+500 gold per day'},
+  capitol: {name: 'Capitol',       cost: {gold: 5000, wood: 5, ore: 5, gems: 2}, req: ['hall'],         desc: '+500 more gold per day, +1 kingdom policy slot'},
   market:  {name: 'Marketplace',   cost: {gold: 500, wood: 5},                    req: [],                 desc: 'Trade resources'},
   citadel: {name: 'Citadel',       cost: {gold: 2500, ore: 5},                    req: ['fort'],           desc: '+50% creature growth'},
   guild1:  {name: 'Mage Guild 1',  cost: {gold: 2000, wood: 5, ore: 5},           req: [],                 desc: 'Teaches level 1 spells'},
@@ -45,7 +46,7 @@ const BUILDINGS = {
   dw4:     {name: 'Dwelling IV',   cost: {gold: 2000, wood: 5, ore: 5, gems: 2},  req: ['dw3', 'guild1'],  tier: 3},
   dw5:     {name: 'Dwelling V',    cost: {gold: 4000, wood: 10, ore: 10, gems: 5},req: ['dw4', 'citadel'], tier: 4},
 };
-const AI_BUILD_ORDER = ['dw2', 'tavern', 'fort', 'dw3', 'hall', 'guild1', 'citadel', 'dw4', 'guild2', 'dw5', 'market'];
+const AI_BUILD_ORDER = ['dw2', 'tavern', 'fort', 'dw3', 'hall', 'guild1', 'citadel', 'capitol', 'dw4', 'guild2', 'dw5', 'market'];
 
 // Spells are cast in the PLAN phase and take effect first in the RESOLVE phase.
 const SPELLS = {
@@ -178,3 +179,51 @@ const TALENTS = {
   ],
 };
 const FORMATIONS = ['line', 'wedge', 'turtle'];
+
+// ---------- Kingdom layer: policies + kingdom talents (map level, per owner) ----------
+const POLICY_CATS = {economy: {name: 'Economy', col: '#f8b800'}, military: {name: 'Military', col: '#e40058'}, arcane: {name: 'Arcane', col: '#d858f8'}};
+// faction: only that faction may use it. unlock: needs that kingdom talent.
+const POLICIES = {
+  tax:       {cat: 'economy',  name: 'Tax Reform',      icon: 'TAX', desc: '+10% gold income'},
+  lumber:    {cat: 'economy',  name: 'Lumber Rights',   icon: 'LUM', desc: '+2 wood and +2 ore per day'},
+  trade:     {cat: 'economy',  name: 'Trade Guilds',    icon: 'TRD', unlock: 'charter', desc: '+1 gems per day, +250 gold per day'},
+  warchest:  {cat: 'economy',  name: 'War Chest',       icon: 'WAR', desc: 'Creatures cost 10% less'},
+  conscript: {cat: 'military', name: 'Conscription',    icon: 'CON', desc: '+1 weekly growth per dwelling'},
+  muster:    {cat: 'military', name: 'Veteran Muster',  icon: 'MUS', desc: 'New heroes start with +10 basic and +4 tier-2 troops'},
+  fortify:   {cat: 'military', name: 'Fortify',         icon: 'FOR', desc: 'Town defenders +2 defense'},
+  drill:     {cat: 'military', name: 'Drill Sergeants', icon: 'DRL', unlock: 'sergeants', desc: '+25% battle experience'},
+  manafont:  {cat: 'arcane',   name: 'Mana Font',       icon: 'MAN', desc: '+20% max mana'},
+  tithe:     {cat: 'arcane',   name: 'Spell Tithe',     icon: 'TTH', desc: 'Terrain spells and Reveal cost 1 less'},
+  carto:     {cat: 'arcane',   name: 'Cartographers',   icon: 'MAP', desc: '+1 hero sight radius'},
+  ley:       {cat: 'arcane',   name: 'Ley Lines',       icon: 'LEY', unlock: 'leylore', desc: '+3 mana regen per day'},
+  crusade:   {cat: 'military', name: 'Holy Crusade',    icon: 'CRU', faction: 'castle', desc: 'Castle: +1 morale (+10% morale chance each round)'},
+  divine:    {cat: 'arcane',   name: 'Divine Favor',    icon: 'DIV', faction: 'castle', desc: 'Castle: all your battle stacks +1 defense'},
+  raisedead: {cat: 'arcane',   name: 'Raise Dead',      icon: 'RAI', faction: 'necro', desc: 'Necropolis: 15% of enemy HP killed rises as Skeletons after a won battle'},
+  dread:     {cat: 'military', name: 'Dread Aura',      icon: 'DRE', faction: 'necro', desc: 'Necropolis: enemy stacks -2 attack'},
+};
+const POLICY_SWAP_COST = 1000, BASE_SLOTS = 2, MAX_SLOTS = 4;
+// Kingdom talents: 3 branches x 4 tiers + capstone. Kingdom Points: 1 per week + 1 per 3 mines owned.
+const KTALENTS = {
+  economy: [
+    {k: 'bookkeeping', name: 'Bookkeeping',   desc: '+5% gold income'},
+    {k: 'charter',     name: 'Guild Charter', desc: 'Unlock Trade Guilds policy'},
+    {k: 'treasury',    name: 'Treasury',      desc: 'Policy swaps cost half'},
+    {k: 'mint',        name: 'Royal Mint',    desc: '+250 gold per day'},
+    {k: 'goldenage',   name: 'GOLDEN AGE', cap: true, desc: '+1 policy slot (max 5)'},
+  ],
+  military: [
+    {k: 'barracks',    name: 'Barracks',      desc: '+10% weekly growth'},
+    {k: 'sergeants',   name: 'Sergeants',     desc: 'Unlock Drill Sergeants policy'},
+    {k: 'veterans',    name: 'Veterans',      desc: 'New heroes +1 attack'},
+    {k: 'garrisonlaw', name: 'Garrison Law',  desc: 'Town defenders +1 defense'},
+    {k: 'warlord',     name: 'WARLORD', cap: true, desc: 'All your battle stacks +1 attack'},
+  ],
+  arcane: [
+    {k: 'scholars',    name: 'Scholars',      desc: '+10% max mana'},
+    {k: 'leylore',     name: 'Ley Lore',      desc: 'Unlock Ley Lines policy'},
+    {k: 'seers',       name: 'Seers',         desc: '+1 Intel in every battle'},
+    {k: 'archmage',    name: 'Archmage',      desc: 'Terrain spells cost 1 less'},
+    {k: 'astral',      name: 'ASTRAL THRONE', cap: true, desc: '+1 policy slot (max 5)'},
+  ],
+};
+const AI_POLICY_PREF = {castle: ['tax', 'conscript', 'crusade', 'warchest', 'divine', 'manafont'], necro: ['tax', 'raisedead', 'conscript', 'dread', 'warchest', 'manafont']};

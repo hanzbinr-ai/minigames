@@ -40,8 +40,8 @@ const artBonus = (h, s) => h.arts.reduce((a, k) => a + (ARTIFACTS[k].stat === s 
 const stat = (h, s) => h[s] + artBonus(h, s);
 const skl = (h, k) => SKILLS[k].v[(h && h.sk && h.sk[k]) || 0];
 const maxMp = h => Math.round((BASE_MP + artBonus(h, 'mp')) * (1 + skl(h, 'logistics') / 100));
-const maxMana = h => Math.round(stat(h, 'kn') * 10 * (1 + skl(h, 'wisdom') / 100));
-const sight = h => 4 + skl(h, 'scouting');
+const maxMana = h => Math.round(stat(h, 'kn') * 10 * (1 + skl(h, 'wisdom') / 100 + (pol(h.owner, 'manafont') ? 0.2 : 0) + (ktal(h.owner, 'scholars') ? 0.1 : 0)));
+const sight = h => 4 + skl(h, 'scouting') + (pol(h.owner, 'carto') ? 1 : 0);
 const costText = c => RES.filter(r => c[r]).map(r => c[r] + ' ' + r).join(', ');
 const canPay = (owner, c) => RES.every(r => (G.res[owner][r] || 0) >= (c[r] || 0));
 const pay = (owner, c) => RES.forEach(r => G.res[owner][r] -= (c[r] || 0));
@@ -97,7 +97,7 @@ function newGame(opts = {}) {
   MW = SZ.w; MH = SZ.h; PT = {x: 2, y: 2}; ET = {x: MW - 3, y: MH - 3};
   const {T, R} = genTerrain(cfg.seed);
   const rnd = (a, b) => a + Math.floor(R() * (b - a + 1)), pick = a => a[Math.floor(R() * a.length)];
-  G = {v: 4, cfg, tut: null, day: 1, map: T, fog: T.map(r => r.map(() => 0)), objs: [], heroes: [], towns: [], sel: null, nid: 1, over: null,
+  G = {v: 5, cfg, tut: null, day: 1, map: T, fog: T.map(r => r.map(() => 0)), objs: [], heroes: [], towns: [], sel: null, nid: 1, over: null,
     res: {player: {...D.player}, ai: {...D.ai}}};
   const k = MW / 24, sc = v => Math.max(2, Math.round(v * k)), rep = Math.max(1, Math.round(MW * MH / 480));
   const id = () => G.nid++;
@@ -151,7 +151,7 @@ function newGame(opts = {}) {
 function newTutorial() {
   const T = TUTORIAL_MAP.map(r => [...r].map(c => ({'.': 0, ',': 1, 'T': 2, '^': 3, '~': 4})[c]));
   setDims(T); ET = {x: 13, y: 9};
-  G = {v: 4, cfg: {size: 'T', diff: 'easy', seed: 0, tutorial: true}, tut: {step: 0}, day: 1, map: T, fog: T.map(r => r.map(() => 0)), objs: [], heroes: [], towns: [], sel: null, nid: 1, over: null,
+  G = {v: 5, cfg: {size: 'T', diff: 'easy', seed: 0, tutorial: true}, tut: {step: 0}, day: 1, map: T, fog: T.map(r => r.map(() => 0)), objs: [], heroes: [], towns: [], sel: null, nid: 1, over: null,
     res: {player: {gold: 6000, wood: 15, ore: 15, gems: 4}, ai: {gold: 0, wood: 0, ore: 0, gems: 0}}};
   const id = () => G.nid++;
   G.towns.push({id: id(), x: PT.x, y: PT.y, owner: 'player', faction: 'castle', name: 'Castlegate', built: ['dw1', 'dw2'], avail: {Peasant: 14, Archer: 9}, garrison: [], builtToday: false});
@@ -323,9 +323,13 @@ function nextLevelUp() {
 // ---------- day / week ----------
 function income(owner) {
   let inc = {gold: 0, wood: 0, ore: 0, gems: 0};
-  G.towns.filter(t => t.owner === owner).forEach(t => inc.gold += BASE_INCOME + (t.built.includes('hall') ? 500 : 0));
+  G.towns.filter(t => t.owner === owner).forEach(t => inc.gold += BASE_INCOME + (t.built.includes('hall') ? 500 : 0) + (t.built.includes('capitol') ? 500 : 0));
   G.heroes.filter(h => h.owner === owner).forEach(h => inc.gold += skl(h, 'estates'));
   G.objs.filter(o => o.kind === 'mine' && o.owner === owner).forEach(o => inc[MINES[o.mine].res] += MINES[o.mine].amt);
+  if (pol(owner, 'lumber')) { inc.wood += 2; inc.ore += 2; }
+  if (pol(owner, 'trade')) { inc.gems += 1; inc.gold += 250; }
+  if (ktal(owner, 'mint')) inc.gold += 250;
+  inc.gold = Math.round(inc.gold * (1 + (pol(owner, 'tax') ? 0.1 : 0) + (ktal(owner, 'bookkeeping') ? 0.05 : 0)));
   if (owner === 'ai') inc.gold = Math.round(inc.gold * DIFF().aiIncome);
   return inc;
 }
@@ -340,14 +344,16 @@ function newDay() {
   G.day++;
   for (const owner of ['player', 'ai']) { const inc = income(owner); RES.forEach(r => G.res[owner][r] += inc[r]); }
   G.towns.forEach(t => t.builtToday = false);
-  G.heroes.forEach(h => { h.mp = maxMp(h); h.mana = Math.min(maxMana(h), h.mana + 2); });
+  G.heroes.forEach(h => { h.mp = maxMp(h); h.mana = Math.min(maxMana(h), h.mana + 2 + (pol(h.owner, 'ley') ? 3 : 0)); });
   let note = 'Day ' + G.day + ' (' + calText(G.day) + ')';
   if ((G.day - 1) % 7 === 0) {
     G.towns.forEach(t => FACTIONS[t.faction].units.forEach((u, i) => {
-      if (t.built.includes('dw' + (i + 1))) t.avail[u] = (t.avail[u] || 0) + Math.floor(UNITS[u].growth * (t.built.includes('citadel') ? 1.5 : 1));
+      if (t.built.includes('dw' + (i + 1))) t.avail[u] = (t.avail[u] || 0) + growthOf(t, u);
     }));
     G.objs.filter(o => o.kind === 'monster').forEach(o => o.army[0].count = Math.ceil(o.army[0].count * 1.1));
-    note = 'A new week begins! Creatures have grown. ' + note;
+    for (const o of ['player', 'ai']) if (KG(o)) { KG(o).kp += weeklyKP(o); KG(o).slots = KG(o).slots.slice(0, slotCount(o)); }
+    aiKingdom();
+    note = 'A new week begins! Creatures have grown, +' + weeklyKP('player') + ' Kingdom Point. Policies can be swapped today. ' + note;
     SFX.lvl();
   }
   revealAll();
@@ -375,12 +381,14 @@ function build(t, k) {
   const h = heroAt(t.x, t.y); if (h && h.owner === t.owner) visitTown(h, t);
   return true;
 }
+const growthOf = (t, u) => Math.floor((UNITS[u].growth * (t.built.includes('citadel') ? 1.5 : 1) + (pol(t.owner, 'conscript') ? 1 : 0)) * (ktal(t.owner, 'barracks') ? 1.1 : 1));
+const unitCost = (o, u) => Math.round(UNITS[u].cost * (pol(o, 'warchest') ? 0.9 : 1));
 function recruitTarget(t) { const h = heroAt(t.x, t.y); return h && h.owner === t.owner ? h.army : t.garrison; }
 function recruit(t, u, n) {
-  n = Math.min(n, t.avail[u] || 0, Math.floor(G.res[t.owner].gold / UNITS[u].cost));
+  n = Math.min(n, t.avail[u] || 0, Math.floor(G.res[t.owner].gold / unitCost(t.owner, u)));
   if (n <= 0) return 0;
   if (!addUnits(recruitTarget(t), u, n)) return 0;
-  t.avail[u] -= n; G.res[t.owner].gold -= n * UNITS[u].cost;
+  t.avail[u] -= n; G.res[t.owner].gold -= n * unitCost(t.owner, u);
   if (t.owner === 'player' && G.tut) G.tut.recruited = true;
   return n;
 }
@@ -388,6 +396,8 @@ function hire(t) {
   if (!t.built.includes('tavern') || heroAt(t.x, t.y) || G.res[t.owner].gold < HIRE_COST) return null;
   const names = t.owner === 'player' ? HERO_NAMES : AI_NAMES, used = G.heroes.map(h => h.name);
   const h = mkHero(t.owner, names.find(n => !used.includes(n)) || 'Hero', t.x, t.y, [{type: FACTIONS[t.faction].units[0], count: 15}]);
+  if (pol(t.owner, 'muster')) { const us = FACTIONS[t.faction].units; addUnits(h.army, us[0], 10); addUnits(h.army, us[1], 4); }
+  if (ktal(t.owner, 'veterans')) h.att++;
   G.res[t.owner].gold -= HIRE_COST; G.heroes.push(h); visitTown(h, t);
   return h;
 }
@@ -417,7 +427,9 @@ function autoBattle(ctx) {
 // xpA/xpD = enemy hit points killed by attacker/defender
 function finishFight(ctx, attWon, xpA, xpD) {
   const {att, def} = ctx, [w, l] = attWon ? [att, def] : [def, att];
-  if (w.hero) gainXp(w.hero, attWon ? xpA : xpD);
+  const killedHp = attWon ? xpA : xpD;
+  if (w.hero) gainXp(w.hero, killedHp * (pol(w.owner, 'drill') ? 1.25 : 1));
+  if (w.hero && pol(w.owner, 'raisedead') && killedHp > 0) { const n = Math.floor(killedHp * 0.15 / UNITS.Skeleton.hp); if (n > 0 && addUnits(w.hero.army, 'Skeleton', n)) { G.lastRaised = n; if (w.owner === 'player') msg('Raise Dead: ' + n + ' Skeletons join ' + w.hero.name + '!'); } }
   if (l.hero) G.heroes.splice(G.heroes.indexOf(l.hero), 1);
   if (def.monster && attWon) G.objs.splice(G.objs.indexOf(def.monster), 1);
   if (def.town && attWon) {
@@ -537,6 +549,7 @@ const uAt = (x, y) => B.units.find(u => u.alive && u.x === x && u.y === y);
 const uById = id => B.units.find(u => u.id === id);
 const md = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 const heroOf = side => B.sides[side].hero;
+const moraleChance = side => skl(heroOf(side), 'leadership') + (pol(B.sides[side].owner, 'crusade') ? 10 : 0);
 const moveOf = u => u.slow ? 1 : Math.max(1, UNITS[u.type].move + (u.haste ? 2 : 0) + (u.morale ? 1 : 0) + (tac(u.side, 'blitz') ? (hasTal(heroOf(u.side), 'grandblitz') ? 2 : 1) : 0) - (tac(otherSide(u.side), 'sabotage') ? 1 : 0));
 function wallBlocks(x, y, side) {
   const S = B.siege; if (!S) return false;
@@ -562,11 +575,14 @@ function reach(u, mv) { // BFS: key -> {d, prev}
 }
 function calcDmg(a, t, ranged) {
   const ua = UNITS[a.type], ut = UNITS[t.type], ha = heroOf(a.side), ht = heroOf(t.side);
-  const A = ua.att + (ha ? stat(ha, 'att') : 0);
+  const oa = B.sides[a.side].owner, ot = B.sides[t.side].owner;
+  const A = ua.att + (ha ? stat(ha, 'att') : 0) + (ktal(oa, 'warlord') ? 1 : 0) - (pol(ot, 'dread') ? 2 : 0);
   let D = ut.def + (ht ? stat(ht, 'def') : 0) + (B.fort === t.side ? 3 : 0);
   if (tac(t.side, 'shieldwall')) { const sw = 3 + (hasTal(ht, 'bulwark') ? 2 : 0); if (hasTal(ht, 'phalanx')) D += sw + 5; else if (B.units.some(o => o.alive && o !== t && o.side === t.side && md(o, t) === 1)) D += sw; }
   if (tac(t.side, 'bloodlust')) D -= 2;
   if ((terrAt(t.x, t.y) || {}).k === 'raise') D += 3;
+  if (pol(ot, 'divine')) D += 1;
+  if (B.ctx.def.town && B.sides[t.side] === B.ctx.def) D += (pol(ot, 'fortify') ? 2 : 0) + (ktal(ot, 'garrisonlaw') ? 1 : 0);
   let d = a.count * (ua.dmg[0] + Math.random() * (ua.dmg[1] - ua.dmg[0]));
   d *= A >= D ? 1 + 0.05 * Math.min(60, A - D) : Math.max(0.3, 1 - 0.025 * (D - A));
   const tags = [];
@@ -659,7 +675,7 @@ function resolveRound() {
   const out = [];
   // 1. spells
   castSpell('L', out); castSpell('R', out); siegeFire(out);
-  for (const u of B.units) { const l = skl(heroOf(u.side), 'leadership'); if (u.alive && l && Math.random() * 100 < l) { u.morale = 1; fx(u, 'MORALE!', '#58f8f8', 0.5); } }
+  for (const u of B.units) { const l = moraleChance(u.side); if (u.alive && l && Math.random() * 100 < l) { u.morale = 1; fx(u, 'MORALE!', '#58f8f8', 0.5); } }
   const afterSpell = B.units.map(u => [u, u.count, u.alive]);
   later(0.5, () => afterSpell.forEach(([u, c, a]) => { u.shown = c; if (!a && u.deadAt == null) u.deadAt = B.clock; }));
   // 2. movement, fastest first (ties random)
@@ -758,10 +774,10 @@ function learnTalent(h, k) {
   return false;
 }
 function aiLearnTalent(h) { const brs = shuffle(Object.keys(TALENTS)); for (const br of brs) { const i = TALENTS[br].findIndex((t, j) => talentState(h, br, j) === 'open'); if (i >= 0) { learnTalent(h, TALENTS[br][i].k); return; } } }
-const baseIntel = h => !h ? 0 : Math.min(2, (h.sk && h.sk.scouting ? (h.sk.scouting >= 3 ? 2 : 1) : 0) + (hasTal(h, 'spymaster') ? 1 : 0));
+const baseIntel = h => !h ? 0 : Math.min(2, (h.sk && h.sk.scouting ? (h.sk.scouting >= 3 ? 2 : 1) : 0) + (hasTal(h, 'spymaster') ? 1 : 0) + (ktal(h.owner, 'seers') ? 1 : 0));
 const intelOf = side => Math.min(2, baseIntel(heroOf(side)) + (B.tac[side].reveal ? 1 : 0));
-const terrCost = (h, k) => Math.max(1, TERRAIN_SPELLS[k].mana - (hasTal(h, 'geomancer') ? 2 : 0) - (k === 'fog' && hasTal(h, 'mist') ? 2 : 0));
-const revealCost = h => hasTal(h, 'mist') ? 0 : REVEAL.mana;
+const terrCost = (h, k) => Math.max(1, TERRAIN_SPELLS[k].mana - (hasTal(h, 'geomancer') ? 2 : 0) - (k === 'fog' && hasTal(h, 'mist') ? 2 : 0) - (pol(h.owner, 'tithe') ? 1 : 0) - (ktal(h.owner, 'archmage') ? 1 : 0));
+const revealCost = h => hasTal(h, 'mist') ? 0 : REVEAL.mana - (pol(h.owner, 'tithe') ? 1 : 0);
 const terrAt = (x, y) => B && B.terr && B.terr[x + ',' + y];
 function blunted(side) {
   const T = B.tac[side], t = T.tactic, o = B.tac[otherSide(side)].tactic, h = heroOf(side); if (!t) return false;
@@ -860,7 +876,7 @@ function renderPre() {
   if (sig === el.dataset.sig) return; el.dataset.sig = sig;
   const tb = k => { const t = TACTICS[k], ok = known.includes(k); return btn((ok ? '' : 'LOCKED ') + t.name, ok ? 'ptac' : 'nop', k, T.tactic === k ? 'y' : 'alt', !ok); };
   let s = `<h2>PRE-BATTLE${B.siege ? ' - SIEGE' : ''}</h2>
-    <h3>1. SCOUT - INTEL ${iv}</h3><p>${INTEL_DESC[iv]}.<br>${foes.map(u => (iv ? u.count : sizeWord(u.count)) + ' ' + u.type).join(', ')}${iv >= 2 ? `<br><b class="hl">Enemy tactic: ${E.tactic ? TACTICS[E.tactic].name : 'none'}</b><br><b class="hl">Enemy terrain: ${E.terrain.map(t => TERRAIN_SPELLS[t.k].name).join(', ') || 'none'}</b>` : '<br>Enemy tactic: ???'}</p>
+    <h3>1. SCOUT - INTEL ${iv}</h3><p>${INTEL_DESC[iv]}.<br>${foes.map(u => (iv ? u.count : sizeWord(u.count)) + ' ' + u.type).join(', ')}${iv >= 2 ? `<br><b class="hl">Enemy tactic: ${E.tactic ? TACTICS[E.tactic].name : 'none'}</b><br><b class="hl">Enemy terrain: ${E.terrain.map(t => TERRAIN_SPELLS[t.k].name).join(', ') || 'none'}</b>${KG(B.sides.R.owner) ? `<br><b class="hl">Enemy kingdom: ${KG(B.sides.R.owner).slots.map(k => POLICIES[k].name).join(', ') || 'no policies'}</b>` : ''}` : '<br>Enemy tactic: ???'}</p>
     ${h && iv < 2 && !T.reveal ? `<div class="bar">${btn('REVEAL (' + revealCost(h) + ' mana)', 'preveal', '', 'p', h.mana < revealCost(h))}</div>` : ''}
     <h3>2. FORMATION</h3><div class="bar">${FORMATIONS.map(f => btn(f.toUpperCase(), 'pform', f, T.form === f ? 'y' : 'alt')).join('')}</div><p>Tap or drag your stacks inside the blue zone to fine-tune.</p>
     <h3>3. TACTIC (whole battle)</h3>${Object.keys(DOCTRINES).map(d => `<div class="bar"><b style="color:${DOCTRINES[d].col};width:64px">${DOCTRINES[d].name.toUpperCase()}</b>${Object.keys(TACTICS).filter(k => TACTICS[k].doc === d).map(tb).join('')}</div>`).join('')}
@@ -868,7 +884,7 @@ function renderPre() {
   if (T.tactic === 'ambush') s += `<p>Hidden (max 2): ${B.units.filter(u => u.side === 'L' && u.alive).map(u => btn((u.hidden ? 'HIDDEN ' : '') + u.type, 'phide', u.id, u.hidden ? 'p' : 'alt')).join('')}</p>`;
   s += `<h3>4. TERRAIN SPELLS ${h ? '(mana ' + h.mana + ')' : ''}</h3>${h ? `<div class="bar">${Object.keys(TERRAIN_SPELLS).map(k => btn(TERRAIN_SPELLS[k].name + ' ' + terrCost(h, k), 'pterr', k, UI.preTerr === k ? 'y' : 'p', h.mana < terrCost(h, k))).join('')}${T.terrain.length ? btn('CLEAR', 'pclear', '', 'alt') : ''}</div>
     <p>${UI.preTerr ? 'Tap the field to place ' + TERRAIN_SPELLS[UI.preTerr].name + ': ' + TERRAIN_SPELLS[UI.preTerr].desc : 'Placed: ' + (T.terrain.map(t => TERRAIN_SPELLS[t.k].name).join(', ') || 'none') + '. Lasts the whole battle.'}</p>` : '<p>No hero - no spells.</p>'}
-    <div class="bar"><button class="btn g" data-a="pfight" style="flex:1">FIGHT!</button></div>`;
+    <div class="bar fbar"><button class="btn g" data-a="pfight" style="flex:1">FIGHT!</button></div>`;
   el.innerHTML = s;
 }
 function preTap(gx, gy) {
@@ -881,6 +897,58 @@ function preTap(gx, gy) {
 }
 function preDrag(ax, ay, bx, by) { const u = uAt(ax, ay); if (!u || u.side !== 'L') return; UI.preSel = u.id; preTap(bx, by); }
 function moveUnitTo(u, x, y) { u.x = u.gx = x; u.y = u.gy = y; }
+
+// ---------- KINGDOM: policies + kingdom talents (per owner, apply to all heroes and towns) ----------
+const KG = o => G && G.kg && G.kg[o];
+const pol = (o, k) => !!(KG(o) && KG(o).slots.includes(k));
+const ktal = (o, k) => !!(KG(o) && KG(o).tal[k]);
+const isWeekStart = () => (G.day - 1) % 7 === 0;
+function mkKingdom(owner) { const t = G.towns.find(t => t.owner === owner); return {faction: t ? t.faction : (owner === 'player' ? 'castle' : 'necro'), slots: [], kp: 1, tal: {}, kpWeek: 0}; }
+function slotCount(o) {
+  const k = KG(o); if (!k) return 0;
+  const extra = (ktal(o, 'goldenage') ? 1 : 0) + (ktal(o, 'astral') ? 1 : 0);
+  return Math.min(MAX_SLOTS + extra, BASE_SLOTS + (G.towns.some(t => t.owner === o && t.built.includes('capitol')) ? 1 : 0) + (G.day >= 29 ? 1 : 0) + extra);
+}
+function policyOK(o, k) { const p = POLICIES[k], K = KG(o); if (!p || !K) return 'No kingdom'; if (p.faction && p.faction !== K.faction) return FACTIONS[p.faction].name + ' only'; if (p.unlock && !ktal(o, p.unlock)) return 'Needs talent ' + ALL_KT().find(t => t.k === p.unlock).name; return ''; }
+const swapCost = o => ktal(o, 'treasury') ? POLICY_SWAP_COST / 2 : POLICY_SWAP_COST;
+// slot i: empty -> free any time; filled -> only on Day 1 of a week, for gold
+function setPolicy(o, i, k) {
+  const K = KG(o); if (!K || i >= slotCount(o)) return 'No such slot';
+  if (k && K.slots.includes(k)) return 'Already active';
+  if (k) { const why = policyOK(o, k); if (why) return why; }
+  const cur = K.slots[i];
+  if (cur) { if (!isWeekStart()) return 'Swap only on Day 1 of a week'; if (G.res[o].gold < swapCost(o)) return 'Need ' + swapCost(o) + ' gold'; G.res[o].gold -= swapCost(o); }
+  if (k) K.slots[i] = k; else K.slots.splice(i, 1);
+  K.slots = K.slots.filter(Boolean); return '';
+}
+const ALL_KT = () => Object.values(KTALENTS).flat();
+function ktState(o, br, i) { const K = KG(o), t = KTALENTS[br][i]; if (K.tal[t.k]) return 'have'; return (i === 0 || K.tal[KTALENTS[br][i - 1].k]) && K.kp > 0 ? 'open' : 'locked'; }
+function learnKT(o, k) { const K = KG(o); for (const br in KTALENTS) { const i = KTALENTS[br].findIndex(t => t.k === k); if (i >= 0 && ktState(o, br, i) === 'open') { K.tal[k] = 1; K.kp--; return true; } } return false; }
+function weeklyKP(o) { const mines = G.objs.filter(x => x.kind === 'mine' && x.owner === o).length; return 1 + Math.floor(mines / 3); }
+function aiKingdom() {
+  const o = 'ai', K = KG(o); if (!K) return;
+  const order = ['economy', 'military', 'arcane'];
+  for (let guard = 0; K.kp > 0 && guard < 20; guard++) { let done = false; for (const br of order) { const i = KTALENTS[br].findIndex((t, j) => ktState(o, br, j) === 'open'); if (i >= 0) { learnKT(o, KTALENTS[br][i].k); done = true; break; } } if (!done) break; }
+  for (const k of [...AI_POLICY_PREF[K.faction] || [], ...Object.keys(POLICIES)]) { if (K.slots.length >= slotCount(o)) break; if (!K.slots.includes(k) && !policyOK(o, k)) K.slots.push(k); }
+}
+const policyIcons = o => (KG(o) ? KG(o).slots : []).map(k => `<i class="pi" style="background:${POLICY_CATS[POLICIES[k].cat].col}" title="${POLICIES[k].name}: ${POLICIES[k].desc}">${POLICIES[k].icon}</i>`).join('');
+const canSeeEnemyKingdom = () => G.heroes.some(h => h.owner === 'player' && h.sk && h.sk.scouting);
+function openKingdom() {
+  if (!G || !KG('player')) return;
+  UI.kslot = UI.kslot ?? null;
+  showPanel(() => {
+    const o = 'player', K = KG(o), n = slotCount(o), wk = isWeekStart();
+    let s = `<div class="thead"><h2>KINGDOM - ${FACTIONS[K.faction].name.toUpperCase()}</h2>${btn('CLOSE', 'close', '', 'g')}</div><div class="kg">
+      <p>Policies apply to every hero and town. Slots ${n}: 2 base${G.towns.some(t => t.owner === o && t.built.includes('capitol')) ? ' +1 Capitol' : ' (+1 with a Capitol)'}${G.day >= 29 ? ' +1 Month 2' : ' (+1 from Month 2)'}${ktal(o, 'goldenage') || ktal(o, 'astral') ? ' +talent' : ''}.
+      Empty slots fill free. Swapping a policy costs ${swapCost(o)} gold and is only allowed on Day 1 of a week ${wk ? '<b class="ok">(today!)</b>' : '<b class="no">(not today)</b>'}.</p>
+      <h3>POLICY SLOTS</h3><div class="kslots">${Array.from({length: n}, (_, i) => { const k = K.slots[i], p = k && POLICIES[k]; return `<button class="btn kslot ${UI.kslot === i ? 'y' : 'alt'}" data-a="kslot" data-v="${i}">${p ? `<i class="pi" style="background:${POLICY_CATS[p.cat].col}">${p.icon}</i>${p.name}` : 'EMPTY SLOT'}</button>`; }).join('')}</div>
+      <p>${UI.kslot != null ? 'Slot ' + (UI.kslot + 1) + ' selected: pick a policy below.' : 'Tap a slot, then a policy.'}</p>
+      <div class="cols3">${Object.keys(POLICY_CATS).map(c => `<div><h3 style="color:${POLICY_CATS[c].col}">${POLICY_CATS[c].name.toUpperCase()}</h3>${Object.keys(POLICIES).filter(k => POLICIES[k].cat === c).map(k => { const p = POLICIES[k], why = policyOK(o, k), on = K.slots.includes(k); return `<div class="it"><div class="t">${p.name}${on ? ' <b class="ok">ACTIVE</b>' : ''}<small>${p.desc}${why ? ' · <span class="no">' + why + '</span>' : ''}</small></div>${btn('SET', 'kpol', k, 'y', !!why || on || UI.kslot == null)}</div>`; }).join('')}</div>`).join('')}</div>
+      <h3>KINGDOM TALENTS (${K.kp} point${K.kp === 1 ? '' : 's'} · +${weeklyKP(o)} next week: 1 + 1 per 3 mines)</h3><div class="tal">${Object.keys(KTALENTS).map(br => `<div><b style="color:${POLICY_CATS[br].col}">${POLICY_CATS[br].name.toUpperCase()}</b>${KTALENTS[br].map((t, i) => { const st = ktState(o, br, i); return `<button class="btn sb ${st === 'have' ? 'g' : st === 'open' ? 'y' : 'alt'}${t.cap ? ' ult' : ''}" data-a="ktal" data-v="${t.k}" ${st !== 'open' ? 'disabled' : ''}>${t.name}<small>${t.desc}</small></button>`; }).join('')}</div>`).join('')}</div>`;
+    if (canSeeEnemyKingdom() && KG('ai')) s += `<h3>ENEMY KINGDOM (your scouts report)</h3><p>${KG('ai').slots.map(k => POLICIES[k].name).join(', ') || 'No policies'}</p>`;
+    return s + '</div>';
+  }, {full: true, kingdom: true});
+}
 
 // ---------- floating text & battle timeline (all driven by elapsed seconds) ----------
 function fx(u, text, col, delay = 0) { UI.fx.push({x: u.x, y: u.y, text, col, t: -delay, life: 1.1}); }
@@ -1113,10 +1181,11 @@ function meter(v, m, c) { return `<div class="meter"><i style="width:${Math.max(
 function updateHud() {
   if (!G) return;
   const h = curHero(), r = G.res.player;
-  const sig = JSON.stringify([r, G.day, h && [h.id, h.mp, h.mana, h.lvl, h.xp, h.att, h.def, h.sp, h.kn, h.army, h.arts.length, h.sk], myHeroes().map(x => x.id + x.name), G.towns.map(t => t.owner), UI.mode]);
+  const sig = JSON.stringify([r, G.day, h && [h.id, h.mp, h.mana, h.lvl, h.xp, h.att, h.def, h.sp, h.kn, h.army, h.arts.length, h.sk], G.kg && G.kg.player.slots, myHeroes().map(x => x.id + x.name), G.towns.map(t => t.owner), UI.mode]);
   if (sig === hudSig) return; hudSig = sig;
   const inc = income('player');
   $('res').innerHTML = RES.map(k => `<span title="${k} +${inc[k]}/day"><img src="${resImg(k)}" alt="${k}"><b>${r[k]}</b></span>`).join('');
+  $('pol').innerHTML = policyIcons('player');
   $('cal').textContent = 'DAY ' + ((G.day - 1) % 7 + 1) + ' WEEK ' + (Math.floor((G.day - 1) / 7) % 4 + 1) + ' MONTH ' + (Math.floor((G.day - 1) / 28) + 1);
   $('chip').innerHTML = h ? `<img src="${portraitImg(h)}" alt=""><div class="bars"><b>${h.name} LV${h.lvl}</b>MOVE ${meter(h.mp, maxMp(h), '#58d854')}MANA ${meter(h.mana, maxMana(h), '#3cbcfc')}</div>` : '<b>NO HERO</b>';
   $('sideinfo').innerHTML = h ? `<div class="hcard"><img src="${portraitImg(h)}" alt="" data-a="hero"><div><b>${h.name}</b><br>LEVEL ${h.lvl}<br>XP ${h.xp}/${xpForLevel(h.lvl)}${meter(h.xp, xpForLevel(h.lvl), '#f8b800')}</div></div>
@@ -1189,7 +1258,7 @@ function openTown(t) {
   showPanel(() => {
     const own = t.owner === 'player', h = heroAt(t.x, t.y), units = FACTIONS[t.faction].units, inc = income('player');
     const head = `<div class="thead"><h2>${t.name.toUpperCase()}</h2>${btn('CLOSE', 'close', '', 'g')}</div><canvas class="tview" id="tview"></canvas>`;
-    if (!own) return head + `<div class="cols"><p>Enemy town. Garrison: ${armyText(t.garrison)}</p></div>`;
+    if (!own) return head + `<div class="cols"><p>Enemy town. Garrison: ${armyText(t.garrison)}</p>${canSeeEnemyKingdom() && KG(t.owner) ? `<p>Scouts report kingdom policies: ${KG(t.owner).slots.map(k => POLICIES[k].name).join(', ') || 'none'}</p>` : '<p>Learn Scouting to see their kingdom policies.</p>'}</div>`;
     let s = head + `<div class="cols"><div><p>Income per day: ${costText(inc) || '0'}${t.builtToday ? '<br><span class="no">Already built today</span>' : ''}</p><h3>BUILD</h3>`;
     for (const k in BUILDINGS) {
       if (t.built.includes(k)) continue;
@@ -1199,8 +1268,8 @@ function openTown(t) {
     s += `</div><div><h3>RECRUIT (to ${h ? h.name : 'garrison'})</h3>`;
     units.forEach((u, i) => {
       if (!t.built.includes('dw' + (i + 1))) return;
-      const U = UNITS[u], n = t.avail[u] || 0, aff = Math.min(n, Math.floor(G.res.player.gold / U.cost));
-      s += `<div class="it"><img src="${unitImg(u)}" alt=""><div class="t">${u} x${n}<small>${U.cost}g · ATK ${U.att} DEF ${U.def} HP ${U.hp} DMG ${U.dmg.join('-')} MOVE ${U.move}${U.range ? ' RANGE ' + U.range : ''} · ${U.skill}</small></div>${btn('+1', 'buy', u + ':1', 'alt', !aff)}${btn('ALL ' + aff, 'buy', u + ':999', 'y', !aff)}</div>`;
+      const U = UNITS[u], n = t.avail[u] || 0, aff = Math.min(n, Math.floor(G.res.player.gold / unitCost('player', u)));
+      s += `<div class="it"><img src="${unitImg(u)}" alt=""><div class="t">${u} x${n}<small>${unitCost('player', u)}g · ATK ${U.att} DEF ${U.def} HP ${U.hp} DMG ${U.dmg.join('-')} MOVE ${U.move}${U.range ? ' RANGE ' + U.range : ''} · ${U.skill}</small></div>${btn('+1', 'buy', u + ':1', 'alt', !aff)}${btn('ALL ' + aff, 'buy', u + ':999', 'y', !aff)}</div>`;
     });
     s += `<h3>ARMY</h3>`;
     if (h) h.army.forEach((a, i) => s += `<div class="it"><img src="${unitImg(a.type)}" alt=""><div class="t">${h.name}: ${a.count} ${a.type}</div>${btn('TO GARRISON', 'togar', i, 'alt', t.garrison.length >= MAX_STACKS && !t.garrison.some(g => g.type === a.type) || h.army.length < 2)}</div>`);
@@ -1284,19 +1353,24 @@ const ACTIONS = {
   pclear: () => { clearTerrain('L'); UI.preTerr = null; },
   preveal: () => { const h = heroOf('L'); if (h && h.mana >= revealCost(h) && !B.tac.L.reveal) { h.mana -= revealCost(h); B.tac.L.reveal = true; B.tac.L.intel = intelOf('L'); SFX.magic(); msg('Reveal! Intel ' + B.tac.L.intel); } },
   tal: k => { const h = curHero(); if (h && learnTalent(h, k)) { SFX.lvl(); msg(ALL_TAL().find(t => t.k === k).name + ' learned!'); } refreshPanel(); },
+  kingdom: () => G && UI.mode === 'map' && openKingdom(),
+  kslot: i => { UI.kslot = UI.kslot === +i ? null : +i; refreshPanel(); },
+  kpol: k => { if (UI.kslot == null) return; const why = setPolicy('player', UI.kslot, k); if (why) { msg(why); SFX.bad(); } else { msg(POLICIES[k].name + ' enacted'); SFX.pick(); UI.kslot = null; } hudSig = ''; refreshPanel(); },
+  ktal: k => { if (learnKT('player', k)) { SFX.lvl(); msg(ALL_KT().find(t => t.k === k).name + ' learned'); } refreshPanel(); },
   opentown: id => openTown(G.towns.find(t => t.id === +id)),
 };
 // v0.2 saves (v:2) -> v3: add map config, tutorial state and hero skills
 function migrate(g) {
   if (g.v === 2) { g.v = 3; g.cfg = {size: 'M', diff: 'normal', seed: null, tutorial: false}; g.tut = null; }
   if (g.v === 3) g.v = 4;
+  if (g.v === 4) { g.v = 5; G = g; g.kg = {player: mkKingdom('player'), ai: mkKingdom('ai')}; }
   g.heroes.forEach(h => { h.sk = h.sk || {}; if (!h.tal) { h.tal = {}; h.tp = Math.max(0, h.lvl - 1); } });
   setDims(g.map); layers = null;
   return g;
 }
 function startGame(fn, note) {
   UI.panel = null; $('panel').classList.remove('show'); B = null; UI.ai = null; UI.walk = null; UI.preview = null; UI.rpos = {}; UI.levelQ = []; UI.fx = [];
-  fn(); layers = null; CAM.z = 0; hudSig = ''; UI.mode = 'map'; msg(note || '');
+  fn(); if (!G.kg) { G.kg = {player: mkKingdom('player'), ai: mkKingdom('ai')}; if (!G.cfg.tutorial) aiKingdom(); } layers = null; CAM.z = 0; UI.kslot = null; hudSig = ''; UI.mode = 'map'; msg(note || '');
 }
 function openSetup() {
   UI.setup = UI.setup || {size: 'M', diff: 'normal', seed: Math.floor(Math.random() * 1e6)};
@@ -1337,7 +1411,7 @@ function tutTick() {
   }
 }
 function loadGame(key) {
-  try { const g = JSON.parse(localStorage.getItem(key)); if (!g || ![2, 3, 4].includes(g.v)) throw 0; G = migrate(g); } catch (e) { msg('No valid save'); return; }
+  try { const g = JSON.parse(localStorage.getItem(key)); if (!g || ![2, 3, 4, 5].includes(g.v)) throw 0; G = migrate(g); } catch (e) { msg('No valid save'); return; }
   UI.panel = null; $('panel').classList.remove('show'); B = null; UI.ai = null; UI.walk = null; UI.preview = null; UI.rpos = {}; UI.levelQ = [];
   UI.mode = G.over ? 'over' : 'map'; msg('Game loaded - ' + calText(G.day)); CAM.z = 0; hudSig = ''; tutShown = -1;
 }
@@ -1426,10 +1500,10 @@ document.addEventListener('keydown', e => {
   const h = curHero();
   if (d && h && !UI.walk) { e.preventDefault(); const nx = h.x + d[0], ny = h.y + d[1]; if (inMap(nx, ny) && enterable(nx, ny, h)) startWalk(h, [[nx, ny]]); }
   else if (k === 'enter' && UI.preview && h) { startWalk(h, UI.preview.path); UI.preview = null; }
-  else if (k === 'e') endDay(); else if (k === 't') ACTIONS.town(); else if (k === 'h') openHero(); else if (k === 'n') ACTIONS.next(); else if (k === 'm') openMenu();
+  else if (k === 'e') endDay(); else if (k === 't') ACTIONS.town(); else if (k === 'h') openHero(); else if (k === 'n') ACTIONS.next(); else if (k === 'm') openMenu(); else if (k === 'k') ACTIONS.kingdom();
 });
 $('mute').onclick = e => { e.stopPropagation(); muted = !muted; localStorage.setItem('mh-mute', muted ? '1' : '0'); $('mute').textContent = muted ? 'MUTE' : 'SND'; };
 $('mute').textContent = muted ? 'MUTE' : 'SND';
-window.MHX = {get G() { return G; }, get B() { return B; }, fight, startFight, tac, blunted, moveOf, calcDmg, intelOf, knownTactics, learnTalent, reach, uById, loadGame, applyFormation, placeTerrain, curHero, gainXp, flood, get PT() { return PT; }, get ET() { return ET; }, battleToClient: (lx, ly) => { const r = cv.getBoundingClientRect(); return [r.left + (BV.ox + lx * BV.s) / CAM.dpr, r.top + (BV.oy + ly * BV.s) / CAM.dpr]; }, UI, CAM, ACTIONS, tapMap, battleTap, endDay, resolveRound, cell: (x, y) => [BOX + x * CW + CW / 2, BOY + y * CW + CW / 2], tileToClient: (x, y) => { const r = cv.getBoundingClientRect(); return [r.left + ((x * TS + TS / 2 - CAM.x) * CAM.z) / CAM.dpr, r.top + ((y * TS + TS / 2 - CAM.y) * CAM.z) / CAM.dpr]; }}; // test hook
+window.MHX = {moraleChance, get G() { return G; }, get B() { return B; }, setPolicy, slotCount, income, learnKT, growthOf, unitCost, newDay, hire, finishFight, KG, pol, maxMana, fight, startFight, tac, blunted, moveOf, calcDmg, intelOf, knownTactics, learnTalent, reach, uById, loadGame, applyFormation, placeTerrain, curHero, gainXp, flood, get PT() { return PT; }, get ET() { return ET; }, battleToClient: (lx, ly) => { const r = cv.getBoundingClientRect(); return [r.left + (BV.ox + lx * BV.s) / CAM.dpr, r.top + (BV.oy + ly * BV.s) / CAM.dpr]; }, UI, CAM, ACTIONS, tapMap, battleTap, endDay, resolveRound, cell: (x, y) => [BOX + x * CW + CW / 2, BOY + y * CW + CW / 2], tileToClient: (x, y) => { const r = cv.getBoundingClientRect(); return [r.left + ((x * TS + TS / 2 - CAM.x) * CAM.z) / CAM.dpr, r.top + ((y * TS + TS / 2 - CAM.y) * CAM.z) / CAM.dpr]; }}; // test hook
 openMenu();
 requestAnimationFrame(loop);
