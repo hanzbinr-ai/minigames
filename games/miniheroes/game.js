@@ -1478,7 +1478,7 @@ function renderWorld(opt) {
     for (const [cx, cy, sx, sy] of [[0, 0, 1, 1], [TS - 1, 0, -1, 1], [0, TS - 1, 1, -1], [TS - 1, TS - 1, -1, -1]]) { g.fillRect(X + cx - k * sx + Math.min(0, sx * 3), Y + cy - k * sy, 4, 1); g.fillRect(X + cx - k * sx, Y + cy - k * sy + Math.min(0, sy * 3), 1, 4); }
   }
   const items = [];
-  G.objs.forEach(o => inV(o.x, o.y) && items.push([o.y, () => drawObj(g, o)]));
+  G.objs.forEach(o => inV(o.x, o.y) && !(dyn && opt.skipObj && opt.skipObj(o)) && items.push([o.y, () => drawObj(g, o)]));
   if (!dyn) G.towns.forEach(t => inV(t.x, t.y) && items.push([t.y + 0.1, () => g.drawImage(SPR.town(t.faction, t.owner, Math.floor(clock * 4) % 2), t.x * TS - 10, t.y * TS - 18)]));
   if (!dyn) G.heroes.forEach(h => inV(rp(h).x, rp(h).y) && items.push([rp(h).y + 0.2, () => { const p = rp(h), f = p.moving > 0.02 ? 1 + Math.floor(clock * 8) % 2 : 0; const im = SPR.hero(h.owner, f, p.face < 0);
     if (p.moving <= 0.02 && townAt(h.x, h.y)) g.drawImage(im, Math.round(p.x * TS) + 3, Math.round(p.y * TS) + 1, Math.round(im.width * 0.7), Math.round(im.height * 0.7)); // smaller, in front of the gate, so the town stays readable
@@ -1535,7 +1535,7 @@ const cellC = (x, y) => [BOX + x * CW + CW / 2, BOY + y * CW + CW / 2];
 // pass: 'all' = classic; 'bg' = field..plan lines + unit shadows; 'fg' = count badges, projectiles, fx (render layer draws unit sprites between)
 function drawBattle(g, pass = 'all') {
   g.imageSmoothingEnabled = false;
-  const BG = pass !== 'fg', FG = pass !== 'bg';
+  const BG = pass !== 'fg' && pass !== 'fgn', FG = pass !== 'bg';
   if (!BG) g.clearRect(0, 0, BLW, BLH);
   const selU = B.sel && uById(B.sel), r = BG && selU && B.phase === 'plan' ? reach(selU, moveOf(selU)) : null, seeTerr = t => t.side === 'L' || B.phase !== 'pre' || B.tac.L.intel >= 2, fr = Math.floor(clock * 2) % 2;
   if (BG) {
@@ -1603,14 +1603,14 @@ function drawBattle(g, pass = 'all') {
     if (pass === 'all') g.drawImage(flash ? SPR.unitFlash(u.type, f, u.side === 'R') : SPR.unitTeam(u.type, f, u.side === 'R', u.side === 'L' ? '#1c5cb0' : '#9c1840'), sx, Math.round(Y));
     g.globalAlpha = 1;
     if (!dying && FG) {
-      const s = u.side === 'R' && !(B.tac.L.intel >= 1) ? rough(u.shown) : String(u.shown), w = s.length * 6 + 3, bx = Math.round(X) + (u.side === 'L' ? CW - w : 0), by = BOY + u.ry * CW + CW - 8;
+      const s = u.side === 'R' && !(B.tac.L.intel >= 1) ? rough(u.shown) : String(u.shown), w = s.length * 6 + 3, bx = Math.round(X) + (u.side === 'L' ? -3 : CW - w + 3), by = BOY + u.ry * CW + CW - 9; // back corner, so the badge never covers the unit
       g.fillStyle = '#000'; g.fillRect(bx - 1, by - 1, w + 2, 11); g.fillStyle = u.side === 'L' ? '#2058d0' : '#b01038'; g.fillRect(bx, by, w, 9); g.fillStyle = u.side === 'L' ? '#78c8fc' : '#fc7898'; g.fillRect(bx, by, w, 1);
       g.font = '8px PS2P, monospace'; g.textAlign = 'left'; g.fillStyle = '#000'; g.save(); g.translate(bx + 3, by + 9); g.scale(0.75, 0.875); g.fillText(s, 0, 0); g.restore(); g.fillStyle = '#fcfcfc'; g.save(); g.translate(bx + 2, by + 8); g.scale(0.75, 0.875); g.fillText(s, 0, 0); g.restore();
       if (B.phase === 'plan' && B.plans[u.id] && B.plans[u.id].t === 'def' && u.side === 'L') { g.fillStyle = '#000'; g.fillRect(X + 1, Y + 3, 7, 8); g.fillStyle = '#f8b800'; g.fillRect(X + 2, Y + 4, 5, 5); g.fillRect(X + 3, Y + 9, 3, 1); }
     }
   }
   if (!FG) return;
-  for (const p of B.proj) {
+  if (pass !== 'fgn') for (const p of B.proj) { // 'fgn': the render layer draws projectiles itself
     const k = (B.clock - p.at) / p.dur; if (k < 0 || k > 1) continue;
     const [x0, y0] = cellC(p.fx, p.fy), [x1, y1] = cellC(p.tx, p.ty), x = x0 + (x1 - x0) * k, y = y0 + (y1 - y0) * k - Math.sin(k * Math.PI) * (p.arc || 14) - 4;
     if (p.kind === 'arrow') { const a = Math.atan2(y1 - y0 - Math.cos(k * Math.PI) * 14 * Math.PI, x1 - x0); for (let i = 0; i < 9; i++) { g.fillStyle = i < 2 ? '#fcfcfc' : i > 6 ? '#e40058' : '#c8a060'; g.fillRect(Math.round(x - Math.cos(a) * i), Math.round(y - Math.sin(a) * i), i < 2 ? 2 : 1, i < 2 ? 2 : 1); } }
@@ -1687,7 +1687,7 @@ function updateHud() {
     ${RS('player') && facOf('player') ? `<div class="rpbar">${FACTIONS[facOf('player')].name.toUpperCase()} RESEARCH: <b>${RS('player').pts}</b> pt · ${Math.round(RS('player').prog * 100)}% ${meter(RS('player').prog, 1, FACTIONS[facOf('player')].col)}</div>` : ''}
     <div class="stats"><div>ATK<b>${stat(h, 'att')}</b></div><div>DEF<b>${stat(h, 'def')}</b></div><div>POW<b>${stat(h, 'sp')}</b></div><div>KNO<b>${stat(h, 'kn')}</b></div></div>
     <div>MOVE ${h.mp}/${maxMp(h)} ${meter(h.mp, maxMp(h), '#58d854')}MANA ${h.mana}/${maxMana(h)} ${meter(h.mana, maxMana(h), '#3cbcfc')}</div>
-    <div class="slots">${Array.from({length: MAX_STACKS}, (_, i) => { const a = h.army[i]; return `<div class="slot" title="${a ? a.count + ' ' + a.type : ''}">${a ? `<img src="${unitImg(a.type)}" alt=""><s>${a.count}</s>` : ''}</div>`; }).join('')}</div>
+    <div class="slots">${Array.from({length: MAX_STACKS}, (_, i) => { const a = h.army[i]; return `<div class="slot" title="${a ? a.count + ' ' + a.type : ''}">${a ? `${unitPic(a.type)}<s>${a.count}</s>` : ''}</div>`; }).join('')}</div>
     <div class="skl">${Array.from({length: MAX_SKILLS}, (_, i) => { const k = Object.keys(h.sk)[i]; return k ? `<span title="${SKILL_LVL[h.sk[k]]} ${SKILLS[k].name}: ${SKILLS[k].desc(skl(h, k))}">${SKILLS[k].name.slice(0, 5).toUpperCase()}<i>${'I'.repeat(h.sk[k])}</i></span>` : '<span class="e">-</span>'; }).join('')}</div>
     ${h.arts.length ? '<div>ARTIFACTS: ' + h.arts.map(k => ARTIFACTS[k].name).join(', ') + '</div>' : ''}` : '<b>No hero. Hire one at a Tavern.</b>';
   $('sidelists').innerHTML = `<h4>HEROES</h4>${myHeroes().map(x => `<button class="btn ${x === h ? 'y' : 'alt'}" data-a="selhero" data-v="${x.id}">${x.name} LV${x.lvl} (${x.mp} MOVE)</button>`).join('') || '-'}
@@ -1754,18 +1754,29 @@ function closePanel() {
   if (cb) cb();
 }
 const btn = (label, a, v, cls = 'alt', dis) => `<button class="btn sb ${cls}" data-a="${a}" data-v="${v ?? ''}" ${dis ? 'disabled' : ''}>${label}</button>`;
+// Town screen header: painted per-faction backdrop with a strip of building cards (built / can build / locked).
+// Falls back to the procedural pixel view (#tview) when the backdrop image is missing.
+const BLD_ICON = {fort: '🛡', citadel: '🏰', tavern: '🍺', hall: '🏛', capitol: '👑', market: '⚖', guild1: '✦', guild2: '✧', pit: '🔥'};
+function townScene(t, own) {
+  const units = FACTIONS[t.faction].units, keys = Object.keys(BUILDINGS).filter(k => !BUILDINGS[k].faction || BUILDINGS[k].faction === t.faction);
+  const card = k => { const b = BUILDINGS[k], built = t.built.includes(k), why = own && !built ? canBuild(t, k) : 'x', u = b.tier !== undefined ? units[b.tier] : b.upTier !== undefined ? UNITS[units[b.upTier]].upName : null;
+    const st = built ? 'built' : !why ? 'can' : 'lock', icon = u ? unitPic(u) : `<b>${BLD_ICON[k] || '★'}</b>`;
+    return `<button class="bcard ${st}" ${st === 'can' ? `data-a="build" data-v="${k}"` : 'disabled'} title="${b.name}${built ? ' (built)' : why && why !== 'x' ? ': ' + why : ''}">${icon}<span>${b.name.replace('Dwelling ', 'Dw ').replace('Upgrade ', 'Up ')}</span><i>${built ? '✔' : st === 'can' ? 'BUILD' : '🔒'}</i></button>`; };
+  return `<div class="tscene" style="--bg:url('art/town-${t.faction}.webp')"><canvas class="tview" id="tview"></canvas><div class="tbld">${keys.map(card).join('')}</div></div>`;
+}
+const unitPic = u => (window.MHR && MHR.pic && MHR.pic(u)) || `<img src="${unitImg(u)}" alt="">`;
 function openTown(t) {
   if (!t) return;
   showPanel(() => {
     const own = t.owner === 'player', h = heroAt(t.x, t.y), units = FACTIONS[t.faction].units, inc = income('player');
-    const head = `<div class="thead"><h2>${t.name.toUpperCase()}</h2>${btn('CLOSE', 'close', '', 'g')}</div>${resBar()}<canvas class="tview" id="tview"></canvas>`;
+    const head = `<div class="thead"><h2>${t.name.toUpperCase()}</h2>${btn('CLOSE', 'close', '', 'g')}</div>${resBar()}${townScene(t, own)}`;
     if (!own) return head + `<div class="cols"><p>Enemy ${FACTIONS[t.faction].name} town. Garrison: ${bandArmy(t.garrison)}</p>${canSeeEnemyKingdom() && KG(t.owner) ? `<p>Scouts report kingdom policies: ${KG(t.owner).slots.map(k => POLICIES[k].name).join(', ') || 'none'}</p>` : '<p>Learn Scouting to see their kingdom policies.</p>'}</div>`;
     let s = head + `<div class="cols"><div><p>Income per day: ${costText(inc) || '0'}${t.builtToday ? '<br><span class="no">Already built today</span>' : ''}</p><h3>BUILD</h3>`;
     for (const k in BUILDINGS) {
       if (t.built.includes(k)) continue;
       const b = BUILDINGS[k]; if (b.faction && b.faction !== t.faction) continue;
       const why = canBuild(t, k), desc = b.tier !== undefined ? 'Recruit tier ' + (b.tier + 1) + ': ' + units[b.tier] : b.upTier !== undefined ? 'Upgrade ' + units[b.upTier] + ' → ' + UNITS[units[b.upTier]].upName : b.desc;
-      s += `<div class="it">${b.tier !== undefined || b.upTier !== undefined ? `<img src="${unitImg(b.tier !== undefined ? units[b.tier] : UNITS[units[b.upTier]].upName)}" alt="">` : ''}<div class="t">${b.name}<small>${desc} · ${costText(bCost(t.owner, k))}${why ? ` · <span class="no">${why}</span>` : ''}</small></div>${btn('BUILD', 'build', k, 'g', why)}</div>`;
+      s += `<div class="it">${b.tier !== undefined || b.upTier !== undefined ? unitPic(b.tier !== undefined ? units[b.tier] : UNITS[units[b.upTier]].upName) : ''}<div class="t">${b.name}<small>${desc} · ${costText(bCost(t.owner, k))}${why ? ` · <span class="no">${why}</span>` : ''}</small></div>${btn('BUILD', 'build', k, 'g', why)}</div>`;
     }
     s += `</div><div><h3>RECRUIT (to ${h ? h.name : 'garrison'})</h3>`;
     units.forEach((b0, i) => {
@@ -1774,14 +1785,14 @@ function openTown(t) {
       for (const u of [b0, UNITS[b0].upName]) {
         if (!canRecruitUp(t, u)) continue;
         const U = effStats('player', u), aff = Math.min(n, Math.floor(G.res.player.gold / unitCost('player', u)));
-        s += `<div class="it"><img src="${unitImg(u)}" alt=""><div class="t">T${i + 1}${UNITS[u].up ? '+' : ''} ${u} x${n}<small>${unitCost('player', u)}g · ATK ${U.att} DEF ${U.def} HP ${U.hp} DMG ${U.dmg.join('-')} MOVE ${U.move}${U.range ? ' RANGE ' + U.range : ''} · ${abText(U)}</small></div>${btn('+1', 'buy', u + ':1', 'alt', !aff)}${btn('ALL ' + aff, 'buy', u + ':999', 'y', !aff)}</div>`;
+        s += `<div class="it">${unitPic(u)}<div class="t">T${i + 1}${UNITS[u].up ? '+' : ''} ${u} x${n}<small>${unitCost('player', u)}g · ATK ${U.att} DEF ${U.def} HP ${U.hp} DMG ${U.dmg.join('-')} MOVE ${U.move}${U.range ? ' RANGE ' + U.range : ''} · ${abText(U)}</small></div>${btn('+1', 'buy', u + ':1', 'alt', !aff)}${btn('ALL ' + aff, 'buy', u + ':999', 'y', !aff)}</div>`;
       }
     });
     s += `<h3>ARMY</h3>`;
     const upB = (arr, i, w) => { const a = arr[i], U = UNITS[a.type]; if (!U || U.up || !U.upName || U.fac !== t.faction || !t.built.includes('up' + (U.tier + 1))) return ''; const c = upgradeCost('player', a); return btn('UPG ' + c + 'g', 'upg', w + ':' + i, 'p', G.res.player.gold < c); };
     if (h) s += `<div class="bar">${btn('⇄ EXCHANGE WITH GARRISON', 'mgar', t.id, 'y')}</div>`;
-    if (h) h.army.forEach((a, i) => s += `<div class="it"><img src="${unitImg(a.type)}" alt=""><div class="t">${h.name}: ${a.count} ${a.type}</div>${upB(h.army, i, 'h')}${btn('TO GARRISON', 'togar', i, 'alt', t.garrison.length >= MAX_STACKS && !t.garrison.some(g => g.type === a.type) || h.army.length < 2)}</div>`);
-    t.garrison.forEach((a, i) => s += `<div class="it"><img src="${unitImg(a.type)}" alt=""><div class="t">Garrison: ${a.count} ${a.type}</div>${upB(t.garrison, i, 'g')}${btn('TO HERO', 'tohero', i, 'alt', !h)}</div>`);
+    if (h) h.army.forEach((a, i) => s += `<div class="it">${unitPic(a.type)}<div class="t">${h.name}: ${a.count} ${a.type}</div>${upB(h.army, i, 'h')}${btn('TO GARRISON', 'togar', i, 'alt', t.garrison.length >= MAX_STACKS && !t.garrison.some(g => g.type === a.type) || h.army.length < 2)}</div>`);
+    t.garrison.forEach((a, i) => s += `<div class="it">${unitPic(a.type)}<div class="t">Garrison: ${a.count} ${a.type}</div>${upB(t.garrison, i, 'g')}${btn('TO HERO', 'tohero', i, 'alt', !h)}</div>`);
     if (!h && !t.garrison.length) s += '<p>No hero or garrison here.</p>';
     if (t.built.includes('tavern')) s += `<h3>TAVERN</h3><div class="it"><div class="t">Hire a hero<small>${HIRE_COST} gold, comes with 15 ${units[0]}s${(G.fled || []).some(f => f.owner === 'player') ? ' · next: ' + G.fled.find(f => f.owner === 'player').name + ' (retreated, LV' + G.fled.find(f => f.owner === 'player').lvl + ')' : ''}</small></div>${btn('HIRE', 'hire', '', 'g', h || G.res.player.gold < HIRE_COST)}</div>`;
     if (t.built.includes('guild1')) s += `<h3>MAGE GUILD</h3><p>${Object.keys(SPELLS).filter(k => SPELLS[k].lvl <= (t.built.includes('guild2') ? 2 : 1)).map(k => SPELLS[k].name + ' (' + SPELLS[k].mana + ' mana): ' + SPELLS[k].desc).join('<br>')}<br>Heroes visiting learn these and refill mana.</p>`;
@@ -1800,7 +1811,7 @@ function openHero() {
     <p>Tactics known: ${knownTactics(h).map(k => TACTICS[k].name).join(', ')}</p>
     <h3>ARTIFACTS</h3><p>${h.arts.map(k => ARTIFACTS[k].name + ' (+' + ARTIFACTS[k].val + ' ' + ARTIFACTS[k].stat + ')').join('<br>') || 'None'}</p>
     <h3>SPELLS</h3><p>${h.spells.map(k => SPELLS[k].name + ' - ' + SPELLS[k].desc).join('<br>') || 'None. Build a Mage Guild and visit it.'}</p>
-    <h3>ARMY</h3>${h.army.map(a => `<div class="it"><img src="${unitImg(a.type)}" alt=""><div class="t">${a.count} ${a.type}<small>${abText(effStats(h.owner, a.type))}</small></div></div>`).join('')}
+    <h3>ARMY</h3>${h.army.map(a => `<div class="it">${unitPic(a.type)}<div class="t">${a.count} ${a.type}<small>${abText(effStats(h.owner, a.type))}</small></div></div>`).join('')}
     <div class="bar" style="margin-top:10px">${btn('CLOSE', 'close', '', 'g')}</div>`);
 }
 // ---------- TECH panel: faction research points + 6-level tree ----------
@@ -1818,7 +1829,7 @@ function pitHtml(t) {
   const o = t.owner, h = heroAt(t.x, t.y), arr = h && h.owner === o ? h.army : t.garrison, R = RS(o);
   return `<h3>SACRIFICIAL PIT</h3><p>Research today ${R.today.toFixed(2)} / ${RP_DAY_CAP}.</p>` +
     [['gold', '2500 GOLD'], ['res', '5 WOOD + 5 ORE'], ['xp', '1000 HERO XP' + (h ? ' (' + h.name + ')' : ' (needs a hero here)')]].map(([k, l]) => { const v = sacValue(o, k, t); return `<div class="it"><div class="t">${l}<small>${v ? '+' + v.toFixed(2) + ' research' : '<span class="no">Not available</span>'}</small></div>${btn('SACRIFICE', 'sac', k, 'p', !v)}</div>`; }).join('') +
-    arr.map((a, i) => { const v = sacValue(o, 'troop', t, i); return `<div class="it"><img src="${unitImg(a.type)}" alt=""><div class="t">${a.count} ${a.type}<small>${v ? '+' + v.toFixed(2) + ' research (stack is lost)' : '<span class="no">Keep at least one stack</span>'}</small></div>${btn('SACRIFICE', 'sac', 'troop:' + i, 'p', !v)}</div>`; }).join('');
+    arr.map((a, i) => { const v = sacValue(o, 'troop', t, i); return `<div class="it">${unitPic(a.type)}<div class="t">${a.count} ${a.type}<small>${v ? '+' + v.toFixed(2) + ' research (stack is lost)' : '<span class="no">Keep at least one stack</span>'}</small></div>${btn('SACRIFICE', 'sac', 'troop:' + i, 'p', !v)}</div>`; }).join('');
 }
 function openTech() {
   if (!G || !RS('player') || !facOf('player')) return;
