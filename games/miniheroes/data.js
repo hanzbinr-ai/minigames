@@ -170,6 +170,7 @@ const SKILLS = {
   scouting:    {name: 'Scouting',    v: [0, 1, 2, 3],      desc: v => '+' + v + ' sight radius'},
   estates:     {name: 'Estates',     v: [0, 125, 250, 500],desc: v => '+' + v + ' gold per day'},
   wisdom:      {name: 'Wisdom',      v: [0, 20, 40, 60],   desc: v => '+' + v + '% max mana'},
+  scholar:     {name: 'Scholar',     v: [0, 1, 2, 3],      desc: v => 'Meeting heroes: share spells up to level ' + (v + 1) + ', teach 1 skill per week'},
   archery:     {name: 'Archery',     v: [0, 10, 25, 50],   desc: v => '+' + v + '% ranged damage'},
   offense:     {name: 'Offense',     v: [0, 10, 20, 30],   desc: v => '+' + v + '% melee damage'},
   armorer:     {name: 'Armorer',     v: [0, 5, 10, 15],    desc: v => '-' + v + '% damage taken'},

@@ -47,6 +47,11 @@ body{touch-action:none;font-size:9px}
 #dlg{position:absolute;inset:0;z-index:25;background:#0008;align-items:flex-end;justify-content:center;padding-bottom:20px}
 #dlg .dbox{width:min(94%,620px);background:#10102a;border:4px solid #fcfcfc;box-shadow:0 0 0 4px #000,6px 6px 0 #000;padding:10px 12px;font-size:9px;line-height:1.8;color:#fcfcfc;animation:pop .2s ease-out}
 #dlg b{color:#f8b800;display:block;margin-bottom:4px}#dlg p{margin:0 0 6px}#dlg .bar{display:flex;gap:6px;align-items:center;justify-content:flex-end}#dlg i{flex:1;font-style:normal;color:#888;font-size:7px}#dlg .btn{padding:6px 8px;font-size:8px;border-width:3px}
+.mt{display:grid;grid-template-columns:1fr 1fr;gap:8px}.mt>div{min-width:0}.mt h3{margin:4px 0}
+.msl{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px}@media (min-width:700px){.msl{grid-template-columns:repeat(7,minmax(0,1fr))}.mt{grid-template-columns:1fr 1fr}}
+.msl button{position:relative;aspect-ratio:1;padding:0;background:#0f0f1b;border:3px solid #000;box-shadow:none;min-width:0}.msl button img{width:100%;height:100%;image-rendering:pixelated}.msl button s{position:absolute;right:1px;bottom:0;text-decoration:none;font-size:8px;color:var(--yellow);text-shadow:1px 1px 0 #000}
+.msl button.sel{border-color:#f8b800;box-shadow:0 0 0 2px #f8b800}.msl button.tgt{border-color:#58d854}.mart{display:flex;flex-wrap:wrap;gap:4px}.mart .btn{font-size:7px;padding:5px}
+#mcnt{width:100%;accent-color:#f8b800}
 #zoom{position:absolute;right:6px;top:6px;display:flex;flex-direction:column;gap:6px}
 #zoom .btn{width:38px;height:38px;padding:0;font-size:14px;border-width:3px;box-shadow:2px 2px 0 #000}
 #chip{position:absolute;left:6px;top:6px;display:flex;gap:6px;align-items:center;background:#1c1c3acc;border:3px solid #000;padding:3px 6px 3px 3px;cursor:pointer;max-width:70%}
@@ -152,4 +157,5 @@ body.battle #msg{bottom:4px;font-size:8px}
 <script src="sprites.js"></script>
 <script src="game.js"></script>
 <script src="campaign.js"></script>
+<script src="meet.js"></script>
 </body></html>

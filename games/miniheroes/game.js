@@ -1730,6 +1730,7 @@ function openTown(t) {
     });
     s += `<h3>ARMY</h3>`;
     const upB = (arr, i, w) => { const a = arr[i], U = UNITS[a.type]; if (!U || U.up || !U.upName || U.fac !== t.faction || !t.built.includes('up' + (U.tier + 1))) return ''; const c = upgradeCost('player', a); return btn('UPG ' + c + 'g', 'upg', w + ':' + i, 'p', G.res.player.gold < c); };
+    if (h) s += `<div class="bar">${btn('⇄ EXCHANGE WITH GARRISON', 'mgar', t.id, 'y')}</div>`;
     if (h) h.army.forEach((a, i) => s += `<div class="it"><img src="${unitImg(a.type)}" alt=""><div class="t">${h.name}: ${a.count} ${a.type}</div>${upB(h.army, i, 'h')}${btn('TO GARRISON', 'togar', i, 'alt', t.garrison.length >= MAX_STACKS && !t.garrison.some(g => g.type === a.type) || h.army.length < 2)}</div>`);
     t.garrison.forEach((a, i) => s += `<div class="it"><img src="${unitImg(a.type)}" alt=""><div class="t">Garrison: ${a.count} ${a.type}</div>${upB(t.garrison, i, 'g')}${btn('TO HERO', 'tohero', i, 'alt', !h)}</div>`);
     if (!h && !t.garrison.length) s += '<p>No hero or garrison here.</p>';
