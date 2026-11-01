@@ -52,7 +52,10 @@ const SPR = (() => {
     for (let i = 0; i < 4; i++) { const x = (i * 5 + f * 2) % T, y = (i * 4 + 2) % T; p(x, y, 4, 1, '#3c78e0'); p((x + 1) % T, y + 1, 2, 1, '#6ca0fc'); }
   }));
   // tile variants: 0 grass, 1 rough, 2 trees, 3 rocks, 4 water
-  function terrainTile(t, x, y) { const v = (x * 7 + y * 13 + (x * y) % 5) % 3; return t === 0 ? grass(v) : t === 1 ? dirt(v) : t === 2 ? trees(v + ((x + y) % 2) * 3) : t === 3 ? rocks(v + (x % 2) * 3) : null; }
+  const road = v => memo('road' + v, () => mk(T, T, (p, g) => { g.drawImage(grass(v), 0, 0); const r = rng(v * 41 + 5);
+    p(1, 1, T - 2, T - 2, '#b09058'); p(2, 2, T - 4, T - 4, '#c8a868'); for (let i = 0; i < 14; i++) p(2 + Math.floor(r() * (T - 4)), 2 + Math.floor(r() * (T - 4)), 1, 1, ['#a08048', '#e0c890', '#d8b878'][i % 3]);
+    for (let i = 0; i < 3; i++) { const x = 3 + Math.floor(r() * 9), y = 3 + Math.floor(r() * 9); p(x, y, 2, 1, '#8c8c8c'); } }));
+  function terrainTile(t, x, y) { const v = (x * 7 + y * 13 + (x * y) % 5) % 3; return t === 0 ? grass(v) : t === 1 ? dirt(v) : t === 2 ? trees(v + ((x + y) % 2) * 3) : t === 3 ? rocks(v + (x % 2) * 3) : t === 5 ? road(v) : null; }
 
   // Static land layer (water left transparent) with edge transitions and shores.
   function landLayer(map) {

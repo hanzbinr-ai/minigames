@@ -152,6 +152,7 @@ const TERRAIN = [
   {name: 'Trees', cost: 0, col: '#1e5a1e', dot: '#0d3a0d'},
   {name: 'Rocks', cost: 0, col: '#6a6a6a', dot: '#4a4a4a'},
   {name: 'Water', cost: 0, col: '#2050c0', dot: '#3c78e0'},
+  {name: 'Road', cost: 1, col: '#c8a868', dot: '#e0c890'},
 ];
 
 const HERO_NAMES = ['Roland', 'Lyra', 'Gareth', 'Sylva', 'Tarnum', 'Mira'];
@@ -180,7 +181,7 @@ const START_SKILLS = {Roland: {leadership: 1, archery: 1}, Lyra: {wisdom: 1, sco
   Alaron: {archery: 1, pathfinding: 1}, Xeron: {offense: 1, wisdom: 1}, Calid: {wisdom: 1, scouting: 1}, Crag: {offense: 1, leadership: 1}};
 
 // Random map setup
-const MAP_SIZES = {S: {w: 20, h: 15, name: 'Small'}, M: {w: 28, h: 20, name: 'Medium'}, L: {w: 36, h: 26, name: 'Large'}};
+const MAP_SIZES = {S: {w: 20, h: 15, name: 'Small'}, M: {w: 28, h: 20, name: 'Medium'}, L: {w: 36, h: 36, name: 'Large'}, XL: {w: 72, h: 72, name: 'X-Large'}};
 const DIFFICULTY = {
   easy:   {name: 'Easy',   player: {gold: 7500, wood: 15, ore: 15, gems: 4}, ai: {gold: 3000, wood: 5, ore: 5, gems: 0},   grace: 14, attack: 1.6, aiArmy: 0.7, aiIncome: 0.8},
   normal: {name: 'Normal', player: {gold: 5000, wood: 10, ore: 10, gems: 2}, ai: {gold: 5000, wood: 10, ore: 10, gems: 2}, grace: 8,  attack: 1.3, aiArmy: 1,   aiIncome: 1},

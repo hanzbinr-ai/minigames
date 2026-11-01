@@ -176,11 +176,15 @@ const DIFF = () => DIFFICULTY[(G && G.cfg && G.cfg.diff) || 'normal'] || DIFFICU
 function genTerrain(seed) {
   for (let tries = 0; tries < 60; tries++) {
     const R = mulberry(seed + tries * 7919);
-    const T = Array.from({length: MH}, () => Array(MW).fill(0));
+    const T = Array.from({length: MH}, () => Array(MW).fill(0)), big = Math.sqrt(MW * MH / 432);
+    if (MW * MH >= 1000) { // terrain zones: a few large grass/rough regions (nearest-seed), so big maps have distinct areas
+      const zs = Array.from({length: Math.round(MW * MH / 260)}, () => ({x: R() * MW, y: R() * MH, t: R() < 0.3 ? 1 : 0}));
+      for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) { let b = null, bd = 1e9; for (const z of zs) { const d = (z.x - x) ** 2 + (z.y - y) ** 2; if (d < bd) { bd = d; b = z; } } T[y][x] = b.t; }
+    }
     for (let i = 0, nb = Math.round(26 * MW * MH / 432); i < nb; i++) {
       const t = [1, 1, 2, 2, 2, 3, 4][Math.floor(R() * 7)];
       let x = Math.floor(R() * MW), y = Math.floor(R() * MH);
-      for (let k = 0, n = 3 + Math.floor(R() * 6); k < n; k++) { if (inMap(x, y)) T[y][x] = t; x += Math.floor(R() * 3) - 1; y += Math.floor(R() * 3) - 1; }
+      for (let k = 0, n = Math.round((3 + Math.floor(R() * 6)) * Math.min(2, big)); k < n; k++) { if (inMap(x, y)) T[y][x] = t; x += Math.floor(R() * 3) - 1; y += Math.floor(R() * 3) - 1; }
     }
     for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) if (y * MW + x >= MW * MH / 2) T[y][x] = T[MH - 1 - y][MW - 1 - x];
     for (const c of [PT, ET]) for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) if (inMap(c.x + dx, c.y + dy)) T[c.y + dy][c.x + dx] = 0;
@@ -245,6 +249,32 @@ function newGame(opts = {}) {
   pair(5, sc(12), resPick, () => ({type: 'Goblin', count: rnd(6, 10)}));
   }
   for (let i = 0, n = Math.round(MW * MH / 200); i < n; i++) pair(3, sc(14), i % 3 ? resPick : () => ({kind: 'chest'}), i % 2 ? () => ({type: pick(['Goblin', 'Wolf']), count: rnd(5, 12)}) : null);
+  // neutral towns (mirrored pairs) on bigger maps, guarded by their own faction's garrison
+  const nTownPairs = MW * MH >= 4000 ? 3 : MW * MH >= 1200 ? 1 : 0;
+  for (let i = 0; i < nTownPairs; i++) {
+    const f = pick(FACTION_KEYS), lo = Math.round(MW * 0.25), hi = Math.round(MW * (0.45 + 0.15 * i));
+    for (let k = 0; k < 600; k++) {
+      const x = 2 + Math.floor(R() * (MW - 4)), y = 2 + Math.floor(R() * (MH - 4)), mx = MW - 1 - x, my = MH - 1 - y, d = dP(x, y);
+      if (d < lo || d > hi || d > dE(x, y) || !free(x, y) || !free(mx, my) || Math.abs(x - mx) + Math.abs(y - my) < 6 || G.towns.some(t => Math.max(Math.abs(t.x - x), Math.abs(t.y - y)) < 6)) continue;
+      for (const [cx, cy] of [[x, y], [mx, my]]) {
+        const t = mkTown({x: cx, y: cy}, 'neutral', f, FACTIONS[f].town + ' ' + ['Ford', 'Hold', 'Watch', 'Vale', 'Crest', 'Keep'][(i * 2 + (cx === x ? 0 : 1)) % 6]);
+        t.garrison = FACTIONS[f].units.slice(0, 3).map((u, j) => ({type: u, count: Math.max(1, Math.round((6 + 4 * i) * [4, 2, 1][j] * 130 / UNITS[u].cost * 2))}));
+        FACTIONS[f].units.slice(0, 2).forEach(u => t.avail[u] = UNITS[u].growth); G.towns.push(t);
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) used.add((cx + dx) + ',' + (cy + dy));
+        if (TERRAIN[T[cy][cx]].cost === 0) T[cy][cx] = 0;
+      }
+      break;
+    }
+  }
+  // roads: shortest walkable line between towns (mirrored so both sides get the same roads)
+  const roadBetween = (a, b) => {
+    const N = MW * MH, prev = new Int32Array(N).fill(-2), q = [a.y * MW + a.x]; prev[q[0]] = -1;
+    for (let qi = 0; qi < q.length; qi++) { const u = q[qi]; if (u === b.y * MW + b.x) break; const ux = u % MW, uy = (u / MW) | 0;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = ux + dx, ny = uy + dy, v = ny * MW + nx; if (!inMap(nx, ny) || prev[v] !== -2 || !TERRAIN[T[ny][nx]].cost) continue; prev[v] = u; q.push(v); } }
+    let v = b.y * MW + b.x; if (prev[v] === -2) return;
+    while (v >= 0) { const x = v % MW, y = (v / MW) | 0; if (T[y][x] <= 1) { T[y][x] = 5; T[MH - 1 - y][MW - 1 - x] = 5; } v = prev[v]; }
+  };
+  if (MW * MH >= 1000) { const ts = G.towns; roadBetween(ts[0], ts[1]); ts.slice(2).forEach(t => roadBetween(t.x + t.y < MW ? ts[0] : ts[1], t)); }
   const startArmy = (f, k) => FACTIONS[f].units.slice(0, 2).map((u, i) => ({type: u, count: Math.max(1, Math.round((i ? 1000 : 1500) / UNITS[u].cost * k))}));
   G.heroes.push(mkHero('player', FACTIONS[pf].heroes[0], PT.x, PT.y, startArmy(pf, 1)));
   G.heroes.push(mkHero('ai', FACTIONS[af].heroes[pf === af ? 1 : 0], ET.x, ET.y, startArmy(af, 0.5 * D.aiArmy)));
@@ -291,21 +321,37 @@ function enterable(x, y, h, avoid) {
   return true;
 }
 const isTerminal = (x, y) => !!(objAt(x, y) || townAt(x, y) || heroAt(x, y) || guardOf(x, y));
+function tileIndex() { // one pass over objects so path search is O(1) per tile
+  const N = MW * MH, obj = new Array(N), hero = new Array(N), town = new Array(N), guard = new Array(N);
+  for (const o of G.objs) { obj[o.y * MW + o.x] = o; if (o.kind === 'monster') for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const x = o.x + dx, y = o.y + dy; if (inMap(x, y) && !guard[y * MW + x]) guard[y * MW + x] = o; } }
+  for (const h of G.heroes) hero[h.y * MW + h.x] = h;
+  for (const t of G.towns) town[t.y * MW + t.x] = t;
+  return {obj, hero, town, guard};
+}
 function dijkstra(h, avoid) {
-  const N = MW * MH, dist = new Array(N).fill(Infinity), prev = new Int32Array(N).fill(-1), done = new Uint8Array(N), s = h.y * MW + h.x;
-  dist[s] = 0;
-  for (;;) {
-    let u = -1, best = Infinity;
-    for (let i = 0; i < N; i++) if (!done[i] && dist[i] < best) { best = dist[i]; u = i; }
-    if (u < 0) break;
-    done[u] = 1;
-    const ux = u % MW, uy = (u / MW) | 0;
-    if (u !== s && isTerminal(ux, uy)) continue;
+  const N = MW * MH, dist = new Float64Array(N).fill(Infinity), prev = new Int32Array(N).fill(-1), done = new Uint8Array(N), s = h.y * MW + h.x, I = tileIndex();
+  const hk = [], hv = []; // binary min-heap of (dist, node)
+  const push = (d, v) => { let i = hk.length; hk.push(d); hv.push(v); while (i > 0) { const p = (i - 1) >> 1; if (hk[p] <= d) break; hk[i] = hk[p]; hv[i] = hv[p]; i = p; } hk[i] = d; hv[i] = v; };
+  const pop = () => { const v = hv[0], ld = hk.pop(), lv = hv.pop(); const n = hk.length; if (n) { let i = 0; for (;;) { let c = 2 * i + 1; if (c >= n) break; if (c + 1 < n && hk[c + 1] < hk[c]) c++; if (hk[c] >= ld) break; hk[i] = hk[c]; hv[i] = hv[c]; i = c; } hk[i] = ld; hv[i] = lv; } return v; };
+  const ok = (x, y, v) => {
+    if (!TERRAIN[G.map[y][x]].cost) return false;
+    const o = I.obj[v]; if (o && o.kind === 'monster') return false;
+    const oh = I.hero[v]; if (oh && oh !== h && oh.owner === h.owner) return false;
+    const t = I.town[v]; if (t && t.owner === h.owner && oh && oh !== h) return false;
+    if (avoid) { const g = I.guard[v]; if (g && avoid(g)) return false; }
+    return true;
+  };
+  const pf = skl(h, 'pathfinding') * 0.34;
+  dist[s] = 0; push(0, s);
+  while (hk.length) {
+    const u = pop(); if (done[u]) continue; done[u] = 1;
+    const best = dist[u], ux = u % MW, uy = (u / MW) | 0;
+    if (u !== s && (I.obj[u] || I.town[u] || I.hero[u] || I.guard[u])) continue;
     for (const [dx, dy] of DIRS8) {
-      const nx = ux + dx, ny = uy + dy;
-      if (!inMap(nx, ny) || !enterable(nx, ny, h, avoid)) continue;
-      const v = ny * MW + nx, d = best + stepCost(nx, ny, dx, dy, h);
-      if (d < dist[v]) { dist[v] = d; prev[v] = u; }
+      const nx = ux + dx, ny = uy + dy; if (nx < 0 || ny < 0 || nx >= MW || ny >= MH) continue;
+      const v = ny * MW + nx; if (done[v] || !ok(nx, ny, v)) continue;
+      let c = TERRAIN[G.map[ny][nx]].cost; if (c > 2) c = Math.max(2, c - pf); c = Math.round(dx && dy ? c * 1.5 : c);
+      const d = best + c; if (d < dist[v]) { dist[v] = d; prev[v] = u; push(d, v); }
     }
   }
   return {dist, prev};
@@ -625,6 +671,7 @@ function aiChoosePath(h) {
   }
   const grace = G.day < DIFF().grace; // no attacks on the player early on (difficulty)
   for (const e of G.heroes) if (!grace && e.owner === 'player' && my > armyPower(e.army, e) * DIFF().attack) consider(e.x, e.y, 6000);
+  for (const t of G.towns) if (t.owner === 'neutral' && my > armyPower(t.garrison) * 1.4) consider(t.x, t.y, 15000);
   for (const t of G.towns) if (!grace && t.owner === 'player') {
     const th = heroAt(t.x, t.y), dp = armyPower(t.garrison) + (th ? armyPower(th.army, th) : 0);
     if (my > dp * (t.built.includes('fort') ? 1.5 : 1.2) * DIFF().attack / 1.3) consider(t.x, t.y, 30000);
@@ -1385,7 +1432,11 @@ function drawObj(g, o) {
 function renderWorld() {
   ensureLayers();
   const g = wctx, sel = curHero(); g.imageSmoothingEnabled = false;
-  g.drawImage(layers.water[Math.floor(clock * 3) % 4], 0, 0); g.drawImage(layers.land, 0, 0);
+  // only the part of the world inside the camera (+ margin) is redrawn each frame
+  const V = viewRect(); UI.viewRect = V;
+  g.save(); g.beginPath(); g.rect(V.x, V.y, V.w, V.h); g.clip();
+  g.drawImage(layers.water[Math.floor(clock * 3) % 4], V.x, V.y, V.w, V.h, V.x, V.y, V.w, V.h); g.drawImage(layers.land, V.x, V.y, V.w, V.h, V.x, V.y, V.w, V.h);
+  const tx0 = V.x / TS - 3, ty0 = V.y / TS - 3, tx1 = (V.x + V.w) / TS + 3, ty1 = (V.y + V.h) / TS + 3, inV = (x, y) => x >= tx0 && x <= tx1 && y >= ty0 && y <= ty1;
   if (UI.preview && sel) UI.preview.path.forEach(([x, y], i) => {
     const ok = UI.preview.cost[i] <= sel.mp, last = i === UI.preview.path.length - 1, X = x * TS, Y = y * TS, c = ok ? '#58d854' : '#e40058';
     g.fillStyle = '#000';
@@ -1398,30 +1449,42 @@ function renderWorld() {
     for (const [cx, cy, sx, sy] of [[0, 0, 1, 1], [TS - 1, 0, -1, 1], [0, TS - 1, 1, -1], [TS - 1, TS - 1, -1, -1]]) { g.fillRect(X + cx - k * sx + Math.min(0, sx * 3), Y + cy - k * sy, 4, 1); g.fillRect(X + cx - k * sx, Y + cy - k * sy + Math.min(0, sy * 3), 1, 4); }
   }
   const items = [];
-  G.objs.forEach(o => items.push([o.y, () => drawObj(g, o)]));
-  G.towns.forEach(t => items.push([t.y + 0.1, () => g.drawImage(SPR.town(t.faction, t.owner, Math.floor(clock * 4) % 2), t.x * TS - 10, t.y * TS - 18)]));
-  G.heroes.forEach(h => items.push([rp(h).y + 0.2, () => { const p = rp(h), f = p.moving > 0.02 ? 1 + Math.floor(clock * 8) % 2 : 0; g.drawImage(SPR.hero(h.owner, f, p.face < 0), Math.round(p.x * TS) - 2, Math.round(p.y * TS) - 6); }]));
+  G.objs.forEach(o => inV(o.x, o.y) && items.push([o.y, () => drawObj(g, o)]));
+  G.towns.forEach(t => inV(t.x, t.y) && items.push([t.y + 0.1, () => g.drawImage(SPR.town(t.faction, t.owner, Math.floor(clock * 4) % 2), t.x * TS - 10, t.y * TS - 18)]));
+  G.heroes.forEach(h => inV(rp(h).x, rp(h).y) && items.push([rp(h).y + 0.2, () => { const p = rp(h), f = p.moving > 0.02 ? 1 + Math.floor(clock * 8) % 2 : 0; g.drawImage(SPR.hero(h.owner, f, p.face < 0), Math.round(p.x * TS) - 2, Math.round(p.y * TS) - 6); }]));
   items.sort((a, b) => a[0] - b[0]).forEach(i => i[1]());
   const tt = tutTile();
   if (tt) { const k = Math.floor(clock * 4) % 2; g.strokeStyle = k ? '#f8b800' : '#fcfcfc'; g.lineWidth = 1; g.strokeRect(tt[0] * TS - 1.5 - k, tt[1] * TS - 1.5 - k, TS + 3 + 2 * k, TS + 3 + 2 * k); }
-  g.drawImage(layers.fog, 0, 0);
+  g.drawImage(layers.fog, V.x, V.y, V.w, V.h, V.x, V.y, V.w, V.h);
+  g.restore();
+}
+function viewRect() {
+  const m = TS * 2, x = Math.max(0, Math.floor(CAM.x - m)), y = Math.max(0, Math.floor(CAM.y - m));
+  return {x, y, w: Math.max(1, Math.min(WW - x, Math.ceil(CAM.w / CAM.z + 2 * m))), h: Math.max(1, Math.min(WH - y, Math.ceil(CAM.h / CAM.z + 2 * m)))};
 }
 function renderMapScreen() {
   renderWorld(); clampCam();
   ctx.imageSmoothingEnabled = false; ctx.fillStyle = '#05050c'; ctx.fillRect(0, 0, CAM.w, CAM.h);
-  ctx.drawImage(world, Math.round(-CAM.x * CAM.z), Math.round(-CAM.y * CAM.z), WW * CAM.z, WH * CAM.z);
+  const V = UI.viewRect; ctx.drawImage(world, V.x, V.y, V.w, V.h, Math.round((V.x - CAM.x) * CAM.z), Math.round((V.y - CAM.y) * CAM.z), V.w * CAM.z, V.h * CAM.z);
 }
 let miniT = 0;
 function renderMini(dt) {
-  if ((miniT -= dt) > 0 || !G) return; miniT = 0.2;
-  const m = $('mini'); if (!m.offsetParent) return;
-  const g = m.getContext('2d'), s = 4;
-  for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) { g.fillStyle = G.fog[y][x] ? TERRAIN[G.map[y][x]].col : '#000'; g.fillRect(x * s, y * s, s, s); }
-  const dot = (x, y, c, n = 2) => { if (!G.fog[y][x]) return; g.fillStyle = c; g.fillRect(x * s + (s - n) / 2, y * s + (s - n) / 2, n, n); };
+  if ((miniT -= dt) > 0 || !G || !layers) return; miniT = 0.2;
+  const m = $('mini'), mm = $('mmap'), showMM = mm && mm.offsetParent; if (!m.offsetParent && !showMM) return;
+  const s = MW > 40 ? 2 : 4; if (m.width !== MW * s) { m.width = MW * s; m.height = MH * s; }
+  const g = m.getContext('2d');
+  if (!layers || layers.miniN !== layers.fogN || layers.miniS !== s) { // terrain+fog base only rebuilt when fog changes
+    const b = layers.miniBase || (layers.miniBase = document.createElement('canvas')); b.width = MW * s; b.height = MH * s; const bg = b.getContext('2d');
+    for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) { bg.fillStyle = G.fog[y][x] ? TERRAIN[G.map[y][x]].col : '#000'; bg.fillRect(x * s, y * s, s, s); }
+    layers.miniN = layers.fogN; layers.miniS = s;
+  }
+  g.drawImage(layers.miniBase, 0, 0);
+  const dot = (x, y, c, n = 2) => { if (!G.fog[y][x]) return; n = Math.max(2, n * s / 4); g.fillStyle = c; g.fillRect(x * s + (s - n) / 2, y * s + (s - n) / 2, n, n); };
   G.objs.forEach(o => o.kind === 'mine' || o.kind === 'grove' ? dot(o.x, o.y, ownerCol(o.owner), 4) : o.kind === 'monster' ? dot(o.x, o.y, '#fc7460') : dot(o.x, o.y, '#f8b800'));
-  G.towns.forEach(t => { g.fillStyle = '#000'; g.fillRect(t.x * s - 3, t.y * s - 3, 10, 10); g.fillStyle = ownerCol(t.owner); g.fillRect(t.x * s - 2, t.y * s - 2, 8, 8); });
+  G.towns.forEach(t => { if (!G.fog[t.y][t.x] && t.owner !== 'player') return; g.fillStyle = '#000'; g.fillRect(t.x * s - 3, t.y * s - 3, s + 6, s + 6); g.fillStyle = ownerCol(t.owner); g.fillRect(t.x * s - 2, t.y * s - 2, s + 4, s + 4); });
   G.heroes.forEach(h => dot(h.x, h.y, h.owner === 'player' ? '#fcfcfc' : '#e40058', 4));
   g.strokeStyle = '#f8b800'; g.lineWidth = 1; g.strokeRect(CAM.x / TS * s + 0.5, CAM.y / TS * s + 0.5, CAM.w / CAM.z / TS * s - 1, CAM.h / CAM.z / TS * s - 1);
+  if (showMM) { if (mm.width !== m.width) { mm.width = m.width; mm.height = m.height; } const c = mm.getContext('2d'); c.imageSmoothingEnabled = false; c.drawImage(m, 0, 0); }
 }
 
 // ---------- battle rendering (256x202 logical canvas, integer scaled) ----------
@@ -1588,6 +1651,7 @@ function syncBars() {
   document.querySelectorAll('#battlebar .btn').forEach(e => e.disabled = !!(b && B && B.phase === 'pre' && e.dataset.a !== 'book'));
   $('mapbar').style.display = b ? 'none' : 'contents';
   $('zoom').style.display = b || UI.mode === 'title' ? 'none' : 'flex';
+  $('mmapw').style.display = b || UI.mode === 'title' || !G ? 'none' : '';
   $('chip').style.visibility = b || UI.mode === 'title' ? 'hidden' : 'visible';
   document.querySelectorAll('#mapbar .btn').forEach(e => e.disabled = UI.mode !== 'map');
 }
@@ -1799,6 +1863,7 @@ const ACTIONS = {
   bspell: () => { closeBook(); openSpells(); }, bflee: () => { closeBook(); openFlee(); },
   bcast: k => { closeBook(); ACTIONS.cast(k); },
   speed: () => { if (B && B.phase === 'resolve') { UI.skip = true; return; } UI.bspeed = (UI.bspeed || 1) === 1 ? 2 : 1; const e = document.querySelector('[data-a=speed]'); if (e) e.textContent = 'SPEED ' + UI.bspeed + 'X'; msg('Resolve speed ' + UI.bspeed + 'x (tap during resolve to skip)'); },
+  mmtoggle: () => { UI.mmHide = !UI.mmHide; $('mmapw').classList.toggle('hide', UI.mmHide); },
   zin: () => setZoom(CAM.z + 1), zout: () => setZoom(CAM.z - 1),
   center: () => { const h = curHero(); if (h) centerOn(h.x, h.y); },
   selhero: id => { G.sel = +id; UI.preview = null; const h = curHero(); if (h) centerOn(h.x, h.y); },
@@ -1962,7 +2027,8 @@ function tapAt(cx, cy) {
   if (UI.mode === 'map') { const tx = Math.floor((CAM.x + sx / CAM.z) / TS), ty = Math.floor((CAM.y + sy / CAM.z) / TS); if (inMap(tx, ty)) tapMap(tx, ty); }
   else if (UI.mode === 'battle' && B) battleTap((sx - BV.ox) / BV.s, (sy - BV.oy) / BV.s);
 }
-$('mini').addEventListener('click', e => { const r = e.target.getBoundingClientRect(); centerOn(Math.floor((e.clientX - r.left) / r.width * MW), Math.floor((e.clientY - r.top) / r.height * MH)); });
+for (const id of ['mini', 'mmap']) $(id).addEventListener('click', e => { e.stopPropagation(); const r = e.target.getBoundingClientRect(); centerOn(Math.floor((e.clientX - r.left) / r.width * MW), Math.floor((e.clientY - r.top) / r.height * MH)); });
+for (const ev of ['pointerdown', 'pointerup']) $('mmap').addEventListener(ev, e => e.stopPropagation());
 $('fs').onclick = e => { e.stopPropagation(); const d = document; if (d.fullscreenElement) d.exitFullscreen && d.exitFullscreen(); else { const el = d.documentElement; (el.requestFullscreen || el.webkitRequestFullscreen || (() => msg('Fullscreen not supported'))).call(el); } };
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') { closePanel(); return; }
@@ -1979,6 +2045,6 @@ document.addEventListener('keydown', e => {
 });
 $('mute').onclick = e => { e.stopPropagation(); muted = !muted; localStorage.setItem('mh-mute', muted ? '1' : '0'); $('mute').textContent = muted ? 'MUTE' : 'SND'; };
 $('mute').textContent = muted ? 'MUTE' : 'SND';
-window.MHX = {addRP, pickTech, effStats, techList, techState, countWord, countText, recruit, build, sacrifice, sacValue, upgradeStack, newGame, openTech, openTown, RS, facOf, savings, dailyResearch, bCost, startBattle, get UNITS() { return UNITS; }, take, tipFor, threatOf, surrenderPrice, payPlans, doRetreat, doSurrender, openFlee, tradeBulk, mktState, mktMax, celebrate, objAt, moraleChance, get G() { return G; }, get B() { return B; }, setPolicy, slotCount, income, learnKT, growthOf, unitCost, newDay, hire, finishFight, KG, pol, maxMana, fight, startFight, tac, blunted, moveOf, calcDmg, intelOf, knownTactics, learnTalent, reach, uById, loadGame, applyFormation, placeTerrain, curHero, gainXp, flood, get PT() { return PT; }, get ET() { return ET; }, battleToClient: (lx, ly) => { const r = cv.getBoundingClientRect(); return [r.left + (BV.ox + lx * BV.s) / CAM.dpr, r.top + (BV.oy + ly * BV.s) / CAM.dpr]; }, UI, CAM, ACTIONS, tapMap, battleTap, endDay, resolveRound, cell: (x, y) => [BOX + x * CW + CW / 2, BOY + y * CW + CW / 2], tileToClient: (x, y) => { const r = cv.getBoundingClientRect(); return [r.left + ((x * TS + TS / 2 - CAM.x) * CAM.z) / CAM.dpr, r.top + ((y * TS + TS / 2 - CAM.y) * CAM.z) / CAM.dpr]; }}; // test hook
+window.MHX = {dijkstra, aiChoosePath, get layers() { return layers; }, addRP, pickTech, effStats, techList, techState, countWord, countText, recruit, build, sacrifice, sacValue, upgradeStack, newGame, openTech, openTown, RS, facOf, savings, dailyResearch, bCost, startBattle, get UNITS() { return UNITS; }, take, tipFor, threatOf, surrenderPrice, payPlans, doRetreat, doSurrender, openFlee, tradeBulk, mktState, mktMax, celebrate, objAt, moraleChance, get G() { return G; }, get B() { return B; }, setPolicy, slotCount, income, learnKT, growthOf, unitCost, newDay, hire, finishFight, KG, pol, maxMana, fight, startFight, tac, blunted, moveOf, calcDmg, intelOf, knownTactics, learnTalent, reach, uById, loadGame, applyFormation, placeTerrain, curHero, gainXp, flood, get PT() { return PT; }, get ET() { return ET; }, battleToClient: (lx, ly) => { const r = cv.getBoundingClientRect(); return [r.left + (BV.ox + lx * BV.s) / CAM.dpr, r.top + (BV.oy + ly * BV.s) / CAM.dpr]; }, UI, CAM, ACTIONS, tapMap, battleTap, endDay, resolveRound, cell: (x, y) => [BOX + x * CW + CW / 2, BOY + y * CW + CW / 2], tileToClient: (x, y) => { const r = cv.getBoundingClientRect(); return [r.left + ((x * TS + TS / 2 - CAM.x) * CAM.z) / CAM.dpr, r.top + ((y * TS + TS / 2 - CAM.y) * CAM.z) / CAM.dpr]; }}; // test hook
 openMenu();
 requestAnimationFrame(loop);
