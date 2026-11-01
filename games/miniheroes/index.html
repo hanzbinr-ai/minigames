@@ -42,6 +42,11 @@ body{touch-action:none;font-size:9px}
 .it.form{align-items:center}.dz{display:inline-block;width:12px;height:12px;background:#3cbcfc80;border:2px solid #3cbcfc;vertical-align:middle}.hlp summary{cursor:pointer;color:var(--blue);margin:4px 0}.hlp div{font-size:7px;margin:2px 0}
 #mmapw{position:absolute;right:6px;bottom:44px;display:flex;flex-direction:column;align-items:flex-end;gap:4px;z-index:3}#mmap{width:min(36vw,150px);height:auto;image-rendering:pixelated;border:3px solid #000;background:#000;box-shadow:2px 2px 0 #000;cursor:pointer}#mmapw.hide #mmap{display:none}#mmapw .btn{padding:4px 6px;font-size:7px;border-width:2px}
 @media (min-width:900px) and (min-height:500px){#mmapw{display:none!important}}
+#obj{position:absolute;left:50%;transform:translateX(-50%);top:6px;z-index:4;max-width:min(94%,640px);background:#10102ae8;border:3px solid #f8b800;box-shadow:3px 3px 0 #000;padding:5px 8px;font-size:7px;line-height:1.6;color:#fcfcfc;text-align:center;pointer-events:none}
+@media (max-width:899px){#obj{top:84px;max-width:calc(100% - 70px);left:6px;transform:none}}
+#dlg{position:absolute;inset:0;z-index:25;background:#0008;align-items:flex-end;justify-content:center;padding-bottom:20px}
+#dlg .dbox{width:min(94%,620px);background:#10102a;border:4px solid #fcfcfc;box-shadow:0 0 0 4px #000,6px 6px 0 #000;padding:10px 12px;font-size:9px;line-height:1.8;color:#fcfcfc;animation:pop .2s ease-out}
+#dlg b{color:#f8b800;display:block;margin-bottom:4px}#dlg p{margin:0 0 6px}#dlg .bar{display:flex;gap:6px;align-items:center;justify-content:flex-end}#dlg i{flex:1;font-style:normal;color:#888;font-size:7px}#dlg .btn{padding:6px 8px;font-size:8px;border-width:3px}
 #zoom{position:absolute;right:6px;top:6px;display:flex;flex-direction:column;gap:6px}
 #zoom .btn{width:38px;height:38px;padding:0;font-size:14px;border-width:3px;box-shadow:2px 2px 0 #000}
 #chip{position:absolute;left:6px;top:6px;display:flex;gap:6px;align-items:center;background:#1c1c3acc;border:3px solid #000;padding:3px 6px 3px 3px;cursor:pointer;max-width:70%}
@@ -123,6 +128,8 @@ body.battle #msg{bottom:4px;font-size:8px}
   <div id="chip" data-a="hero"></div>
   <div id="zoom"><button class="btn alt" data-a="zin">+</button><button class="btn alt" data-a="zout">-</button><button class="btn y" data-a="center">◎</button></div>
   <div id="mmapw"><canvas id="mmap"></canvas><button class="btn alt" data-a="mmtoggle" title="Minimap">MAP</button></div>
+  <div id="obj" style="display:none"></div>
+  <div id="dlg" style="display:none"><div class="dbox"><b></b><p></p><div class="bar"><i></i><button class="btn y" data-a="dnext">NEXT ▼</button><button class="btn alt" data-a="dskip">SKIP</button></div></div></div>
   <div id="tut" style="display:none"></div>
   <div id="pre" style="display:none"></div>
   <div id="msg"></div>
@@ -144,4 +151,5 @@ body.battle #msg{bottom:4px;font-size:8px}
 <script src="data.js"></script>
 <script src="sprites.js"></script>
 <script src="game.js"></script>
+<script src="campaign.js"></script>
 </body></html>

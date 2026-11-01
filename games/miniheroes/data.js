@@ -16,43 +16,43 @@ const UNIT_DEFS = [
   ['castle', 2, 'Crossbowman', 'Arbalester', [], ['Shred'], {range: 6, def: -1, cost: 1.026}, '#58d854'],
   ['castle', 3, 'Griffin', 'Royal Griffin', ['Fly'], ['NoRetal'], {move: 2, hp: 1.1, att: 1, cost: 1.009}, '#e8c050'],
   ['castle', 4, 'Swordsman', 'Crusader', ['Cleave'], ['Double'], {def: 2, move: -1, att: 3, dmg: 1.15, cost: 1.009}, '#3cbcfc'],
-  ['castle', 5, 'Monk', 'Zealot', ['Heal'], ['Holy'], {range: 6, hp: 1.183, cost: 0.973}, '#fcfcfc'],
-  ['castle', 6, 'Paladin', 'Champion', ['Charge', 'Holy'], ['Tough'], {move: 1, dmg: 0.9, cost: 0.973, hp: 1.075}, '#f8b800'],
+  ['castle', 5, 'Monk', 'Zealot', ['Heal'], ['Holy'], {range: 6, hp: 1.216, cost: 0.973}, '#fcfcfc'],
+  ['castle', 6, 'Paladin', 'Champion', ['Charge', 'Holy'], ['Tough'], {move: 1, dmg: 0.9, cost: 0.973, hp: 1.105}, '#f8b800'],
   ['necro', 0, 'Skeleton', 'Skeleton Warrior', ['Undead'], ['ShieldW'], {def: 1, att: 1}, '#e0e0e0'],
   ['necro', 1, 'Zombie', 'Plague Zombie', ['Undead', 'Tough'], ['Plague'], {hp: 1.25, move: -1, att: -1}, '#7ca050'],
   ['necro', 2, 'Ghost', 'Spectre', ['Undead', 'Ethereal', 'Fly'], ['ManaSteal'], {move: 1, hp: 1.15}, '#a8a8fc'],
   ['necro', 3, 'Vampire', 'Vampire Lord', ['Undead', 'Fly', 'Drain'], ['NoRetal'], {move: 1}, '#a00030'],
   ['necro', 4, 'Lich', 'Archlich', ['Undead', 'Splash'], ['Fear'], {range: 6, hp: 0.8, dmg: 1.0}, '#d858f8'],
-  ['necro', 5, 'Wraith Knight', 'Dread Knight', ['Undead', 'Charge', 'Fear'], ['Cleave'], {move: 1, hp: 1.049, cost: 0.83}, '#e40058'],
-  ['necro', 6, 'Bone Dragon', 'Ghost Dragon', ['Undead', 'Fly', 'Fear'], ['Ethereal'], {move: 1, att: 1, hp: 1.002, cost: 0.83}, '#d8d8c0'],
+  ['necro', 5, 'Wraith Knight', 'Dread Knight', ['Undead', 'Charge', 'Fear'], ['Cleave'], {move: 1, hp: 0.997, cost: 0.83}, '#e40058'],
+  ['necro', 6, 'Bone Dragon', 'Ghost Dragon', ['Undead', 'Fly', 'Fear'], ['Ethereal'], {move: 1, att: 1, hp: 0.952, cost: 0.83}, '#d8d8c0'],
   ['sylvan', 0, 'Sprite', 'Faerie', ['Fly', 'NoRetal'], ['Blind'], {move: 2, hp: 0.5, def: -1, cost: 0.948}, '#a8f8a8'],
   ['sylvan', 1, 'Wolf Rider', 'Moon Rider', ['Charge'], ['Double'], {move: 2, def: -1, dmg: 1.1, cost: 0.948}, '#8c8c9c'],
   ['sylvan', 2, 'Elf Archer', 'Grand Elf', ['Double'], ['Shred'], {range: 7, dmg: 0.5, hp: 0.8, cost: 0.948}, '#38b848'],
   ['sylvan', 3, 'Druid', 'Elder Druid', ['Heal'], ['ManaSteal'], {range: 6, dmg: 0.75, cost: 1.087, hp: 0.939}, '#c8a878'],
   ['sylvan', 4, 'Unicorn', 'Silver Unicorn', ['Blind'], ['Tough'], {move: 1, hp: 1.079, cost: 1.087}, '#f0f0ff'],
-  ['sylvan', 5, 'Treant', 'Ancient Treant', ['Tough', 'Regen'], ['Brace'], {move: -2, hp: 1.012, def: 3, cost: 1.191}, '#6c8c3c'],
-  ['sylvan', 6, 'Green Dragon', 'Emerald Dragon', ['Fly', 'SpellImm'], ['Splash'], {move: 1, att: 2, cost: 1.191, hp: 1.066}, '#20c040'],
+  ['sylvan', 5, 'Treant', 'Ancient Treant', ['Tough', 'Regen'], ['Brace'], {move: -2, hp: 1.074, def: 3, cost: 1.191}, '#6c8c3c'],
+  ['sylvan', 6, 'Green Dragon', 'Emerald Dragon', ['Fly', 'SpellImm'], ['Splash'], {move: 1, att: 2, cost: 1.191, hp: 1.132}, '#20c040'],
   ['inferno', 0, 'Imp', 'Familiar', ['ManaSteal'], ['Swarm'], {move: 1, def: -1, cost: 0.961}, '#e05030'],
   ['inferno', 1, 'Hell Hound', 'Cerberus', ['Charge'], ['Double'], {move: 2, def: -1, dmg: 1.1, cost: 0.961}, '#a03018'],
   ['inferno', 2, 'Succubus', 'Temptress', [], ['Plague'], {range: 6, dmg: 0.9, cost: 0.961}, '#fc74b4'],
-  ['inferno', 3, 'Demon', 'Horned Demon', ['Tough'], ['Cleave'], {hp: 1.1, cost: 0.967}, '#c02010'],
-  ['inferno', 4, 'Efreet', 'Efreet Sultan', ['Fly', 'FireShield'], ['Double'], {move: 2, cost: 0.967}, '#fc9838'],
+  ['inferno', 3, 'Demon', 'Horned Demon', ['Tough'], ['Cleave'], {hp: 1.134, cost: 0.967}, '#c02010'],
+  ['inferno', 4, 'Efreet', 'Efreet Sultan', ['Fly', 'FireShield'], ['Double'], {move: 2, cost: 0.967, hp: 1.031}, '#fc9838'],
   ['inferno', 5, 'Pit Fiend', 'Pit Lord', ['Splash'], ['Fear'], {dmg: 1.35, hp: 1.25, cost: 1.135}, '#801010'],
   ['inferno', 6, 'Devil', 'Arch Devil', ['Teleport', 'NoRetal'], ['Fear'], {hp: 0.9, cost: 1.135}, '#e40030'],
-  ['stronghold', 0, 'Goblin', 'Hobgoblin', ['Swarm'], ['Rage'], {cost: 0.95, def: -1, dmg: 1.1}, '#80c020'],
-  ['stronghold', 1, 'Wolf Raider', 'Warg Raider', ['Charge'], ['Double'], {cost: 0.95, move: 2, def: -2, dmg: 0.9}, '#9c8c7c'],
-  ['stronghold', 2, 'Orc Axeman', 'Orc Chieftain', ['Rage'], ['Cleave'], {cost: 0.95, def: 0, dmg: 1.2, hp: 1.1}, '#5c9c3c'],
-  ['stronghold', 3, 'Ogre Shaman', 'Ogre Magi', ['Bloodlust'], ['Tough'], {cost: 0.798, def: -2, hp: 1.101}, '#c09060'],
-  ['stronghold', 4, 'Roc', 'Thunderbird', ['Fly'], ['Splash'], {cost: 0.798, move: 2, def: -3, dmg: 1.0, hp: 0.957}, '#a06030'],
-  ['stronghold', 5, 'Cyclops', 'Cyclops King', ['RockThrow'], ['Splash'], {cost: 0.824, range: 5, def: -3, dmg: 1.0, hp: 0.943}, '#c8a080'],
-  ['stronghold', 6, 'Behemoth', 'Ancient Behemoth', ['Shred'], ['Cleave'], {cost: 0.824, def: -4, dmg: 1.2, hp: 0.943}, '#8c6c4c'],
+  ['stronghold', 0, 'Goblin', 'Hobgoblin', ['Swarm'], ['Rage'], {cost: 0.96, def: -1, dmg: 1.1}, '#80c020'],
+  ['stronghold', 1, 'Wolf Raider', 'Warg Raider', ['Charge'], ['Double'], {cost: 0.96, move: 2, def: -2, dmg: 0.9}, '#9c8c7c'],
+  ['stronghold', 2, 'Orc Axeman', 'Orc Chieftain', ['Rage'], ['Cleave'], {cost: 0.96, def: 0, dmg: 1.2, hp: 1.1}, '#5c9c3c'],
+  ['stronghold', 3, 'Ogre Shaman', 'Ogre Magi', ['Bloodlust'], ['Tough'], {cost: 0.798, def: -2, hp: 1.045}, '#c09060'],
+  ['stronghold', 4, 'Roc', 'Thunderbird', ['Fly'], ['Splash'], {cost: 0.798, move: 2, def: -3, dmg: 1.0, hp: 0.908}, '#a06030'],
+  ['stronghold', 5, 'Cyclops', 'Cyclops King', ['RockThrow'], ['Splash'], {cost: 0.824, range: 5, def: -3, dmg: 1.0, hp: 0.892}, '#c8a080'],
+  ['stronghold', 6, 'Behemoth', 'Ancient Behemoth', ['Shred'], ['Cleave'], {cost: 0.824, def: -4, dmg: 1.2, hp: 0.892}, '#8c6c4c'],
   ['dwarf', 0, 'Miner', 'Foreman', ['Tough'], ['Swarm'], {move: -1, def: 2, cost: 0.979}, '#c08040'],
   ['dwarf', 1, 'Shieldbearer', 'Shieldguard', ['ShieldW', 'Brace'], ['Rune'], {move: -1, def: 4, dmg: 1.1, cost: 0.979}, '#a0a0b8'],
   ['dwarf', 2, 'Crossbow Engineer', 'Siege Engineer', ['ShieldW'], ['RockThrow'], {range: 6, move: -1, def: 0, dmg: 0.75, cost: 0.979}, '#d0a050'],
   ['dwarf', 3, 'Runesmith', 'Runelord', ['Rune'], ['SpellImm'], {move: -1, def: 3, att: 2, dmg: 1.1, cost: 1.066, hp: 1.061}, '#58c8f8'],
   ['dwarf', 4, 'Bear Rider', 'Bear Lord', ['Charge', 'Tough'], ['Cleave'], {def: 2, hp: 1.061, cost: 1.066}, '#7c5030'],
-  ['dwarf', 5, 'Steam Golem', 'Iron Golem', ['Machine', 'Tough'], ['SpellImm'], {move: -1, def: 4, hp: 1.14, dmg: 1.1, cost: 1.001}, '#9c9cac'],
-  ['dwarf', 6, 'Iron Dreadnought', 'Thunder Dreadnought', ['Machine', 'Splash'], ['Tough'], {range: 6, move: -2, def: 3, dmg: 1.0, cost: 1.001, hp: 1.036}, '#606878'],
+  ['dwarf', 5, 'Steam Golem', 'Iron Golem', ['Machine', 'Tough'], ['SpellImm'], {move: -1, def: 4, hp: 1.215, dmg: 1.1, cost: 1.001}, '#9c9cac'],
+  ['dwarf', 6, 'Iron Dreadnought', 'Thunder Dreadnought', ['Machine', 'Splash'], ['Tough'], {range: 6, move: -2, def: 3, dmg: 1.0, cost: 1.001, hp: 1.104}, '#606878'],
 ];
 const FACTION_UNITS = {};
 for (const [fac, tier, base, up, ab, ab2, m, col] of UNIT_DEFS) {
@@ -61,7 +61,7 @@ for (const [fac, tier, base, up, ab, ab2, m, col] of UNIT_DEFS) {
     const k = isUp ? 1 : 0, dm = (m.dmg || 1) * (1 + 0.2 * k);
     UNITS[name] = {fac, tier, up: isUp, base, upName: up, att: att + (m.att || 0) + 2 * k, def: Math.max(0, def + (m.def || 0) + 2 * k), hp: Math.round(hp * (m.hp || 1) * (1 + 0.2 * k)),
       dmg: [Math.max(1, Math.round(dmg[0] * dm)), Math.max(1, Math.round(dmg[1] * dm))], move: Math.max(1, move + (m.move || 0) + (isUp && tier % 2 ? 1 : 0)), range: m.range ? m.range + k : 0,
-      ab: isUp ? [...ab, ...ab2] : ab.slice(), cost: Math.round(cost * (m.cost || 1) * (isUp ? 1.35 : 1) / 5) * 5, growth, col};
+      ab: isUp ? [...ab, ...ab2] : ab.slice(), cost: Math.round(cost * (m.cost || 1) / 5) * 5, growth, col};
   };
   mk(base, false); mk(up, true);
   (FACTION_UNITS[fac] = FACTION_UNITS[fac] || [])[tier] = base;
@@ -118,7 +118,7 @@ const BUILDINGS = {
   dw6: {name: 'Dwelling VI',  cost: {gold: 3500, wood: 8, ore: 8, gems: 4},   req: ['dw5', 'citadel'],  tier: 5},
   dw7: {name: 'Dwelling VII', cost: {gold: 6000, wood: 10, ore: 10, gems: 8}, req: ['dw6', 'hall'],     tier: 6},
 };
-for (let i = 1; i <= 7; i++) BUILDINGS['up' + i] = {name: 'Upgrade ' + ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'][i - 1], cost: {gold: 400 + i * 500, wood: 2 + i, ore: 2 + i, gems: i > 3 ? i - 3 : 0}, req: ['dw' + i], upTier: i - 1};
+for (let i = 1; i <= 7; i++) BUILDINGS['up' + i] = {name: 'Upgrade ' + ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'][i - 1], cost: {gold: 400 + i * 500 + Math.round(0.7 * TIER_T[i - 1][5] * TIER_T[i - 1][6] / 100) * 100, wood: 2 + i, ore: 2 + i, gems: i > 3 ? i - 3 : 0}, req: ['dw' + i], upTier: i - 1};
 const AI_BUILD_ORDER = ['dw2', 'tavern', 'fort', 'dw3', 'up1', 'hall', 'dw4', 'guild1', 'up2', 'pit', 'dw5', 'citadel', 'up3', 'capitol', 'dw6', 'up4', 'guild2', 'up5', 'dw7', 'up6', 'up7', 'market'];
 
 // Spells are cast in the PLAN phase and take effect first in the RESOLVE phase.

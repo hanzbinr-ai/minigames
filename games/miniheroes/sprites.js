@@ -496,5 +496,6 @@ const SPR = (() => {
     u.forEach((name, i) => { if (!B('dw' + (i + 1))) return; const up = B('up' + (i + 1)); p(6 + i * 33, 72, 28, 22, '#00000030'); if (up) p(6 + i * 33, 92, 28, 2, '#f8b800'); g.drawImage(unit(up ? UNITS[name].upName : name, 0, false), 8 + i * 33, 70); });
   }
 
-  return {grove, terr, wall, tower, catapult, flip, T, landLayer, waterLayer, pile, chest, artifact, mine, unit, unitFlash, unitTeam, hero, town, portrait, field, boulder, townView};
+  const mythicLook = (base, my) => { for (const f in my) UNIT_LOOK[my[f]] = {...(UNIT_LOOK[base[f]] || UNIT_LOOK.Peasant), aura: '#fcfc54'}; };
+  return {mythicLook, grove, terr, wall, tower, catapult, flip, T, landLayer, waterLayer, pile, chest, artifact, mine, unit, unitFlash, unitTeam, hero, town, portrait, field, boulder, townView};
 })();

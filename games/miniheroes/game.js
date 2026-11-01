@@ -552,8 +552,9 @@ function unitCost(o, u) {
   return Math.round(U.cost * (1 - (pol(o, 'warchest') ? 0.1 : 0) - (pol(o, 'warband') ? 0.15 : 0) - techSum(o, 'cost') / 100 - tc / 100));
 }
 const poolOf = u => UNITS[u].base || u; // upgraded creatures recruit from the base dwelling's stock
-const canRecruitUp = (t, u) => !UNITS[u].up || t.built.includes('up' + (UNITS[u].tier + 1));
-function upgradeCost(o, s) { const U = UNITS[s.type]; return U && !U.up && U.upName ? Math.max(0, (unitCost(o, U.upName) - unitCost(o, s.type)) * s.count) : 0; }
+const canRecruitUp = (t, u) => { const U = UNITS[u]; if (U.mythic) return false; const upB = t.built.includes('up' + (U.tier + 1)); return U.up ? upB : !(U.upName && upB); }; // once upgraded, a tier offers ONLY the upgraded unit
+const tierUnit = (t, i) => { const b = FACTIONS[t.faction].units[i]; return canRecruitUp(t, b) ? b : UNITS[b].upName; };
+function upgradeCost(o, s) { const U = UNITS[s.type]; return U && !U.up && U.upName ? Math.ceil(unitCost(o, s.type) * 0.1) * s.count : 0; } // upgrading an existing stack: 10% of the unit price per creature
 function upgradeStack(t, army, i) {
   const s = army[i], U = s && UNITS[s.type]; if (!U || U.up || !U.upName || U.fac !== t.faction || !t.built.includes('up' + (U.tier + 1))) return false;
   const c = upgradeCost(t.owner, s); if (G.res[t.owner].gold < c) return false;
@@ -573,12 +574,12 @@ function recruit(t, u, n) {
 }
 function hire(t) {
   if (!t.built.includes('tavern') || heroAt(t.x, t.y) || G.res[t.owner].gold < HIRE_COST) return null;
-  const names = [...FACTIONS[t.faction].heroes, ...ALL_HERO_NAMES], used = G.heroes.map(h => h.name), u0 = FACTIONS[t.faction].units[0], n0 = Math.max(5, Math.round(750 / UNITS[u0].cost));
+  const names = [...FACTIONS[t.faction].heroes, ...ALL_HERO_NAMES], used = G.heroes.map(h => h.name), u0 = tierUnit(t, 0), n0 = Math.max(5, Math.round(750 / UNITS[u0].cost));
   const fi = (G.fled || []).findIndex(f => f.owner === t.owner);
   const h = fi >= 0 ? Object.assign(G.fled.splice(fi, 1)[0], {x: t.x, y: t.y, id: G.nid++, army: [{type: u0, count: n0}]}) : mkHero(t.owner, names.find(n => !used.includes(n)) || 'Hero', t.x, t.y, [{type: u0, count: n0}]);
   h.fac = h.fac || t.faction;
   h.mp = maxMp(h);
-  if (pol(t.owner, 'muster')) { const us = FACTIONS[t.faction].units; addUnits(h.army, us[0], 10); addUnits(h.army, us[1], 4); }
+  if (pol(t.owner, 'muster')) { addUnits(h.army, tierUnit(t, 0), 10); addUnits(h.army, tierUnit(t, 1), 4); }
   if (ktal(t.owner, 'veterans')) h.att++;
   G.res[t.owner].gold -= HIRE_COST; G.heroes.push(h); visitTown(h, t);
   return h;
@@ -1788,7 +1789,7 @@ function openTech() {
 }
 function openMenu() {
   const has = !!localStorage.getItem(SAVE_KEY), auto = !!localStorage.getItem(SAVE_KEY + '-auto');
-  showPanel(() => `<h2>MENU</h2><div class="bar">${btn('SAVE', 'save', '', 'g', !G || UI.mode !== 'map')}${btn('LOAD', 'load', '', 'alt', !has)}${btn('LOAD AUTOSAVE', 'loadauto', '', 'alt', !auto)}${btn('NEW GAME', 'new', '', 'y')}${btn('TUTORIAL', 'tutorial', '', 'p')}${G ? btn('CLOSE', 'close', '', 'g') : ''}</div>
+  showPanel(() => `<h2>MENU</h2><div class="bar">${btn('SAVE', 'save', '', 'g', !G || UI.mode !== 'map')}${btn('LOAD', 'load', '', 'alt', !has)}${btn('LOAD AUTOSAVE', 'loadauto', '', 'alt', !auto)}${btn('NEW GAME', 'new', '', 'y')}${btn('CAMPAIGN', 'campaign', '', 'y')}${btn('TUTORIAL', 'tutorial', '', 'p')}${G ? btn('CLOSE', 'close', '', 'g') : ''}</div>
     <h3>HOW TO PLAY</h3><p>Explore, grab resources, flag mines and grow your army. Build dwellings in town; creatures grow each week (day 1 of every week).
     Capture the enemy town to win. Lose all towns and heroes and you lose.</p>
     <h3>BATTLE</h3><p>PLAN: tap your stack, then tap an empty tile (move), an enemy (attack) or the stack again (defend). Cast one spell per round with SPELL.
@@ -1917,7 +1918,7 @@ function openSetup() {
     <p>${S.diff === 'easy' ? 'More starting resources, slower and weaker enemy.' : S.diff === 'hard' ? 'Less gold for you, a rich and aggressive enemy.' : 'Even start for both sides.'}</p>
     <h3>SEED</h3><div class="bar"><input id="seed" inputmode="numeric" value="${S.seed}" style="font:inherit;font-size:11px;width:120px;padding:8px;border:3px solid #000;background:#0f0f1b;color:#fff">${btn('RANDOM', 'rseed', '', 'alt')}</div>
     <p>Same seed + size = same map. Both sides get a mirrored, fair layout; every town and mine is reachable.</p>
-    <div class="bar" style="margin-top:8px">${btn('START', 'start', '', 'g')}${btn('TUTORIAL', 'tutorial', '', 'p')}${G ? btn('BACK', 'menu', '', 'alt') : ''}</div>`, {sticky: !G});
+    <div class="bar" style="margin-top:8px">${btn('START', 'start', '', 'g')}${btn('CAMPAIGN', 'campaign', '', 'y')}${btn('TUTORIAL', 'tutorial', '', 'p')}${G ? btn('BACK', 'menu', '', 'alt') : ''}</div>`, {sticky: !G});
 }
 // ---------- tutorial: each step completes when the game state shows the player did it ----------
 const objOf = k => G.objs.find(o => o.kind === k);
