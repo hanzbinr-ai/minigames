@@ -1539,7 +1539,8 @@ function drawBattle(g, pass = 'all') {
   if (!BG) g.clearRect(0, 0, BLW, BLH);
   const selU = B.sel && uById(B.sel), r = BG && selU && B.phase === 'plan' ? reach(selU, moveOf(selU)) : null, seeTerr = t => t.side === 'L' || B.phase !== 'pre' || B.tac.L.intel >= 2, fr = Math.floor(clock * 2) % 2;
   if (BG) {
-  g.drawImage(SPR.field(BLW, BLH, CW, B.seed), 0, 0);
+  if (pass === 'bg' && window.MHR && MHR.paintField && MHR.paintField()) g.clearRect(0, 0, BLW, BLH); // painted field sprite sits under this layer
+  else g.drawImage(SPR.field(BLW, BLH, CW, B.seed), 0, 0);
   g.fillStyle = '#10102a'; g.fillRect(0, 0, BLW, BOY - 3); g.fillStyle = '#000'; g.fillRect(0, BOY - 3, BLW, 2);
   txt(g, B.phase === 'pre' ? 'PRE-BATTLE' : 'ROUND ' + (B.phase === 'plan' ? B.round : B.round - 1) + ' - ' + (B.phase === 'plan' ? 'PLAN' : (B.stage || 'RESOLVE')), BLW / 2, 10, B.phase === 'resolve' ? '#58d854' : '#f8b800');
   const hl = heroOf('L'), hr = heroOf('R');
@@ -1980,7 +1981,7 @@ function openSetup() {
   UI.setup.pf = UI.setup.pf || 'castle'; UI.setup.af = UI.setup.af || 'random';
   const S = UI.setup;
   const fbtns = (cur, a) => [...FACTION_KEYS, 'random'].map(k => btn(k === 'random' ? 'RANDOM' : FACTIONS[k].name, a, k, cur === k ? 'y' : 'alt')).join('');
-  const finfo = k => k === 'random' ? '<p>Random faction.</p>' : `<div class="fi"><div class="fu">${FACTIONS[k].units.map(u => `<img src="${unitImg(u)}" alt="${u}" title="${u}: ${abText(UNITS[u])}">`).join('')}</div><p><b style="color:${FACTIONS[k].col}">${FACTIONS[k].name}</b> · hero specialty <b>${FACTIONS[k].spec.name}</b>: ${FACTIONS[k].spec.desc}<br>Research: ${FACTIONS[k].rp}</p></div>`;
+  const finfo = k => k === 'random' ? '<p>Random faction.</p>' : `<div class="fi"><div class="fu">${FACTIONS[k].units.map(u => `<span title="${u}: ${abText(UNITS[u])}">${unitPic(u)}</span>`).join('')}</div><p><b style="color:${FACTIONS[k].col}">${FACTIONS[k].name}</b> · hero specialty <b>${FACTIONS[k].spec.name}</b>: ${FACTIONS[k].spec.desc}<br>Research: ${FACTIONS[k].rp}</p></div>`;
   showPanel(() => `<h2>NEW GAME</h2><h3>YOUR FACTION</h3><div class="bar">${fbtns(S.pf, 'setpf')}</div>${finfo(S.pf)}<h3>ENEMY FACTION</h3><div class="bar">${fbtns(S.af, 'setaf')}</div>${finfo(S.af)}<h3>MAP SIZE</h3><div class="bar">${Object.keys(MAP_SIZES).map(k => btn(MAP_SIZES[k].name + ' ' + MAP_SIZES[k].w + 'x' + MAP_SIZES[k].h, 'setsize', k, S.size === k ? 'y' : 'alt')).join('')}</div>
     <h3>DIFFICULTY</h3><div class="bar">${Object.keys(DIFFICULTY).map(k => btn(DIFFICULTY[k].name, 'setdiff', k, S.diff === k ? 'y' : 'alt')).join('')}</div>
     <p>${S.diff === 'easy' ? 'More starting resources, slower and weaker enemy.' : S.diff === 'hard' ? 'Less gold for you, a rich and aggressive enemy.' : 'Even start for both sides.'}</p>

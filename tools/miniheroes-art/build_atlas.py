@@ -13,6 +13,11 @@ OUT = os.path.join(HERE, '..', '..', 'games', 'miniheroes', 'art')
 PREV = os.path.join(HERE, 'lineups')
 CELL, BASE = 128, 122           # frame size and feet baseline; figures get >= 10px headroom (no cropped lances)
 MAXH, MAXW = 110, 122
+CELLS = {'castle': 192}      # chibi Castle: bigger frames so battle sprites are downscaled < 2x (crisp without mipmaps)
+UI = 96                       # pre-baked UI portraits: 96px source, shown at 48 CSS px (2x)
+def setcell(c):
+    global CELL, BASE, MAXH, MAXW
+    CELL, BASE, MAXH, MAXW = c, round(c * 122 / 128), round(c * 110 / 128), round(c * 122 / 128)
 ANIMS = {'idle': 4, 'attack': 4, 'hit': 3, 'death': 5}
 FACTIONS = {
   'castle': (['Peasant', 'Pikeman', 'Crossbowman', 'Griffin', 'Swordsman', 'Monk', 'Paladin'], ['Militia', 'Halberdier', 'Arbalester', 'Royal Griffin', 'Crusader', 'Zealot', 'Champion'], 'Archangel'),
@@ -23,7 +28,7 @@ FACTIONS = {
   'dwarf': (['Miner', 'Shieldbearer', 'Crossbow Engineer', 'Runesmith', 'Bear Rider', 'Steam Golem', 'Iron Dreadnought'], ['Foreman', 'Shieldguard', 'Siege Engineer', 'Runelord', 'Bear Lord', 'Iron Golem', 'Thunder Dreadnought'], 'Forge Colossus'),
 }
 MYTHIC_ORDER = ['castle', 'necro', 'sylvan', 'inferno', 'stronghold', 'dwarf']
-CUTS = {'castle-base': [152, 300, 452, 706, 875, 1037], 'castle-up': [160, 306, 475, 712, 881, 1044],
+CUTS = {'castle-base': [172, 352, 481, 700, 875, 1019], 'castle-up': [185, 362, 506, 722, 893, 1030],
         'mythic': [231, 425, 648, 854, 1054], 'stronghold-base': [135, 312, 506, 710, 890, 1078]}  # hand-measured where shadows touch
 FLY = {'Griffin', 'Royal Griffin', 'Ghost', 'Spectre', 'Sprite', 'Faerie', 'Phoenix', 'Roc', 'Thunderbird', 'Vampire', 'Vampire Lord', 'Efreet', 'Efreet Sultan', 'Bone Dragon', 'Ghost Dragon', 'Green Dragon', 'Emerald Dragon', 'Archangel'}
 
@@ -59,7 +64,7 @@ def segments(rgba, n, key):
     a = rgba.split()[3]; w, h = a.size; ap = a.load()
     dens = [sum(1 for y in range(0, int(h * 0.80), 2) if ap[x, y] > 40) for x in range(w)]
     if key in CUTS:
-        cuts = [min(range(c - 40, c + 41), key=lambda x: (dens[x], abs(x - c))) for c in CUTS[key]]
+        R = 3 if key.startswith('castle') else 40; cuts = [min(range(c - R, c + R + 1), key=lambda x: (dens[x], abs(x - c))) for c in CUTS[key]]
     else:  # the n-1 widest empty column gaps between the first and last figure
         xs = [x for x in range(w) if dens[x] > 0]; lo, hi = xs[0], xs[-1]; gaps, x = [], lo
         while x < hi:
@@ -72,6 +77,14 @@ def segments(rgba, n, key):
             step = (hi - lo) / n; gaps += [(0, min(range(int(lo + step * i - step * 0.3), int(lo + step * i + step * 0.3)), key=lambda x: dens[x])) for i in range(1, n)]
         cuts = sorted(c for _, c in sorted(gaps, reverse=True)[:n - 1])
     return list(zip([0] + cuts, cuts + [w]))
+
+def degreen(fig):
+    fig = fig.copy(); px = fig.load()
+    for y in range(fig.height):
+        for x in range(fig.width):
+            r, g, b, a = px[x, y]
+            if a and g > r + 12 and g > b + 12: px[x, y] = (0, 0, 0, 0)
+    return fig
 
 def clean(fig):
     a = fig.split()[3]; w, h = a.size; ap = a.load(); lab = [0] * (w * h); comps = []
@@ -139,31 +152,37 @@ def frames(fig, fly):
 
 def main():
     os.makedirs(OUT, exist_ok=True); os.makedirs(PREV, exist_ok=True)
-    man = {'cell': CELL, 'base': BASE, 'anims': {}, 'atlases': {}, 'units': {}}
+    man = {'cell': CELL, 'base': BASE, 'anims': {}, 'atlases': {}, 'cells': {}, 'ui': {}, 'units': {}}
     o = 0
     for k, n in ANIMS.items(): man['anims'][k] = [o, n]; o += n
     nfr = o; myth = {}
     mfigs = None
     mr = cut_background(Image.open(os.path.join(HERE, 'src', 'mythic.jpg')))
-    mfigs = scale_row([clean(mr.crop((max(0, a - 2), 0, min(mr.width, b + 2), mr.height))) for a, b in segments(mr, 6, 'mythic')])
-    for fac, f in zip(MYTHIC_ORDER, mfigs): myth[fac] = f
+    mraw = [clean(mr.crop((max(0, a - 2), 0, min(mr.width, b + 2), mr.height))) for a, b in segments(mr, 6, 'mythic')]
     for fac, (base, up, mname) in FACTIONS.items():
+        setcell(CELLS.get(fac, 128)); myth[fac] = scale_row(mraw)[MYTHIC_ORDER.index(fac)]
         rows = []
         for key, names in ((fac + '-base', base), (fac + '-up', up)):
             rgba = cut_background(Image.open(os.path.join(HERE, 'src', key + '.jpg')))
-            figs = scale_row([clean(rgba.crop((max(0, a - 2), 0, min(rgba.width, b + 2), rgba.height))) for a, b in segments(rgba, 7, key)])
-            rows += list(zip(names, figs))
+            crops = [rgba.crop((max(0, a - 2), 0, min(rgba.width, b + 2), rgba.height)) for a, b in segments(rgba, 7, key)]
+            if key == 'castle-up': crops[1] = degreen(crops[1])  # neighbour's quiver arrows overlap the halberd
+            figs = scale_row([clean(c) for c in crops])
+            rows += list(zip(names, figs)); raws = None
         rows.append((mname, myth[fac]))
-        atlas = Image.new('RGBA', (CELL * nfr, CELL * len(rows)), (0, 0, 0, 0))
+        atlas = Image.new('RGBA', (CELL * nfr, CELL * len(rows)), (0, 0, 0, 0)); ui = Image.new('RGBA', (UI * len(rows), UI), (0, 0, 0, 0))
         prev = Image.new('RGBA', (CELL * 8, CELL * 2 + 24), (34, 40, 52, 255))
         for r, (name, fig) in enumerate(rows):
             for i, fr in enumerate(frames(fig, name in FLY)): atlas.paste(fr, (i * CELL, r * CELL), fr)
             man['units'][name] = {'atlas': fac, 'row': r, 'w': fig.width, 'h': fig.height}
+            k = (UI - 6) / max(fig.width, fig.height); pf = fig.resize((max(1, round(fig.width * k)), max(1, round(fig.height * k))), Image.LANCZOS)
+            pf = pf.filter(ImageFilter.UnsharpMask(radius=1, percent=60, threshold=2)); ui.paste(pf, (r * UI + (UI - pf.width) // 2, UI - 3 - pf.height), pf)
             pi = r if r < 7 else r - 7 if r < 14 else 7
             idle = frames(fig, False)[0]; prev.alpha_composite(idle, (pi * CELL, (0 if r < 7 else CELL) + (CELL if r == 14 else 0) * 0 + 12))
         fn = 'units-' + fac + '.webp'; atlas.save(os.path.join(OUT, fn), 'WEBP', quality=74, method=6, alpha_quality=85)
-        man['atlases'][fac] = 'art/' + fn
+        man['atlases'][fac] = 'art/' + fn; man['cells'][fac] = CELL
+        un = 'units-' + fac + '-ui.webp'; ui.save(os.path.join(OUT, un), 'WEBP', quality=86, method=6, alpha_quality=95); man['ui'][fac] = {'src': 'art/' + un, 'cell': UI}
         prev.convert('RGB').save(os.path.join(PREV, fac + '.png'))
+        setcell(128)
         print(fac, len(rows), 'units', os.path.getsize(os.path.join(OUT, fn)) // 1024, 'KB')
     with open(os.path.join(OUT, 'units.json'), 'w') as f: json.dump(man, f, separators=(',', ':'))
     for fac in FACTIONS:  # town backdrops: 960 wide WebP

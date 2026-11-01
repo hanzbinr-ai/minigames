@@ -27,7 +27,7 @@ function teach(t, s, k) {
 function slotHtml(side, key) {
   const M = UI.meet;
   return `<div class="msl">${Array.from({length: MAX_STACKS}, (_, i) => { const a = side.arr[i], sel = M.sel && M.sel.side === key && M.sel.i === i;
-    return `<button class="${sel ? 'sel' : M.sel ? 'tgt' : ''}" data-a="mslot" data-v="${key}:${i}" title="${a ? a.count + ' ' + a.type : 'empty'}">${a ? `<img src="${unitImg(a.type)}" alt="${a.type}"><s>${a.count}</s>` : ''}</button>`; }).join('')}</div>`;
+    return `<button class="${sel ? 'sel' : M.sel ? 'tgt' : ''}" data-a="mslot" data-v="${key}:${i}" title="${a ? a.count + ' ' + a.type : 'empty'}">${a ? `${unitPic(a.type)}<s>${a.count}</s>` : ''}</button>`; }).join('')}</div>`;
 }
 function heroCol(side, other, key) {
   const h = side.hero; let s = `<h3>${side.name.toUpperCase()}${h ? ' LV' + h.lvl : ''}</h3>${slotHtml(side, key)}`;
