@@ -69,7 +69,7 @@ function meetMove(fs, fi, ts, ti, n) {
 const _tapMap = tapMap;
 tapMap = function (tx, ty) {
   const h = curHero(), oh = h && heroAt(tx, ty);
-  if (h && oh && oh.owner === 'player' && oh !== h) {
+  if (h && oh && oh.owner === 'player' && oh !== h && !townAt(tx, ty)) { // a hero standing in a town is selected instead (tap again: HERO / TOWN)
     if (adj8(h, oh)) { openMeet(h, oh); return; }
     if (UI.preview && UI.preview.tx === tx && UI.preview.ty === ty) { startWalk(h, UI.preview.path); UI.walk.meet = oh.id; UI.preview = null; return; }
     const dj = dijkstra(h), a = bestAdjacent(dj, oh), path = a && pathTo(dj, a[0], a[1]);

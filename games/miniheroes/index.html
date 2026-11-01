@@ -67,7 +67,7 @@ body{touch-action:none;font-size:9px}
 .hcard b{color:var(--yellow);font-size:11px}
 .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;text-align:center}.stats div{background:#0f0f1b;border:2px solid #000;padding:4px 0}.stats b{display:block;color:var(--yellow);font-size:11px}
 .slots{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px}.slot{position:relative;aspect-ratio:1;background:#0f0f1b;border:2px solid #000}
-.slot img{width:100%;height:100%;image-rendering:pixelated}.slot s{position:absolute;right:1px;bottom:0;text-decoration:none;font-size:7px;color:var(--yellow);text-shadow:1px 1px 0 #000}
+.slot img{width:100%;height:100%;image-rendering:pixelated}.slot s{position:absolute;right:0;bottom:-1px;text-decoration:none;font-size:10px;color:var(--yellow);text-shadow:1px 1px 0 #000,-1px -1px 0 #000,1px -1px 0 #000,-1px 1px 0 #000}
 #mini{width:100%;image-rendering:pixelated;border:3px solid #000;background:#000;cursor:pointer}
 .lst .btn{display:block;width:100%;margin:3px 0;padding:6px;font-size:8px;text-align:left;border-width:3px;box-shadow:2px 2px 0 #000}
 .lst h4{margin:6px 0 2px;font-size:9px;color:#3cbcfc}
@@ -148,7 +148,7 @@ body.battle #msg{bottom:4px;font-size:8px}
    <button class="btn y" data-a="hero">HERO</button><button class="btn alt" data-a="next">NEXT</button><button class="btn p" data-a="kingdom">KINGDOM</button><button class="btn y" data-a="tech">TECH</button><button class="btn" data-a="menu">MENU</button>
   </span>
   <span id="battlebar" style="display:none">
-   <button class="btn g" data-a="resolve">RESOLVE</button><button class="btn alt" data-a="auto">AUTO</button><button class="btn alt" data-a="speed">SPEED 1X</button><button class="btn p bkbtn" data-a="book" title="Battle book: spells, retreat, tactics">📖 BOOK</button>
+   <button class="btn g" data-a="resolve">RESOLVE</button><button class="btn alt" data-a="auto">AUTO-PLAN</button><button class="btn y" data-a="autob">AUTO BATTLE</button><button class="btn alt" data-a="autostop" style="display:none">STOP</button><button class="btn alt" data-a="speed">SPEED 1X</button><button class="btn p bkbtn" data-a="book" title="Battle book: spells, retreat, tactics">📖 BOOK</button>
   </span>
  </footer>
 </div>

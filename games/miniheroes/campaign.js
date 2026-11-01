@@ -39,7 +39,7 @@ function openCampaign() {
   const c = CP();
   showPanel(() => { const c = CP(); return `<h2>CAMPAIGN</h2><p>Stars: <b class="hl">${totalStars(c)}</b>/18 · Hard mode ${hardUnlocked(c) ? btn(c.hard ? 'HARD: ON' : 'HARD: OFF', 'chard', '', c.hard ? 'y' : 'alt') : '<span class="no">locked (12 stars)</span>'}</p>
     ${c.carry ? `<p>Hero: <b>${c.carry.name}</b> LV${c.carry.lvl} · ${Object.keys(c.carry.sk).map(k => SKILLS[k].name).join(', ') || 'no skills'}${c.carry.art ? ' · ' + ARTIFACTS[c.carry.art].name : ''}</p>` : ''}
-    ${MISSIONS.map(m => { const st = c.stars[m.id] || 0, open = m.id <= c.unlocked; return `<div class="it"><div class="t">${m.id}. ${m.name} ${'★'.repeat(st)}${'☆'.repeat(3 - st)}<small>${m.goal}${m.limit ? ' (by day ' + m.limit + ')' : ''} · ${FACTIONS[m.pf].name} vs ${FACTIONS[m.af].name} · ${MAP_SIZES[m.size].name}</small></div>${btn(open ? 'PLAY' : 'LOCKED', 'cpick', m.id, open ? 'g' : 'alt', !open)}</div>`; }).join('')}
+    ${MISSIONS.map(m => { const st = c.stars[m.id] || 0, open = m.id <= c.unlocked; return `<div class="it"><div class="t">${m.id}. ${m.name} ${'★'.repeat(st)}${'☆'.repeat(3 - st)}<small>${m.goal}${m.limit ? ' (by day ' + m.limit + ')' : ''} · ★ win · ★ by day ${m.par} · ★ losses under 25% · ${FACTIONS[m.pf].name} vs ${FACTIONS[m.af].name} · ${MAP_SIZES[m.size].name}</small></div>${btn(open ? 'PLAY' : 'LOCKED', 'cpick', m.id, open ? 'g' : 'alt', !open)}</div>`; }).join('')}
     <div class="bar" style="margin-top:8px">${btn('RESET CAMPAIGN', 'creset', '', 'alt')}${btn('BACK', G ? 'close' : 'new', '', 'alt')}</div>`; }, {sticky: !G});
 }
 function openBonus(id) {
