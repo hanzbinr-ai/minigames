@@ -217,8 +217,9 @@ def drop_edge_bits(im):  # remove neighbour fragments: alpha blobs touching the 
             for x, y in pts: op[x, y] = (0, 0, 0, 0)
     return out
 UPSHEET = {'dwarf': 25, 'stronghold': 33, 'sylvan': 27, 'inferno': 28, 'castle': 32, 'necro': 30}  # Broz upgrade sheets: white bg, T1-T7 upgraded, captions below
-def up_figs(fac, n=7):
-    im = Image.open(os.path.join(HERE, 'src', 'broz', str(UPSHEET[fac]) + '.jpg')).convert('RGB'); w, h = im.size; px = im.load()
+BROZ_CUTS = {35: [99, 225, 346, 502, 666, 819, 1017], 33: [137, 316, 481, 709, 854, 1029]}  # hand-measured where neighbours touch (Stronghold base: T4 staff meets the T5 wing)
+def up_figs(fac, n=7, idx=None):
+    im = Image.open(os.path.join(HERE, 'src', 'broz', str(idx or UPSHEET[fac]) + '.jpg')).convert('RGB'); w, h = im.size; px = im.load()
     rows = [sum(1 for x in range(0, w, 2) if max(px[x, y]) < 110) for y in range(h)]
     y = h - 1
     while y > h // 2 and rows[y] < 2: y -= 1
@@ -234,8 +235,13 @@ def up_figs(fac, n=7):
             cl.append((s0 + e0) / 2)
         x += 1
     if len(cl) != n: raise SystemExit(f'upgrade sheet {fac}: found {len(cl)} captions, expected {n}')
-    rgba = cut_background(im.crop((0, 0, w, top)))
-    cuts = [0] + [round((cl[i] + cl[i + 1]) / 2) for i in range(n - 1)] + [w]
+    rgba = cut_background(im.crop((0, 0, w, top))); ap = rgba.getchannel('A').load()
+    colA = [sum(1 for yy in range(0, top, 2) if ap[x, yy] > 40) for x in range(w)]
+    # cut at the emptiest column between neighbouring captions (big figures are rarely centred on their caption)
+    def gap(a, b, near):  # emptiest column within 12px of the wanted cut
+        return min(range(near - 12, near + 13), key=lambda x: (colA[x], abs(x - near)))
+    want = BROZ_CUTS.get(idx or UPSHEET[fac]) or [round((cl[i] + cl[i + 1]) / 2) for i in range(n - 1)]
+    cuts = [0] + [gap(int(cl[i]), int(cl[i + 1]), want[i]) for i in range(n - 1)] + [w]
     return [clean(drop_edge_bits(rgba.crop((cuts[i], 0, cuts[i + 1], rgba.height)))) for i in range(n)]
 def match_h(figs, ref, k=1.06):  # size each upgrade to its base figure (upgrades read slightly bigger)
     return [f.resize((max(1, round(f.width * r.height * k / f.height)), round(r.height * k)), Image.LANCZOS) for f, r in zip(figs, ref)]
@@ -261,7 +267,7 @@ def main():
             myth[fac] = scale_row([clean(ar)] * 3)[0]
         rows = []
         if fac in BROZ:
-            sh, order = BROZ[fac]; bf = broz_figs(sh)
+            sh, order = BROZ[fac]; bf = broz_figs(sh) if fac != 'stronghold' else up_figs(fac, 8, 35)  # respaced white-bg base sheet; its T8 is replaced by Thunder Titan below
             if fac == 'dwarf':  # Broz's standalone Bear Rider (white bg, caption below), kept smaller than the T6 golem
                 im = Image.open(os.path.join(HERE, 'src', 'broz', '31.jpg')).convert('RGB'); br = clean(cut_background(im.crop((0, 0, im.width, int(im.height * 0.74)))))
                 hh = round(bf[order[5]].height * 0.8); bf[order[4]] = br.resize((max(1, round(br.width * hh / br.height)), hh), Image.LANCZOS)
@@ -278,7 +284,9 @@ def main():
             crops = [rgba.crop((max(0, a - 2), 0, min(rgba.width, b + 2), rgba.height)) for a, b in segments(rgba, 7, key)]
             if key == 'castle-up': crops[1] = degreen(crops[1])  # neighbour's quiver arrows overlap the halberd
             figs = scale_row([clean(c) for c in crops])
-            if key == 'castle-up': figs = match_h(up_figs('castle'), [f for _, f in rows[:7]])
+            if key == 'castle-up':
+                uf = up_figs('castle'); im = Image.open(os.path.join(HERE, 'src', 'broz', '34.jpg')).convert('RGB')  # standalone human Arbalester (replaces the sheet's frog-headed one)
+                uf[2] = clean(cut_background(im.crop((0, 0, im.width, int(im.height * 0.84))))); figs = match_h(uf, [f for _, f in rows[:7]])
             rows += list(zip(names, figs)); raws = None
         rows.append((mname, myth[fac]))
         atlas = Image.new('RGBA', (CELL * nfr, CELL * len(rows)), (0, 0, 0, 0)); ui = Image.new('RGBA', (UI * len(rows), UI), (0, 0, 0, 0))
