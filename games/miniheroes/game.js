@@ -1455,13 +1455,16 @@ function drawObj(g, o) {
   else if (o.kind === 'monster' && o.army.length) { const th = threatOf(o.army); g.fillStyle = th.c + '90'; g.fillRect(X + 1, Y + 12, 14, 3); g.fillRect(X + 3, Y + 15, 10, 1); g.fillStyle = '#000'; g.fillRect(X + 9, Y - 12, 9, 6); g.fillStyle = th.c; g.fillRect(X + 10, Y - 11, 7, 4); g.fillStyle = '#000'; g.fillRect(X + 12, Y - 10, 3, 2); }
   if (o.kind === 'monster' && o.army.length) g.drawImage(SPR.unit(o.army[0].type, Math.floor(clock * 2 + o.id * 0.37) % 2, true), X - 4, Y - 9);
 }
-function renderWorld() {
+// opt.dyn: render layer (render-pixi.js) asks only for the dynamic overlay (path, selection, objects) in a view-sized canvas;
+// terrain, towns, heroes and fog are then drawn by Pixi. Without opt this is the classic full canvas renderer.
+function renderWorld(opt) {
   ensureLayers();
-  const g = wctx, sel = curHero(); g.imageSmoothingEnabled = false;
+  const dyn = opt && opt.dyn, g = dyn ? opt.g : wctx, sel = curHero(); g.imageSmoothingEnabled = false;
   // only the part of the world inside the camera (+ margin) is redrawn each frame
   const V = viewRect(); UI.viewRect = V;
-  g.save(); g.beginPath(); g.rect(V.x, V.y, V.w, V.h); g.clip();
-  g.drawImage(layers.water[Math.floor(clock * 3) % 4], V.x, V.y, V.w, V.h, V.x, V.y, V.w, V.h); g.drawImage(layers.land, V.x, V.y, V.w, V.h, V.x, V.y, V.w, V.h);
+  if (dyn) { g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, g.canvas.width, g.canvas.height); g.save(); g.translate(-V.x, -V.y); }
+  else { g.save(); g.beginPath(); g.rect(V.x, V.y, V.w, V.h); g.clip();
+  g.drawImage(layers.water[Math.floor(clock * 3) % 4], V.x, V.y, V.w, V.h, V.x, V.y, V.w, V.h); g.drawImage(layers.land, V.x, V.y, V.w, V.h, V.x, V.y, V.w, V.h); }
   const tx0 = V.x / TS - 3, ty0 = V.y / TS - 3, tx1 = (V.x + V.w) / TS + 3, ty1 = (V.y + V.h) / TS + 3, inV = (x, y) => x >= tx0 && x <= tx1 && y >= ty0 && y <= ty1;
   if (UI.preview && sel) UI.preview.path.forEach(([x, y], i) => {
     const ok = UI.preview.cost[i] <= sel.mp, last = i === UI.preview.path.length - 1, X = x * TS, Y = y * TS, c = ok ? '#58d854' : '#e40058';
@@ -1476,14 +1479,14 @@ function renderWorld() {
   }
   const items = [];
   G.objs.forEach(o => inV(o.x, o.y) && items.push([o.y, () => drawObj(g, o)]));
-  G.towns.forEach(t => inV(t.x, t.y) && items.push([t.y + 0.1, () => g.drawImage(SPR.town(t.faction, t.owner, Math.floor(clock * 4) % 2), t.x * TS - 10, t.y * TS - 18)]));
-  G.heroes.forEach(h => inV(rp(h).x, rp(h).y) && items.push([rp(h).y + 0.2, () => { const p = rp(h), f = p.moving > 0.02 ? 1 + Math.floor(clock * 8) % 2 : 0; const im = SPR.hero(h.owner, f, p.face < 0);
+  if (!dyn) G.towns.forEach(t => inV(t.x, t.y) && items.push([t.y + 0.1, () => g.drawImage(SPR.town(t.faction, t.owner, Math.floor(clock * 4) % 2), t.x * TS - 10, t.y * TS - 18)]));
+  if (!dyn) G.heroes.forEach(h => inV(rp(h).x, rp(h).y) && items.push([rp(h).y + 0.2, () => { const p = rp(h), f = p.moving > 0.02 ? 1 + Math.floor(clock * 8) % 2 : 0; const im = SPR.hero(h.owner, f, p.face < 0);
     if (p.moving <= 0.02 && townAt(h.x, h.y)) g.drawImage(im, Math.round(p.x * TS) + 3, Math.round(p.y * TS) + 1, Math.round(im.width * 0.7), Math.round(im.height * 0.7)); // smaller, in front of the gate, so the town stays readable
     else g.drawImage(im, Math.round(p.x * TS) - 2, Math.round(p.y * TS) - 6); }]));
   items.sort((a, b) => a[0] - b[0]).forEach(i => i[1]());
   const tt = tutTile();
   if (tt) { const k = Math.floor(clock * 4) % 2; g.strokeStyle = k ? '#f8b800' : '#fcfcfc'; g.lineWidth = 1; g.strokeRect(tt[0] * TS - 1.5 - k, tt[1] * TS - 1.5 - k, TS + 3 + 2 * k, TS + 3 + 2 * k); }
-  g.drawImage(layers.fog, V.x, V.y, V.w, V.h, V.x, V.y, V.w, V.h);
+  if (!dyn) g.drawImage(layers.fog, V.x, V.y, V.w, V.h, V.x, V.y, V.w, V.h);
   g.restore();
 }
 function viewRect() {
@@ -1491,6 +1494,7 @@ function viewRect() {
   return {x, y, w: Math.max(1, Math.min(WW - x, Math.ceil(CAM.w / CAM.z + 2 * m))), h: Math.max(1, Math.min(WH - y, Math.ceil(CAM.h / CAM.z + 2 * m)))};
 }
 function renderMapScreen() {
+  if (window.MHR && MHR.map()) return; // Pixi render layer (falls back to this canvas renderer)
   renderWorld(); clampCam();
   ctx.imageSmoothingEnabled = false; ctx.fillStyle = '#05050c'; ctx.fillRect(0, 0, CAM.w, CAM.h);
   const V = UI.viewRect; ctx.drawImage(world, V.x, V.y, V.w, V.h, Math.round((V.x - CAM.x) * CAM.z), Math.round((V.y - CAM.y) * CAM.z), V.w * CAM.z, V.h * CAM.z);
@@ -1528,8 +1532,13 @@ function planPath(u, p, t) { // cells the stack will walk (same rules as the MOV
 }
 function dotLine(g, x0, y0, x1, y1, col) { const n = Math.ceil(Math.hypot(x1 - x0, y1 - y0) / 3); for (let i = 0; i <= n; i++) { const x = Math.round(x0 + (x1 - x0) * i / n), y = Math.round(y0 + (y1 - y0) * i / n); g.fillStyle = '#000'; g.fillRect(x - 1, y - 1, 3, 3); g.fillStyle = col; g.fillRect(x, y, 1, 1); } }
 const cellC = (x, y) => [BOX + x * CW + CW / 2, BOY + y * CW + CW / 2];
-function drawBattle(g) {
+// pass: 'all' = classic; 'bg' = field..plan lines + unit shadows; 'fg' = count badges, projectiles, fx (render layer draws unit sprites between)
+function drawBattle(g, pass = 'all') {
   g.imageSmoothingEnabled = false;
+  const BG = pass !== 'fg', FG = pass !== 'bg';
+  if (!BG) g.clearRect(0, 0, BLW, BLH);
+  const selU = B.sel && uById(B.sel), r = BG && selU && B.phase === 'plan' ? reach(selU, moveOf(selU)) : null, seeTerr = t => t.side === 'L' || B.phase !== 'pre' || B.tac.L.intel >= 2, fr = Math.floor(clock * 2) % 2;
+  if (BG) {
   g.drawImage(SPR.field(BLW, BLH, CW, B.seed), 0, 0);
   g.fillStyle = '#10102a'; g.fillRect(0, 0, BLW, BOY - 3); g.fillStyle = '#000'; g.fillRect(0, BOY - 3, BLW, 2);
   txt(g, B.phase === 'pre' ? 'PRE-BATTLE' : 'ROUND ' + (B.phase === 'plan' ? B.round : B.round - 1) + ' - ' + (B.phase === 'plan' ? 'PLAN' : (B.stage || 'RESOLVE')), BLW / 2, 10, B.phase === 'resolve' ? '#58d854' : '#f8b800');
@@ -1548,10 +1557,8 @@ function drawBattle(g) {
   for (let y = 0; y < BH; y++) g.fillRect(BOX, BOY + y * CW + 1, BW * CW, 1);
   g.fillStyle = '#000'; g.fillRect(BOX - 2, BOY - 1, BW * CW + 4, 1); g.fillRect(BOX - 2, BOY + BH * CW, BW * CW + 4, 2); g.fillRect(BOX - 2, BOY, 2, BH * CW); g.fillRect(BOX + BW * CW, BOY, 2, BH * CW);
   g.fillStyle = '#0000002a'; g.fillRect(0, BOY + BH * CW + 2, BLW, BLH);
-  const selU = B.sel && uById(B.sel), r = selU && B.phase === 'plan' ? reach(selU, moveOf(selU)) : null;
   if (r) { for (const c of r.values()) if (c.d) { const X = BOX + c.x * CW, Y = BOY + c.y * CW; g.fillStyle = '#fcfc5440'; g.fillRect(X + 1, Y + 1, CW - 1, CW - 1); g.fillStyle = '#fcfc54a0'; g.fillRect(X + 2, Y + 2, CW - 3, 1); g.fillRect(X + 2, Y + CW - 2, CW - 3, 1); g.fillRect(X + 2, Y + 2, 1, CW - 3); g.fillRect(X + CW - 2, Y + 2, 1, CW - 3); }
     for (const o of B.units) if (o.alive && o.side === 'R' && !o.hidden) { const X = BOX + o.x * CW, Y = BOY + o.y * CW, k = Math.floor(clock * 3) % 2; g.fillStyle = k ? '#e40058c0' : '#fc7460c0'; g.fillRect(X + 1, Y + 1, CW - 1, 2); g.fillRect(X + 1, Y + CW - 2, CW - 1, 2); g.fillRect(X + 1, Y + 1, 2, CW - 1); g.fillRect(X + CW - 2, Y + 1, 2, CW - 1); } }
-  const seeTerr = t => t.side === 'L' || B.phase !== 'pre' || B.tac.L.intel >= 2, fr = Math.floor(clock * 2) % 2;
   for (const key in B.terr) { const t = B.terr[key], [x, y] = key.split(',').map(Number); if (t.k !== 'fog' && seeTerr(t)) g.drawImage(SPR.terr(t.k, fr), BOX + x * CW, BOY + y * CW); }
   if (B.phase === 'pre') {
     const a = 0.16 + 0.08 * Math.sin(clock * 4); g.fillStyle = `rgba(60,188,252,${a})`;
@@ -1581,6 +1588,7 @@ function drawBattle(g) {
       for (let i = 1; i < pts.length; i++) { const [x0, y0] = cellC(pts[i - 1].x, pts[i - 1].y), [x1, y1] = cellC(pts[i].x, pts[i].y); dotLine(g, x0, y0, x1, y1, col); }
     }
   }
+  }
   const vis = B.units.filter(u => !u.gone && !(u.hidden && u.side === 'R') && (u.alive || u.deadAt == null || B.clock < u.deadAt + 0.6)).sort((a, b) => a.ry - b.ry);
   for (const u of vis) {
     let X = BOX + u.rx * CW, Y = BOY + u.ry * CW - 4, f = Math.floor(clock * 2 + u.ph) % 2, flash = false;
@@ -1590,17 +1598,18 @@ function drawBattle(g) {
     if (dying) { const k = Math.min(1, (B.clock - u.deadAt) / 0.6); g.globalAlpha = 1 - k; Y += k * 6; }
     else if (u.hidden) g.globalAlpha = 0.45 + 0.1 * Math.sin(clock * 5);
     const tc = u.side === 'L' ? '#3cbcfc' : '#fc4878', sy = Math.round(BOY + u.ry * CW + 18), sx = Math.round(X);
-    g.fillStyle = '#00000060'; g.fillRect(sx + 4, sy + 1, 16, 3); g.fillRect(sx + 6, sy + 4, 12, 1);
-    g.fillStyle = tc; g.fillRect(sx + 5, sy, 14, 1); g.fillRect(sx + 3, sy + 1, 2, 2); g.fillRect(sx + 19, sy + 1, 2, 2); g.fillRect(sx + 5, sy + 3, 14, 1);
-    g.drawImage(flash ? SPR.unitFlash(u.type, f, u.side === 'R') : SPR.unitTeam(u.type, f, u.side === 'R', u.side === 'L' ? '#1c5cb0' : '#9c1840'), sx, Math.round(Y));
+    if (BG) { g.fillStyle = '#00000060'; g.fillRect(sx + 4, sy + 1, 16, 3); g.fillRect(sx + 6, sy + 4, 12, 1);
+    g.fillStyle = tc; g.fillRect(sx + 5, sy, 14, 1); g.fillRect(sx + 3, sy + 1, 2, 2); g.fillRect(sx + 19, sy + 1, 2, 2); g.fillRect(sx + 5, sy + 3, 14, 1); }
+    if (pass === 'all') g.drawImage(flash ? SPR.unitFlash(u.type, f, u.side === 'R') : SPR.unitTeam(u.type, f, u.side === 'R', u.side === 'L' ? '#1c5cb0' : '#9c1840'), sx, Math.round(Y));
     g.globalAlpha = 1;
-    if (!dying) {
+    if (!dying && FG) {
       const s = u.side === 'R' && !(B.tac.L.intel >= 1) ? rough(u.shown) : String(u.shown), w = s.length * 6 + 3, bx = Math.round(X) + (u.side === 'L' ? CW - w : 0), by = BOY + u.ry * CW + CW - 8;
       g.fillStyle = '#000'; g.fillRect(bx - 1, by - 1, w + 2, 11); g.fillStyle = u.side === 'L' ? '#2058d0' : '#b01038'; g.fillRect(bx, by, w, 9); g.fillStyle = u.side === 'L' ? '#78c8fc' : '#fc7898'; g.fillRect(bx, by, w, 1);
       g.font = '8px PS2P, monospace'; g.textAlign = 'left'; g.fillStyle = '#000'; g.save(); g.translate(bx + 3, by + 9); g.scale(0.75, 0.875); g.fillText(s, 0, 0); g.restore(); g.fillStyle = '#fcfcfc'; g.save(); g.translate(bx + 2, by + 8); g.scale(0.75, 0.875); g.fillText(s, 0, 0); g.restore();
       if (B.phase === 'plan' && B.plans[u.id] && B.plans[u.id].t === 'def' && u.side === 'L') { g.fillStyle = '#000'; g.fillRect(X + 1, Y + 3, 7, 8); g.fillStyle = '#f8b800'; g.fillRect(X + 2, Y + 4, 5, 5); g.fillRect(X + 3, Y + 9, 3, 1); }
     }
   }
+  if (!FG) return;
   for (const p of B.proj) {
     const k = (B.clock - p.at) / p.dur; if (k < 0 || k > 1) continue;
     const [x0, y0] = cellC(p.fx, p.fy), [x1, y1] = cellC(p.tx, p.ty), x = x0 + (x1 - x0) * k, y = y0 + (y1 - y0) * k - Math.sin(k * Math.PI) * (p.arc || 14) - 4;
@@ -1627,12 +1636,15 @@ function drawSpellFx(g, e) {
   if (e.k === 'slow') { const r = Math.round(14 * (1 - k)) + 3; g.strokeStyle = '#f8b800'; g.lineWidth = 1; g.strokeRect(x - r + 0.5, y - r + 0.5, r * 2, r * 2); }
 }
 function renderBattleScreen() {
-  drawBattle(bctx);
+  const pix = window.MHR && MHR.ready();
+  if (!pix) drawBattle(bctx);
   const pe = $('pre'), pre = B.phase === 'pre' && pe.style.display !== 'none', wide = pre && innerWidth >= 900, pw = wide ? pe.offsetWidth * CAM.dpr : 0, ph = pre && !wide ? pe.offsetHeight * CAM.dpr : 0;
   const aw = CAM.w - pw, ah = CAM.h - ph, fit = Math.min(aw / BLW, ah / BLH), s = Math.max(1, fit >= 3 ? Math.floor(fit) : Math.floor(fit * 4) / 4);
   BV = {s, ox: Math.floor((aw - BLW * s) / 2), oy: Math.max(0, Math.floor((ah - BLH * s) / 2))};
   ctx.imageSmoothingEnabled = false; ctx.fillStyle = '#10101e'; ctx.fillRect(0, 0, CAM.w, CAM.h);
   let sx = 0, sy = 0; for (const k of B.shake || []) { const e = B.clock - k.at; if (e >= 0 && e < 0.25) { const m = k.mag * (1 - e / 0.25) * s; sx += Math.round(Math.sin(e * 90) * m); sy += Math.round(Math.cos(e * 70) * m * 0.6); } }
+  if (pix && MHR.battle(sx, sy)) return; // Pixi render layer
+  if (pix) drawBattle(bctx);
   ctx.drawImage(bcv, BV.ox + sx, BV.oy + sy, BLW * s, BLH * s);
 }
 function renderTitle() {
@@ -1827,7 +1839,7 @@ function openTech() {
 }
 function openMenu() {
   const has = !!localStorage.getItem(SAVE_KEY), auto = !!localStorage.getItem(SAVE_KEY + '-auto');
-  showPanel(() => `<h2>MENU</h2><div class="bar">${btn('SAVE', 'save', '', 'g', !G || UI.mode !== 'map')}${btn('LOAD', 'load', '', 'alt', !has)}${btn('LOAD AUTOSAVE', 'loadauto', '', 'alt', !auto)}${btn('NEW GAME', 'new', '', 'y')}${btn('CAMPAIGN', 'campaign', '', 'y')}${btn('TUTORIAL', 'tutorial', '', 'p')}${G ? btn('CLOSE', 'close', '', 'g') : ''}</div>
+  showPanel(() => `<h2>MENU</h2><div class="bar">${btn('SAVE', 'save', '', 'g', !G || UI.mode !== 'map')}${btn('LOAD', 'load', '', 'alt', !has)}${btn('LOAD AUTOSAVE', 'loadauto', '', 'alt', !auto)}${btn('NEW GAME', 'new', '', 'y')}${btn('CAMPAIGN', 'campaign', '', 'y')}${btn('TUTORIAL', 'tutorial', '', 'p')}${window.MHR ? btn('GRAPHICS: ' + MHR.label(), 'renderer', '', 'alt') : ''}${G ? btn('CLOSE', 'close', '', 'g') : ''}</div>
     <h3>HOW TO PLAY</h3><p>Explore, grab resources, flag mines and grow your army. Build dwellings in town; creatures grow each week (day 1 of every week).
     Capture the enemy town to win. Lose all towns and heroes and you lose.</p>
     <h3>BATTLE</h3><p>PLAN: tap your stack, then tap an empty tile (move), an enemy (attack) or the stack again (defend). Cast one spell per round with SPELL.
