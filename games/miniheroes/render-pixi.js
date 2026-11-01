@@ -9,7 +9,7 @@
 (() => {
   const KEY = 'mh-renderer', want = () => localStorage.getItem(KEY) || 'pixi';
   const glOK = (() => { try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch (e) { return false; } })();
-  const DPR_CAP = 2; // render at most 2 device px per CSS px (phones are 3x): ~55% fewer pixels, visually identical
+  const LOWQ = () => localStorage.getItem('mh-quality') === 'low', DPR_CAP = 2; // render at most 2 device px per CSS px (phones are 3x): ~55% fewer pixels, visually identical
   let app = null, ok = false, failed = false, px = null, man = null;
   const stats = {map: 0, battle: 0, n: 0, res: 1};
   // painted unit portrait for DOM panels (works in canvas mode too: it is just a CSS sprite of the atlas)
@@ -22,7 +22,10 @@
     label: () => (want() !== 'pixi' ? 'CANVAS' : ok ? 'PIXI' : failed || !glOK || !window.PIXI ? 'CANVAS (no WebGL)' : 'PIXI…'),
     map: () => ok && drawMap(),
     battle: (sx, sy) => ok && drawFight(sx, sy),
-    stats, get app() { return app; }, atlases: {}, paintField: () => ok && !!(MAPA && MAPA.field),
+    stats, get app() { return app; }, atlases: {},
+    debug: () => { if (!ok) return null; let mem = 0, n = 0; for (const src of SRCS) { if (src.destroyed) { SRCS.delete(src); continue; } mem += (src.pixelWidth || src.width) * (src.pixelHeight || src.height) * 4; }
+      const cnt = c => { let k = 0; for (const ch of c.children) if (ch.visible && c.visible) k += (ch instanceof PIXI.Sprite ? 1 : 0) + cnt(ch); return k; }; n = cnt(app.stage);
+      return {mem, sprites: n, atlases: Object.keys(MHR.atlases).filter(k => MHR.atlases[k].ready), res: stats.res, w: app.renderer.width, h: app.renderer.height, parts: parts.length}; }, paintField: () => ok && !!(MAPA && MAPA.field),
   };
   ACTIONS.renderer = () => { localStorage.setItem(KEY, want() === 'pixi' ? 'canvas' : 'pixi'); location.reload(); };
   const manP = fetch('art/units.json').then(r => r.json()).then(m => {
@@ -43,7 +46,8 @@
 
   // ---- textures ----
   const cache = new WeakMap();
-  const tex = c => { let t = cache.get(c); if (!t) { t = PIXI.Texture.from(c); t.source.scaleMode = 'nearest'; cache.set(c, t); } return t; };
+  const SRCS = new Set(), reg = src => (SRCS.add(src), src);
+  const tex = c => { let t = cache.get(c); if (!t) { t = PIXI.Texture.from(c); t.source.scaleMode = 'nearest'; reg(t.source); cache.set(c, t); } return t; };
   const pool = (cont, n, make) => { while (cont.children.length < n) cont.addChild(make()); const ch = cont.children; for (let i = 0; i < ch.length; i++) ch[i].visible = i < n; return ch; };
   const sprite = () => { const s = new PIXI.Sprite(); s.roundPixels = true; return s; };
   const dot = (() => { const c = document.createElement('canvas'); c.width = c.height = 4; const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, 4, 4); return c; })();
@@ -55,7 +59,7 @@
     if (!man) return null;
     const a = MHR.atlases[fac] = {ready: false}, img = new Image();
     img.onload = () => {
-      a.source = new PIXI.ImageSource({resource: img, scaleMode: 'linear', autoGenerateMipmaps: false}); a.frames = {};
+      a.source = reg(new PIXI.ImageSource({resource: img, scaleMode: 'linear', autoGenerateMipmaps: false})); a.frames = {};
       a.ready = true; lru.unshift(fac);
       while (lru.length > 3) { const old = lru.pop(), o = MHR.atlases[old]; delete MHR.atlases[old]; for (const f of Object.values(o.frames)) for (const t of Object.values(f).flat()) if (t && t.destroy) t.destroy(false); o.source.destroy(); }
     };
@@ -69,24 +73,25 @@
   }
 
   // ---- scenes ----
-  let fieldS, root, M, W, water, land, things, dynS, fog, BS, bgS, units, fx, fgS, dyn, dctx, dynT, fgc, fgx, bgT, fgT, lastLayers = null, lastFog = -1;
+  let fieldL, bgL, fgL, dimL, BH_, hdrBg, hdrS, hdrT, root, M, W, water, land, things, dynS, fog, BS, bgS, units, fx, fgS, dyn, dctx, dynT, fgc, fgx, bgT, fgT, lastLayers = null, lastFog = -1;
   function build() {
     root = new PIXI.Container(); M = new PIXI.Container(); W = new PIXI.Container(); M.addChild(W);
     water = sprite(); land = sprite(); dynS = sprite(); things = new PIXI.Container(); things.sortableChildren = true; fog = sprite();
     W.addChild(water, land, dynS, things, fog);
     dyn = document.createElement('canvas'); dyn.width = dyn.height = 64; dctx = dyn.getContext('2d'); dynT = tex(dyn); dynS.texture = dynT;
-    BS = new PIXI.Container(); fieldS = sprite(); BS.addChild(fieldS); bgS = sprite(); units = new PIXI.Container(); fx = new PIXI.Container(); fgS = sprite(); BS.addChild(bgS, units, fx, fgS);
+    BS = new PIXI.Container(); fieldL = new PIXI.Container(); bgL = new PIXI.Container(); units = new PIXI.Container(); fx = new PIXI.Container(); fgL = new PIXI.Container(); dimL = new PIXI.Container(); BS.addChild(fieldL, bgL, units, fx, fgL, dimL);
+    BH_ = new PIXI.Container(); hdrBg = sprite(); hdrS = sprite(); BH_.addChild(hdrBg, hdrS);
     fgc = document.createElement('canvas'); fgc.width = BLW; fgc.height = BLH; fgx = fgc.getContext('2d');
-    bgT = tex(bcv); fgT = tex(fgc); bgS.texture = bgT; fgS.texture = fgT;
-    root.addChild(M, BS); app.stage.addChild(root);
+    bgT = tex(bcv); fgT = tex(fgc); hdrT = tex(hcv);
+    root.addChild(M, BS, BH_); app.stage.addChild(root);
   }
   function fit() {
-    const k = Math.min(1, DPR_CAP / CAM.dpr), w = Math.max(1, Math.round(CAM.w * k)), h = Math.max(1, Math.round(CAM.h * k));
+    const k = Math.min(1, (LOWQ() ? 1 : DPR_CAP) / CAM.dpr), w = Math.max(1, Math.round(CAM.w * k)), h = Math.max(1, Math.round(CAM.h * k));
     if (app.renderer.width !== w || app.renderer.height !== h) app.renderer.resize(w, h);
     root.scale.set(k); stats.res = k;
   }
   function frame(scene, bg) {
-    M.visible = scene === M; BS.visible = scene === BS; app.renderer.background.color = bg;
+    M.visible = scene === M; BS.visible = BH_.visible = scene === BS; app.renderer.background.color = bg;
     app.renderer.render(app.stage); show(true);
   }
 
@@ -94,9 +99,9 @@
   // are sprites from one packed sheet baked at 3x their logical size, so nothing is ever upscaled at zoom 1-1.5
   const P2 = 2, OWN = {player: 0x2c7cf0, ai: 0xe40058};
   function setupMapArt(A) {
-    const sp = new PIXI.ImageSource({resource: A.sp, scaleMode: 'linear'}), fr = {};
+    const sp = reg(new PIXI.ImageSource({resource: A.sp, scaleMode: 'linear'})), fr = {};
     for (const [k, [x, y, w, h]] of Object.entries(A.m.frames)) fr[k] = new PIXI.Texture({source: sp, frame: new PIXI.Rectangle(x, y, w, h)});
-    MAPA = {k: A.m.k, fr, img: A.sp, pos: A.m.frames, ground: A.g, field: new PIXI.Texture({source: new PIXI.ImageSource({resource: A.f, scaleMode: 'linear'})}), land: null, map: null, ui: {}};
+    MAPA = {k: A.m.k, fr, img: A.sp, pos: A.m.frames, ground: A.g, field: new PIXI.Texture({source: reg(new PIXI.ImageSource({resource: A.f, scaleMode: 'linear'}))}), land: null, map: null, ui: {}};
   }
   const hash = (x, y, k) => { let h = (x * 374761393 + y * 668265263 + k * 1442695041) | 0; h = (h ^ (h >>> 13)) * 1274126177; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
   function paintLand(map) {
@@ -127,7 +132,7 @@
   }
   function uiTex(type) { // map monsters: the pre-baked 96px portrait (tiny, every faction can stay resident)
     const m = man && man.units[type], u = m && man.ui && man.ui[m.atlas]; if (!u) return null; let A = MAPA.ui[m.atlas];
-    if (!A) { A = MAPA.ui[m.atlas] = {}; img(u.src).then(i => { A.src = new PIXI.ImageSource({resource: i, scaleMode: 'linear'}); A.t = {}; }).catch(() => {}); }
+    if (!A) { A = MAPA.ui[m.atlas] = {}; img(u.src).then(i => { A.src = reg(new PIXI.ImageSource({resource: i, scaleMode: 'linear'})); A.t = {}; }).catch(() => {}); }
     if (!A.src) return null; return A.t[type] || (A.t[type] = new PIXI.Texture({source: A.src, frame: new PIXI.Rectangle(m.row * u.cell, 0, u.cell, u.cell)}));
   }
 
@@ -196,50 +201,63 @@
   // atlas cell -> logical px: 128px painted cells show at ~43px, Castle chibi 192px cells at 46px (bigger, still <2x downscale)
   const shOf = c => (c >= 192 ? 46 : 43.5) / c;
   const parts = [], seen = new Set();
-  function burst(x, y, n, col, spd, life, up) { for (let i = 0; i < n; i++) { const a = Math.random() * Math.PI * 2, v = spd * (0.4 + Math.random()); parts.push({x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - (up || 0), t: 0, life: life * (0.6 + Math.random() * 0.6), col, sz: 1 + Math.random() * 1.5}); } }
+  function burst(x, y, n, col, spd, life, up) { if (LOWQ()) n = Math.ceil(n * 0.4); for (let i = 0; i < n; i++) { const a = Math.random() * Math.PI * 2, v = spd * (0.4 + Math.random()); parts.push({x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - (up || 0), t: 0, life: life * (0.6 + Math.random() * 0.6), col, sz: 1 + Math.random() * 1.5}); } }
   function drawFight(sx, sy) {
-    const t0 = performance.now(); fit();
-    if (MAPA && MAPA.field) { fieldS.visible = true; fieldS.texture = MAPA.field; fieldS.width = BLW; fieldS.height = BLH; } else fieldS.visible = false;
+    const t0 = performance.now(); fit(); const LQ = LOWQ(), ks = bandKs(), nk = ks.length;
     drawBattle(bctx, 'bg'); bgT.source.update();
-    drawBattle(fgx, 'fgn'); fgT.source.update();
-    const vis = B.units.filter(u => !u.gone && !(u.hidden && u.side === 'R') && (u.alive || u.deadAt == null || B.clock < u.deadAt + 0.9)).sort((a, b) => a.ry - b.ry);
-    pool(units, vis.length, sprite).forEach((s, i) => {
-      const u = vis[i]; if (!u) return;
-      let X = BOX + u.rx * CW, Y = BOY + u.ry * CW - 4, f = Math.floor(clock * 2 + u.ph) % 2, flash = false, atk = -1, hit = -1, dirx = u.side === 'L' ? 1 : -1;
+    drawBattle(fgx, 'fgn'); fgT.source.update(); hdrT.source.update();
+    const PF = MAPA && MAPA.field;
+    // every layer is drawn once per wrapped copy (layer-major, so things crossing the seam overlap the next copy correctly)
+    pool(fieldL, PF ? nk : 0, sprite).forEach((s, i) => { if (i >= nk || !PF) return; s.texture = MAPA.field; s.position.set(0, BOY + ks[i] * PER); s.width = BLW; s.height = PER; });
+    pool(bgL, nk, sprite).forEach((s, i) => { if (i >= nk) return; s.texture = bgT; s.position.set(0, ks[i] * PER); });
+    pool(fgL, nk, sprite).forEach((s, i) => { if (i >= nk) return; s.texture = fgT; s.position.set(0, ks[i] * PER); });
+    const vis = B.units.filter(u => !u.gone && !(u.hidden && u.side === 'R') && (u.alive || u.deadAt == null || B.clock < u.deadAt + 0.9)).sort((a, b) => a.ry - b.ry), U = [];
+    for (const u of vis) {
+      let X = hxp(u.rx, u.ry), Y = hyp(u.ry) - 6, f = Math.floor(clock * 2 + u.ph) % 2, flash = false, atk = -1, hit = -1, dirx = u.side === 'L' ? 1 : -1; const FY = hyp(u.ry);
       for (const a of u.atk) { const k = (B.clock - a.at) / 0.3; if (k >= 0 && k <= 1) { f = 2; atk = k; const e = k < 0.6 ? k / 0.6 : (1 - k) / 0.4; X += a.dx * e * 9; Y += a.dy * e * 9; } }
       for (const h of u.hit) { const k = B.clock - h; if (k >= 0 && k < 0.3) { hit = k / 0.3; flash = Math.floor(k * 20) % 2 === 0; X -= dirx * Math.sin(Math.min(1, hit * 2) * Math.PI) * 3; }
-        const key = u.id + '@' + h; if (k >= 0 && !seen.has(key)) { seen.add(key); burst(X + 12, BOY + u.ry * CW + 8, 7, 0xfcfcfc, 26, 0.35, 10); burst(X + 12, BOY + u.ry * CW + 10, 5, 0xe40058, 18, 0.45, 6); } }
+        const key = u.id + '@' + h; if (k >= 0 && !seen.has(key)) { seen.add(key); burst(X + 12, FY + 6, 7, 0xfcfcfc, 26, 0.35, 10); burst(X + 12, FY + 8, 5, 0xe40058, 18, 0.45, 6); } }
       const dying = u.deadAt != null && B.clock >= u.deadAt, dk = dying ? Math.min(1, (B.clock - u.deadAt) / 0.9) : 0;
-      if (dying && !seen.has(u.id + '#d' + u.deadAt)) { seen.add(u.id + '#d' + u.deadAt); burst(X + 12, BOY + u.ry * CW + 14, 16, 0xbcbcbc, 14, 0.9, 4); burst(X + 12, BOY + u.ry * CW + 6, 8, u.side === 'L' ? 0x3cbcfc : 0xfc4878, 10, 1.1, 18); }
-      const sh = framesOf(u.type), left = u.side === 'R';
-      s.alpha = u.hidden && !dying ? 0.45 + 0.1 * Math.sin(clock * 5) : 1; s.tint = 0xffffff;
+      if (dying && !seen.has(u.id + '#d' + u.deadAt)) { seen.add(u.id + '#d' + u.deadAt); burst(X + 12, FY + 12, 16, 0xbcbcbc, 14, 0.9, 4); burst(X + 12, FY + 4, 8, u.side === 'L' ? 0x3cbcfc : 0xfc4878, 10, 1.1, 18); }
+      const sh = framesOf(u.type), left = u.side === 'R', e = {alpha: u.hidden && !dying ? 0.45 + 0.1 * Math.sin(clock * 5) : 1};
       if (sh) {
-        const fr = dying ? sh.death[Math.min(sh.death.length - 1, Math.floor(dk * sh.death.length))] : atk >= 0 ? sh.attack[Math.min(3, Math.floor(atk * 4))] : hit >= 0 ? sh.hit[Math.min(2, Math.floor(hit * 3))] : sh.idle[Math.floor(clock * 3 + u.ph * 4) % 4];
-        const SH = shOf(sh.cell); s.texture = fr; s.roundPixels = false; s.anchor.set(0.5, man.base / man.cell); s.scale.set(left ? -SH : SH, SH);
-        s.position.set(X + 12 + dirx * 2, BOY + u.ry * CW + 21 + (Y - (BOY + u.ry * CW - 4)));
-        if (dying) s.alpha = 1 - Math.max(0, dk - 0.7) * 3.3;
+        const idle = LQ ? sh.idle[(Math.floor(clock * 1.5 + u.ph * 2) % 2) * 2] : sh.idle[Math.floor(clock * 3 + u.ph * 4) % 4], dn = sh.death.length;
+        e.t = dying ? sh.death[LQ ? Math.min(dn - 1, Math.floor(dk * 3) * 2) : Math.min(dn - 1, Math.floor(dk * dn))] : atk >= 0 ? sh.attack[Math.min(3, Math.floor(atk * 4))] : hit >= 0 ? sh.hit[Math.min(2, Math.floor(hit * 3))] : idle;
+        const SH = shOf(sh.cell); e.ax = 0.5; e.ay = man.base / man.cell; e.sx = left ? -SH : SH; e.sy = SH; e.x = X + 12 + dirx * 2; e.y = FY + RH - 2 + (Y - (FY - 6)); e.rp = false;
+        if (dying) e.alpha = 1 - Math.max(0, dk - 0.7) * 3.3;
       } else {
-        s.texture = tex(flash ? SPR.unitFlash(u.type, f, left) : SPR.unitTeam(u.type, f, left, u.side === 'L' ? '#1c5cb0' : '#9c1840'));
-        s.roundPixels = true; s.anchor.set(0, 0); s.scale.set(1); s.position.set(Math.round(X), Math.round(Y + dk * 6));
-        if (dying) s.alpha = 1 - Math.min(1, dk * 1.5);
+        e.t = tex(flash ? SPR.unitFlash(u.type, f, left) : SPR.unitTeam(u.type, f, left, u.side === 'L' ? '#1c5cb0' : '#9c1840'));
+        e.ax = e.ay = 0; e.sx = e.sy = 1; e.x = Math.round(X); e.y = Math.round(Y + dk * 6); e.rp = true;
+        if (dying) e.alpha = 1 - Math.min(1, dk * 1.5);
       }
-    });
-    // projectiles and particles as native sprites
+      U.push(e);
+    }
+    const nu = U.length;
+    pool(units, nu * nk, sprite).forEach((s, i) => { if (i >= nu * nk) return; const e = U[i % nu], k = ks[Math.floor(i / nu)];
+      s.texture = e.t; s.anchor.set(e.ax, e.ay); s.scale.set(e.sx, e.sy); s.position.set(e.x, e.y + k * PER); s.alpha = e.alpha; s.roundPixels = e.rp; s.tint = 0xffffff; });
+    // projectiles (shortest way across the seam) and particles as native sprites
     const live = [];
     for (const p of B.proj) { const k = (B.clock - p.at) / p.dur; if (k < 0 || k > 1) continue;
-      const [x0, y0] = cellC(p.fx, p.fy), [x1, y1] = cellC(p.tx, p.ty), x = x0 + (x1 - x0) * k, y = y0 + (y1 - y0) * k - Math.sin(k * Math.PI) * (p.arc || 14) - 4;
+      const [x0, y0] = cellC(p.fx, p.fy), [x1, y1] = cellC(p.tx, nearY(p.fy, p.ty)), x = x0 + (x1 - x0) * k, y = y0 + (y1 - y0) * k - Math.sin(k * Math.PI) * (p.arc || 14) - 4;
       if (p.kind === 'arrow') { const a = Math.atan2(y1 - y0 - Math.cos(k * Math.PI) * (p.arc || 14) * Math.PI, x1 - x0); live.push([x, y, 9, 1.4, a, 0xc8a060]); live.push([x + Math.cos(a) * 4, y + Math.sin(a) * 4, 2.5, 2.2, a, 0xfcfcfc]); }
       else if (p.kind === 'boulder') { live.push([x, y, 6, 6, k * 9, 0x8c8c8c]); live.push([x - 1, y - 1, 3, 3, 0, 0xc8c8c8]); }
-      else { const c = parseInt(String(p.col || '#fcfcfc').slice(1), 16); live.push([x, y, 5, 5, 0, c]); live.push([x, y, 2, 2, 0, 0xffffff]); if (Math.random() < 0.5) parts.push({x, y, vx: 0, vy: 0, t: 0, life: 0.25, col: c, sz: 1.5}); } }
+      else { const c = parseInt(String(p.col || '#fcfcfc').slice(1), 16); live.push([x, y, 5, 5, 0, c]); live.push([x, y, 2, 2, 0, 0xffffff]); if (!LQ && Math.random() < 0.5) parts.push({x, y, vx: 0, vy: 0, t: 0, life: 0.25, col: c, sz: 1.5}); } }
     const dt = Math.min(0.05, (performance.now() - (drawFight.last || performance.now())) / 1000) * (B.phase === 'resolve' ? (UI.skip ? 0 : UI.bspeed || 1) : 1); drawFight.last = performance.now();
     for (let i = parts.length - 1; i >= 0; i--) { const q = parts[i]; q.t += dt; q.x += q.vx * dt; q.y += q.vy * dt; q.vy += 30 * dt; if (q.t >= q.life) parts.splice(i, 1); }
-    if (parts.length > 400) parts.splice(0, parts.length - 400);
+    const PCAP = LQ ? 60 : 150; if (parts.length > PCAP) parts.splice(0, parts.length - PCAP); // never more than 150 live particles (60 on LOW)
     if (seen.size > 2000) seen.clear();
     const n = live.length + parts.length, dt0 = tex(dot);
-    pool(fx, n, sprite).forEach((s, i) => { if (i >= n) return; s.texture = dt0; s.anchor.set(0.5); s.roundPixels = false;
-      if (i < live.length) { const [x, y, w, h, a, c] = live[i]; s.position.set(x, y); s.width = w; s.height = h; s.rotation = a; s.tint = c; s.alpha = 1; }
-      else { const q = parts[i - live.length]; s.position.set(q.x, q.y); s.width = s.height = q.sz; s.rotation = 0; s.tint = q.col; s.alpha = 1 - q.t / q.life; } });
+    pool(fx, n * nk, sprite).forEach((s, i) => { if (i >= n * nk) return; const j = i % n, ko = ks[Math.floor(i / n)] * PER; s.texture = dt0; s.anchor.set(0.5); s.roundPixels = false;
+      if (j < live.length) { const [x, y, w, h, a, c] = live[j]; s.position.set(x, y + ko); s.width = w; s.height = h; s.rotation = a; s.tint = c; s.alpha = 1; }
+      else { const q = parts[j - live.length]; s.position.set(q.x, q.y + ko); s.width = s.height = q.sz; s.rotation = 0; s.tint = q.col; s.alpha = 1 - q.t / q.life; } });
+    // dim the wrapped copies + mark the seam
+    const dk = ks.filter(k => k);
+    pool(dimL, dk.length + 2, sprite).forEach((s, i) => { if (i >= dk.length + 2) return; s.texture = dt0; s.anchor.set(0); s.rotation = 0;
+      if (i < dk.length) { s.position.set(0, BOY + dk[i] * PER); s.width = BLW; s.height = PER; s.tint = 0x05050c; s.alpha = 0.4; }
+      else { s.position.set(0, BOY + (i - dk.length) * PER - 0.5); s.width = BLW; s.height = 1; s.tint = 0xf8b800; s.alpha = 0.55; } });
     BS.scale.set(BV.s); BS.position.set(BV.ox + sx, BV.oy + sy);
+    hdrBg.texture = dt0; hdrBg.tint = 0x10101e; hdrBg.position.set(0, 0); hdrBg.width = BV.aw; hdrBg.height = BV.hh;
+    hdrS.texture = hdrT; hdrS.position.set(Math.round((BV.aw - BLW * BV.hs) / 2), 0); hdrS.scale.set(BV.hs);
     frame(BS, 0x10101e);
     stats.battle = stats.battle * 0.95 + (performance.now() - t0) * 0.05; stats.n++;
     return true;

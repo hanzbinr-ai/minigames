@@ -55,13 +55,15 @@ const UNIT_DEFS = [
   ['dwarf', 6, 'Iron Dreadnought', 'Thunder Dreadnought', ['Machine', 'Splash'], ['Tough'], {range: 6, move: -2, def: 3, dmg: 1.0, cost: 1.001, hp: 1.104}, '#606878'],
 ];
 const FACTION_UNITS = {};
+// 1.3 hex-field retune (6 neighbours, 22x16 wrapped field): price multiplier per faction for tiers 1-3 / 4-5 / 6-7
+const HEX_TUNE = {castle: [1.016, 0.94, 0.985], necro: [0.988, 1.05, 0.93], sylvan: [0.984, 0.95, 0.97], inferno: [0.992, 0.956, 1.035], stronghold: [1.012, 1.04, 1.025], dwarf: [1.014, 1.04, 1.01]};
 for (const [fac, tier, base, up, ab, ab2, m, col] of UNIT_DEFS) {
   const [att, def, hp, dmg, move, cost, growth] = TIER_T[tier];
   const mk = (name, isUp) => {
     const k = isUp ? 1 : 0, dm = (m.dmg || 1) * (1 + 0.2 * k);
     UNITS[name] = {fac, tier, up: isUp, base, upName: up, att: att + (m.att || 0) + 2 * k, def: Math.max(0, def + (m.def || 0) + 2 * k), hp: Math.round(hp * (m.hp || 1) * (1 + 0.2 * k)),
       dmg: [Math.max(1, Math.round(dmg[0] * dm)), Math.max(1, Math.round(dmg[1] * dm))], move: Math.max(1, move + (m.move || 0) + (isUp && tier % 2 ? 1 : 0)), range: m.range ? m.range + k : 0,
-      ab: isUp ? [...ab, ...ab2] : ab.slice(), cost: Math.round(cost * (m.cost || 1) / 5) * 5, growth, col};
+      ab: isUp ? [...ab, ...ab2] : ab.slice(), cost: Math.round(cost * (m.cost || 1) * HEX_TUNE[fac][tier < 3 ? 0 : tier < 5 ? 1 : 2] / 5) * 5, growth, col};
   };
   mk(base, false); mk(up, true);
   (FACTION_UNITS[fac] = FACTION_UNITS[fac] || [])[tier] = base;

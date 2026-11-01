@@ -13,7 +13,7 @@ OUT = os.path.join(HERE, '..', '..', 'games', 'miniheroes', 'art')
 PREV = os.path.join(HERE, 'lineups')
 CELL, BASE = 128, 122           # frame size and feet baseline; figures get >= 10px headroom (no cropped lances)
 MAXH, MAXW = 110, 122
-CELLS = {'castle': 192}      # chibi Castle: bigger frames so battle sprites are downscaled < 2x (crisp without mipmaps)
+CELLS = {'castle': 192, 'necro': 192, 'sylvan': 192, 'inferno': 192, 'stronghold': 192, 'dwarf': 192}      # chibi Castle: bigger frames so battle sprites are downscaled < 2x (crisp without mipmaps)
 UI = 96                       # pre-baked UI portraits: 96px source, shown at 48 CSS px (2x)
 def setcell(c):
     global CELL, BASE, MAXH, MAXW
@@ -150,6 +150,55 @@ def frames(fig, fly):
         out.append(put(fig, dx=-4 * i, dy=1.5 * i, rot=rot, tint=(30, 20, 40), tk=0.1 * i, dissolve=dis, seed=i))
     return out
 
+# ---- Broz's chibi sheets (navy background, 8 figures T1..T8 with labels underneath) ----
+BROZ = {  # faction: (sheet in src/broz, Broz column -> data tier order)
+    'necro': (1, [0, 1, 2, 3, 4, 5, 6]), 'sylvan': (0, [0, 1, 2, 3, 4, 5, 6]),
+    'inferno': (11, [0, 1, 3, 2, 4, 5, 6]),      # Broz T3 horned demon = our T4 Demon, Broz T4 succubus = our T3 Succubus
+    'stronghold': (10, [0, 1, 2, 3, 4, 5, 6]), 'dwarf': (9, [0, 2, 1, 3, 4, 5, 6])}  # Broz T2 crossbow / T3 shield swapped vs data
+ARCHANGEL = 8
+def cut_navy(im):
+    im = im.convert('RGB'); w, h = im.size; px = im.load()
+    cs = [px[x, y] for x, y in ((2, 2), (w - 3, 2), (2, h - 3), (w - 3, h - 3), (w // 2, 2))]; bgc = tuple(sorted(c[i] for c in cs)[2] for i in range(3))
+    near = lambda p, t: abs(p[0] - bgc[0]) + abs(p[1] - bgc[1]) + abs(p[2] - bgc[2]) < t
+    # labels: lowest band of bright text -> crop above it
+    rows = [sum(1 for x in range(0, w, 2) if min(px[x, y]) > 200) for y in range(h)]
+    y = h - 1
+    while y > h // 2 and rows[y] < 3: y -= 1
+    while y > h // 2 and any(rows[yy] >= 3 for yy in range(max(0, y - 12), y)): y -= 1
+    top = y - 6
+    bg = bytearray(w * h); q = deque([(x, 0) for x in range(w)] + [(0, yy) for yy in range(h)] + [(w - 1, yy) for yy in range(h)] + [(x, top) for x in range(w)])
+    while q:
+        x, yy = q.popleft()
+        if not (0 <= x < w and 0 <= yy <= top): continue
+        i = yy * w + x
+        if bg[i] or not near(px[x, yy], 34): continue
+        bg[i] = 1; q.extend(((x + 1, yy), (x - 1, yy), (x, yy + 1), (x, yy - 1)))
+    a = Image.new('L', (w, h), 0); ap = a.load()
+    for yy in range(top):
+        for x in range(w):
+            if not bg[yy * w + x]: ap[x, yy] = 255
+    a = a.filter(ImageFilter.MinFilter(3)).filter(ImageFilter.GaussianBlur(0.6))
+    cols = [sum(1 for yy in range(top + 6, min(h, top + 80)) if min(px[x, yy]) > 200) for x in range(w)]
+    cl, x = [], 0
+    while x < w:
+        if cols[x]:
+            s0 = x; e0 = x
+            while x < w and (cols[x] or any(cols[x:x + 28])): e0 = x if cols[x] else e0; x += 1
+            cl.append((s0 + e0) / 2)
+        x += 1
+    out = im.convert('RGBA'); out.putalpha(a); out = out.crop((0, 0, w, top)); out.info['centers'] = cl; return out
+def elite(fig):  # upgraded look for Broz's base art: warm gold rim + a touch brighter/saturated
+    from PIL import ImageEnhance
+    a = fig.split()[3]; pad = 4; W2, H2 = fig.width + pad * 2, fig.height + pad * 2
+    big = Image.new('L', (W2, H2), 0); big.paste(a, (pad, pad)); rim = big.filter(ImageFilter.MaxFilter(5)).filter(ImageFilter.GaussianBlur(1.2))
+    out = Image.new('RGBA', (W2, H2), (255, 196, 64, 0)); out.putalpha(rim.point(lambda v: int(v * 0.85)))
+    f2 = ImageEnhance.Color(ImageEnhance.Brightness(fig).enhance(1.08)).enhance(1.18); out.alpha_composite(f2, (pad, pad)); return out
+def broz_figs(idx, n=8):
+    rgba = cut_navy(Image.open(os.path.join(HERE, 'src', 'broz', str(idx) + '.jpg'))); c = rgba.info['centers']
+    if len(c) != n: raise SystemExit(f'broz sheet {idx}: found {len(c)} labels, expected {n}')
+    cuts = [0] + [round((c[i] + c[i + 1]) / 2) for i in range(n - 1)] + [rgba.width]
+    return [clean(rgba.crop((cuts[i], 0, cuts[i + 1], rgba.height))) for i in range(n)]
+
 def main():
     os.makedirs(OUT, exist_ok=True); os.makedirs(PREV, exist_ok=True)
     man = {'cell': CELL, 'base': BASE, 'anims': {}, 'atlases': {}, 'cells': {}, 'ui': {}, 'units': {}}
@@ -161,8 +210,15 @@ def main():
     mraw = [clean(mr.crop((max(0, a - 2), 0, min(mr.width, b + 2), mr.height))) for a, b in segments(mr, 6, 'mythic')]
     for fac, (base, up, mname) in FACTIONS.items():
         setcell(CELLS.get(fac, 128)); myth[fac] = scale_row(mraw)[MYTHIC_ORDER.index(fac)]
+        if fac == 'castle':  # Broz's chibi Archangel (white card with a caption)
+            ar = cut_navy(Image.open(os.path.join(HERE, 'src', 'broz', str(ARCHANGEL) + '.jpg')))
+            myth[fac] = scale_row([clean(ar)] * 3)[0]
         rows = []
-        for key, names in ((fac + '-base', base), (fac + '-up', up)):
+        if fac in BROZ:
+            sh, order = BROZ[fac]; bf = broz_figs(sh); bs = scale_row([bf[order[i]] for i in range(7)] + [bf[7]])
+            rows = list(zip(base, bs[:7])) + list(zip(up, scale_row([elite(bf[order[i]]) for i in range(7)] + [elite(bf[7])])[:7]))
+            myth[fac] = bs[7]
+        for key, names in (() if fac in BROZ else ((fac + '-base', base), (fac + '-up', up))):
             rgba = cut_background(Image.open(os.path.join(HERE, 'src', key + '.jpg')))
             crops = [rgba.crop((max(0, a - 2), 0, min(rgba.width, b + 2), rgba.height)) for a, b in segments(rgba, 7, key)]
             if key == 'castle-up': crops[1] = degreen(crops[1])  # neighbour's quiver arrows overlap the halberd

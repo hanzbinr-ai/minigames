@@ -1,6 +1,17 @@
 // Mini Heroes - logic + rendering. G = saved game state, UI = screen state, B = current battle.
 'use strict';
-let MW = 24, MH = 18; const TS = 16, BW = 10, BH = 7, CW = 24, BOX = 8, BOY = 28, BLW = 256, BLH = 200;
+let MW = 24, MH = 18; const TS = 16, BW = 22, BH = 16, CW = 24, RH = 21, BOX = 8, BOY = 30, HDR = 26, PER = BH * RH, BLW = BOX * 2 + BW * CW + CW / 2, BLH = BOY + PER + 16;
+// BATTLE GRID: pointy-top hexes in "odd-r" offset rows (odd rows shifted half a hex right), 6 neighbours, like Heroes 3.
+// Rows wrap top<->bottom (a cylinder: BH is even so row parity matches across the seam); left/right are deployment sides.
+const wy = y => ((y % BH) + BH) % BH;
+const HEXN = [[[1, 0], [-1, 0], [-1, -1], [0, -1], [-1, 1], [0, 1]], [[1, 0], [-1, 0], [0, -1], [1, -1], [0, 1], [1, 1]]];
+const hexN = (x, y) => HEXN[y & 1].map(([dx, dy]) => [x + dx, wy(y + dy)]).filter(([nx]) => nx >= 0 && nx < BW);
+const hd0 = (ax, ay, bx, by) => { const q1 = ax - (ay - (ay & 1)) / 2, q2 = bx - (by - (by & 1)) / 2, dq = q1 - q2, dr = ay - by; return (Math.abs(dq) + Math.abs(dr) + Math.abs(dq + dr)) / 2; };
+const hexDist = (ax, ay, bx, by) => Math.min(hd0(ax, ay, bx, by), hd0(ax, ay, bx, by + BH), hd0(ax, ay, bx, by - BH));
+const nearY = (ay, by) => [by, by + BH, by - BH].reduce((b, c) => Math.abs(c - ay) < Math.abs(b - ay) ? c : b); // b's row copy nearest to a (for drawing across the seam)
+const par = y => { const f = Math.floor(y), t = y - f; return (f & 1) * (1 - t) + ((f + 1) & 1) * t; };
+const hxp = (x, y) => BOX + x * CW + par(y) * CW / 2, hyp = y => BOY + y * RH; // top-left of a hex's CW x RH box (logical px)
+const formY = d => BH / 2 - 3 + d; // formation slot 0..6 -> rows 5..11 (a compact block, like the old 7-row field)
 const cv = document.getElementById('c'), ctx = cv.getContext('2d');
 const $ = id => document.getElementById(id);
 const SAVE_KEY = 'mh-save-v2';
@@ -728,7 +739,7 @@ function startBattle(ctx) {
     round: 1, phase: 'pre', terr: {}, noPlan: null, units: [], seed: rnd(1, 1e6), clock: 0, ev: [], proj: [], eff: [], obst: new Set(), plans: {}, spell: {L: null, R: null}, sel: null, spellPick: null, log: ''};
   autoBtns();
   B.fort = ctx.def.town && ctx.def.town.built.includes('fort') ? (L === 'def' ? 'L' : 'R') : null;
-  const rows = [3, 1, 5, 0, 6, 2, 4];
+  const rows = [3, 1, 5, 0, 6, 2, 4].map(formY);
   for (const side of ['L', 'R']) {
     let i = 0;
     B.sides[side].arrs.forEach((arr, src) => arr.forEach(s => {
@@ -740,15 +751,15 @@ function startBattle(ctx) {
   const town = ctx.def.town;
   if (town && town.built.includes('fort')) { // SIEGE: walls, gate, arrow towers vs catapult
     const def = L === 'def' ? 'L' : 'R', cit = town.built.includes('citadel') ? SIEGE.citadelBonus : 0;
-    B.siege = {def, att: def === 'R' ? 'L' : 'R', x: def === 'R' ? 7 : 2, cat: {x: def === 'R' ? 0 : BW - 1, y: BH - 1}, target: null, cells: {},
-      towers: cit ? [0, BH - 1] : [0], towerDmg: cit ? SIEGE.citadelTowerDmg : SIEGE.towerDmg, fire: [], shots: []};
+    B.siege = {def, att: def === 'R' ? 'L' : 'R', x: def === 'R' ? BW - 4 : 3, cat: {x: def === 'R' ? 0 : BW - 1, y: BH - 1}, target: null, cells: {},
+      towers: cit ? [3, BH - 4] : [3], towerDmg: cit ? SIEGE.citadelTowerDmg : SIEGE.towerDmg, fire: [], shots: []};
     for (let y = 0; y < BH; y++) {
-      const kind = y === 3 ? 'gate' : B.siege.towers.includes(y) ? 'tower' : 'wall', hp = (kind === 'gate' ? SIEGE.gateHp : SIEGE.wallHp) + cit;
+      const kind = y === BH / 2 ? 'gate' : B.siege.towers.includes(y) ? 'tower' : 'wall', hp = (kind === 'gate' ? SIEGE.gateHp : SIEGE.wallHp) + cit;
       B.siege.cells[y] = {kind, hp, max: hp, shown: hp};
     }
     for (const u of B.units) while (wallBlocks(u.x, u.y, u.side) || B.units.some(o => o !== u && o.x === u.x && o.y === u.y)) { u.x += u.side === 'L' ? 1 : -1; u.rx = u.gx = u.x; }
   }
-  for (let k = 0; k < 3; k++) { const x = rnd(3, 6), y = rnd(0, BH - 1); if (!uAt(x, y) && !(B.siege && Math.abs(x - B.siege.x) <= 1)) B.obst.add(x + ',' + y); }
+  for (let k = 0; k < 5; k++) { const x = rnd(5, BW - 6), y = rnd(0, BH - 1); if (!uAt(x, y) && !(B.siege && Math.abs(x - B.siege.x) <= 1)) B.obst.add(x + ',' + y); }
   UI.ret = UI.mode === 'aiturn' ? 'aiturn' : 'map'; UI.mode = 'battle'; UI.walk = null; UI.preview = null; UI.preSel = null; UI.preTerr = null;
   B.tac = {L: {tactic: null, form: 'line', terrain: [], reveal: false, intel: 0}, R: {tactic: null, form: 'line', terrain: [], reveal: false, intel: 0}};
   B.tac.L.intel = intelOf('L'); B.tac.R.intel = intelOf('R');
@@ -758,12 +769,20 @@ function startBattle(ctx) {
 }
 const uAt = (x, y) => B.units.find(u => u.alive && u.x === x && u.y === y);
 const uById = id => B.units.find(u => u.id === id);
-const md = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+const md = (a, b) => hexDist(a.x, a.y, b.x, b.y);
+// anti-pocket rule: a stack with no free neighbour hex (tucked in a side-edge pocket behind its friends) can be hit in melee
+// from 2 hexes away (pikes over the shield wall); ranged fire has no line-of-sight limit, so shooters always reach it too
+const enclosed = t => hexN(t.x, t.y).every(([x, y]) => B.obst.has(x + ',' + y) || uAt(x, y) || wallBlocks(x, y, 'x')) && hexN(t.x, t.y).length < 6 + 1;
+const meleeOK = (u, t) => { const d = md(u, t); return d === 1 || (d === 2 && enclosed(t)); };
+const pdir = (a, t) => { const ty = nearY(a.y, t.y), dx = hxp(t.x, ty) - hxp(a.x, a.y), dy = (ty - a.y) * RH, l = Math.hypot(dx, dy) || 1; return [dx / l, dy / l]; };
+const behind = (a, t) => { let best = null; for (const [x, y] of hexN(t.x, t.y)) { const d = hexDist(a.x, a.y, x, y); if (!best || d > best.d) best = {x, y, d}; } return best && best.d === 2 ? uAt(best.x, best.y) : null; };
 const heroOf = side => B.sides[side].hero;
 const moraleChance = side => { const o = B.sides[side].owner; return skl(heroOf(side), 'leadership') + (pol(o, 'crusade') ? 10 : 0) + techSum(o, 'morale') + (techCap(o, 'crusade') ? 50 : 0) + Math.min(20, 10 * B.units.filter(u => u.alive && u.side === side && hasAb(u, 'Holy')).length); };
 const fearImm = u => hasAb(u, 'Undead') || hasAb(u, 'Machine') || techCap(B.sides[u.side].owner, 'crusade');
 const ownerOfU = u => B.sides[u.side].owner;
-const moveOf = u => u.slow ? 1 : Math.max(1, US(u).move + (u.haste ? 2 : 0) + (u.morale ? 1 : 0) + (tac(u.side, 'blitz') ? (hasTal(heroOf(u.side), 'grandblitz') ? 2 : 1) : 0) - (tac(otherSide(u.side), 'sabotage') ? 1 : 0));
+const HEXK = 2; // the 22-wide hex field is ~2.2x the old 10-wide square one: move and range count 2 hexes per stat point
+const moveOf = u => HEXK * moveBase(u);
+const moveBase = u => u.slow ? 1 : Math.max(1, US(u).move + (u.haste ? 2 : 0) + (u.morale ? 1 : 0) + (tac(u.side, 'blitz') ? (hasTal(heroOf(u.side), 'grandblitz') ? 2 : 1) : 0) - (tac(otherSide(u.side), 'sabotage') ? 1 : 0));
 function wallBlocks(x, y, side) {
   const S = B.siege; if (!S) return false;
   if (x === S.cat.x && y === S.cat.y) return true;
@@ -779,8 +798,8 @@ function reach(u, mv) { // BFS: key -> {d, prev}
   const m = new Map([[u.x + ',' + u.y, {d: 0, x: u.x, y: u.y, prev: null}]]), q = [m.get(u.x + ',' + u.y)];
   while (q.length) {
     const c = q.shift(); if (c.d >= mv) continue;
-    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-      const x = c.x + dx, y = c.y + dy, k = x + ',' + y, d = c.d + (!fly && (terrAt(x, y) || {}).k === 'quagmire' ? 2 : 1);
+    for (const [x, y] of hexN(c.x, c.y)) {
+      const k = x + ',' + y, d = c.d + (!fly && (terrAt(x, y) || {}).k === 'quagmire' ? 2 : 1);
       const pass = fly ? x >= 0 && y >= 0 && x < BW && y < BH && !(B.siege && x === B.siege.x && B.siege.cells[y].kind === 'tower') : free(x, y, u.side);
       if (d > mv || (m.has(k) && m.get(k).d <= d) || !pass) continue;
       const n = {d, x, y, prev: c}; m.set(k, n); q.push(n);
@@ -804,7 +823,7 @@ function calcDmg(a, t, ranged) {
   d *= A >= D ? 1 + 0.05 * Math.min(60, A - D) : Math.max(0.3, 1 - 0.025 * (D - A));
   const tags = [];
   if (!ranged) {
-    const dx = Math.sign(a.x - t.x), dy = Math.sign(a.y - t.y), back = uAt(t.x - dx, t.y - dy);
+    const back = behind(a, t);
     if (back && back.side === a.side) { d *= 1.5; tags.push('FLANK'); }
   }
   if (hasAb(a, 'Swarm')) { const n = B.units.filter(o => o.alive && o !== a && o.side === a.side && md(o, t) === 1).length; d *= 1 + 0.15 * n; }
@@ -854,7 +873,7 @@ function planSide(side, onlyMissing) {
   if (B.siege && B.siege.att === side && !wallIntact(B.siege.target)) B.siege.target = autoWallTarget();
 }
 const wallIntact = y => y != null && B.siege.cells[y] && B.siege.cells[y].kind !== 'tower' && B.siege.cells[y].hp > 0;
-function autoWallTarget() { const ys = [3, 2, 4, 1, 5, 6, 0].filter(wallIntact); return ys.length ? ys[0] : null; }
+function autoWallTarget() { const ys = [...Array(BH).keys()].sort((a, b) => Math.abs(a - BH / 2) - Math.abs(b - BH / 2)).filter(wallIntact); return ys.length ? ys[0] : null; }
 // Catapult fires together with spells, before any movement, so a breach can be used this round.
 function siegeFire(out) {
   const S = B.siege; if (!S) return;
@@ -894,7 +913,7 @@ function roundStartAbilities(out) {
     const n = B.units.filter(u => u.alive && u.side === side && hasAb(u, 'ManaSteal')).length * 2 + techSum(o, 'manaRound');
     if (n && foe && foe.mana > 0) { const v = Math.min(foe.mana, n); foe.mana -= v; if (me) me.mana += Math.min(v, n); out.push((side === 'L' ? 'You' : 'Enemy') + ' drained ' + v + ' mana'); }
     if (techCap(o, 'gates')) {
-      const cols = side === 'L' ? [0, 1, 2] : [BW - 1, BW - 2, BW - 3], spot = cols.flatMap(x => [3, 2, 4, 1, 5, 0, 6].map(y => ({x, y}))).find(c => free(c.x, c.y, side));
+      const cols = side === 'L' ? [0, 1, 2] : [BW - 1, BW - 2, BW - 3], spot = cols.flatMap(x => [...Array(BH).keys()].sort((a, b) => Math.abs(a - BH / 2) - Math.abs(b - BH / 2)).map(y => ({x, y}))).find(c => free(c.x, c.y, side));
       if (spot) { const type = (me && me.lvl >= 5) ? 'Familiar' : 'Imp', count = 3 + 2 * B.round + (me ? me.lvl : 0), S = effStats(o, type);
         const u = {S, id: 'G' + side + B.round + '_' + B.units.length, side, type, count, start: count, tot: count * S.hp, x: spot.x, y: spot.y, rx: spot.x, ry: spot.y, gx: spot.x, gy: spot.y, shown: count, ph: 0, atk: [], hit: [], deadAt: null, src: -1, alive: true, summoned: 1};
         B.units.push(u); fx(u, 'GATES OF HELL!', '#fc7430', 0.3); out.push(count + ' ' + type + 's pour out of the portal'); }
@@ -931,7 +950,7 @@ function resolveRound() {
   const land = (h, at, shot) => { // visuals + on-hit abilities for one blow (damage already applied)
     const imp = at + (shot ? 0.35 : 0.15), tmax = h.t.start * US(h.t).hp;
     if (h.a) {
-      h.a.atk.push({at, dx: shot ? 0 : Math.sign(h.t.x - h.a.x), dy: shot ? 0 : Math.sign(h.t.y - h.a.y)});
+      { const [dx, dy] = shot ? [0, 0] : pdir(h.a, h.t); h.a.atk.push({at, dx, dy}); }
       if (shot) B.proj.push({at, dur: 0.35, fx: h.a.x, fy: h.a.y, tx: h.t.x, ty: h.t.y, kind: projKind(h.a), col: US(h.a).col});
     } else { B.siege.shots.push({at, y: h.tower}); B.proj.push({at, dur: 0.35, fx: B.siege.x, fy: h.tower, tx: h.t.x, ty: h.t.y, kind: 'arrow'}); }
     h.t.hit.push(imp); const ret = h.tags.includes('RETAL');
@@ -996,9 +1015,9 @@ function resolveRound() {
       const r = reach(u, moveOf(u)), c = r.get(p.x + ',' + p.y);
       if (c) moveAlong(u, c);
     } else if (p.t === 'atk' && !u.acted) {
-      const t = uById(p.target); if (!t || !up(t) || md(u, t) === 1) continue;
+      const t = uById(p.target); if (!t || !up(t) || meleeOK(u, t)) continue;
       if (US(u).range && !enemyNear(u)) continue;
-      if (hasAb(u, 'Teleport')) { const c = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy]) => ({x: t.x + dx, y: t.y + dy})).filter(c => free(c.x, c.y, u.side)).sort((p, q) => md(p, u) - md(q, u))[0]; if (c) { u.moved = md(c, u); u.x = c.x; u.y = c.y; fx(u, 'TELEPORT', '#e40058', T); } }
+      if (hasAb(u, 'Teleport')) { const c = hexN(t.x, t.y).map(([x, y]) => ({x, y})).filter(c => free(c.x, c.y, u.side)).sort((p, q) => md(p, u) - md(q, u))[0]; if (c) { u.moved = md(c, u); u.x = c.x; u.y = c.y; fx(u, 'TELEPORT', '#e40058', T); } }
       else { let best = null; for (const c of reach(u, moveOf(u)).values()) { const score = md(c, t) * 10 + c.d; if (!best || score < best.s) best = {c, s: score}; } if (best) moveAlong(u, best.c); }
     }
     if (u.x !== ox || u.y !== oy) { anyMove = true; const x = u.x, y = u.y, c = u.count, a = u.alive; later(T, () => { u.gx = x; u.gy = y; u.shown = c; if (!a && u.deadAt == null) u.deadAt = B.clock; }); }
@@ -1009,7 +1028,7 @@ function resolveRound() {
     .sort((a, b) => (b.moved ? 1 : 0) - (a.moved ? 1 : 0) || moveOf(b) - moveOf(a) || Math.random() - 0.5);
   for (const u of mel) {
     if (!up(u)) continue;
-    const t = uById(B.plans[u.id].target); if (!t || !up(t) || md(u, t) !== 1) continue;
+    const t = uById(B.plans[u.id].target); if (!t || !up(t) || !meleeOK(u, t)) continue;
     if (cantAct(u)) { T += 0.3; continue; }
     if (!B.order.includes('melee')) { B.order.push('melee'); stage(T - 0.05, 'MELEE'); }
     let imp = T, landed = 0, tried = 0;
@@ -1093,7 +1112,8 @@ function blunted(side) {
   return t === 'ambush' && B.tac[otherSide(side)].intel >= 2;
 }
 const tac = (side, k) => !!(B && B.tac && B.tac[side].tactic === k && !blunted(side));
-const rangeOf = u => US(u).range ? US(u).range + (heroSpec(heroOf(u.side)) === 'ranger' ? 1 : 0) + (tac(u.side, 'volley') ? 1 : 0) + ((terrAt(u.x, u.y) || {}).k === 'raise' ? 2 : 0) : 0;
+const rangeOf = u => HEXK * rangeBase(u);
+const rangeBase = u => US(u).range ? US(u).range + (heroSpec(heroOf(u.side)) === 'ranger' ? 1 : 0) + (tac(u.side, 'volley') ? 1 : 0) + ((terrAt(u.x, u.y) || {}).k === 'raise' ? 2 : 0) : 0;
 // deploy zone = own first 2 columns
 const deployCols = side => side === 'L' ? [1, 0] : [BW - 2, BW - 1];
 const inDeploy = (side, x, y) => deployCols(side).includes(x) && y >= 0 && y < BH && !wallBlocks(x, y, side) && !B.obst.has(x + ',' + y);
@@ -1104,16 +1124,16 @@ const FORM_SLOTS = {
 };
 function applyFormation(side, kind) {
   const [F, Bk] = deployCols(side), us = B.units.filter(u => u.alive && u.side === side), taken = new Set();
-  const all = [...FORM_SLOTS[kind].m, ...FORM_SLOTS[kind].r].map(s => [s[0] === 'F' ? F : Bk, +s[1]]);
+  const all = [...FORM_SLOTS[kind].m, ...FORM_SLOTS[kind].r].map(s => [s[0] === 'F' ? F : Bk, formY(+s[1])]).concat([...Array(BH).keys()].flatMap(y => [[F, y], [Bk, y]]));
   const put = (u, pref) => { for (const [x, y] of [...pref, ...all]) { const k = x + ',' + y; if (!taken.has(k) && inDeploy(side, x, y)) { taken.add(k); u.x = u.rx = u.gx = x; u.y = u.ry = u.gy = y; return; } } };
-  const slots = l => l.map(s => [s[0] === 'F' ? F : Bk, +s[1]]);
+  const slots = l => l.map(s => [s[0] === 'F' ? F : Bk, formY(+s[1])]);
   us.filter(u => !US(u).range).forEach(u => put(u, slots(FORM_SLOTS[kind].m)));
   us.filter(u => US(u).range).forEach(u => put(u, slots(FORM_SLOTS[kind].r)));
   B.tac[side].form = kind;
 }
 function placeTerrain(side, k, x, y) {
   const h = heroOf(side); if (!h || h.mana < terrCost(h, k)) return false;
-  const cells = TERRAIN_SPELLS[k].cells.map(([dx, dy]) => [x + dx, y + dy]).filter(([cx, cy]) => cx >= 0 && cy >= 0 && cx < BW && cy < BH && !(B.siege && cx === B.siege.x) && !(B.siege && cx === B.siege.cat.x && cy === B.siege.cat.y));
+  const cells = TERRAIN_SPELLS[k].cells.map(([dx, dy]) => [x + dx, wy(y + dy)]).filter(([cx, cy]) => cx >= 0 && cx < BW && !(B.siege && cx === B.siege.x) && !(B.siege && cx === B.siege.cat.x && cy === B.siege.cat.y));
   if (!cells.length) return false;
   h.mana -= terrCost(h, k); cells.forEach(([cx, cy]) => { if (k !== 'raise' || !B.obst.has(cx + ',' + cy)) B.terr[cx + ',' + cy] = {k, side}; });
   B.tac[side].terrain.push({k, x, y, cost: terrCost(h, k)}); return true;
@@ -1153,10 +1173,10 @@ function aiPre(side) {
   if (!h) return;
   const dir = side === 'R' ? -1 : 1, [F] = deployCols(side), budget = () => h.mana - 10;
   const tryT = (k, x, y) => budget() >= terrCost(h, k) && placeTerrain(side, k, x, y);
-  if (foeR > 0.3) tryT('fog', side === 'R' ? BW - 1 : 1, 3);
-  if (foeR < 0.7) tryT('thorns', F + dir * 3, 3);
+  if (foeR > 0.3) tryT('fog', side === 'R' ? BW - 1 : 1, BH / 2);
+  if (foeR < 0.7) tryT('thorns', F + dir * 5, BH / 2);
   const shooter = mine.find(u => US(u).range); if (shooter) tryT('raise', shooter.x, shooter.y);
-  if (foeR < 0.5) tryT('quagmire', F + dir * 4, 3);
+  if (foeR < 0.5) tryT('quagmire', F + dir * 7, BH / 2);
 }
 function aiAdapt(side) { // at FIGHT: an Intel-2 AI sees the player's final tactic and may switch
   if (B.tac[side].intel < 2 || !B.tac[otherSide(side)].tactic) return false;
@@ -1400,7 +1420,7 @@ const bcv = document.createElement('canvas'); bcv.width = BLW; bcv.height = BLH;
 const CAM = {x: 0, y: 0, z: 0, dpr: 1, w: 1, h: 1, target: null};
 let layers = null, clock = 0, BV = {s: 1, ox: 0, oy: 0};
 function fitCanvas() {
-  const dpr = Math.min(3, window.devicePixelRatio || 1), r = $('view').getBoundingClientRect();
+  const dpr = localStorage.getItem('mh-quality') === 'low' ? 1 : Math.min(3, window.devicePixelRatio || 1), r = $('view').getBoundingClientRect();
   const w = Math.max(1, Math.round(r.width * dpr)), h = Math.max(1, Math.round(r.height * dpr));
   if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
   CAM.dpr = dpr; CAM.w = w; CAM.h = h;
@@ -1526,12 +1546,14 @@ function planPath(u, p, t) { // cells the stack will walk (same rules as the MOV
   const chain = c => { const out = []; while (c) { out.unshift({x: c.x, y: c.y}); c = c.prev; } return out; };
   if (p.t === 'move') { const c = reach(u, moveOf(u)).get(p.x + ',' + p.y); return c ? chain(c) : [u]; }
   if (US(u).range && !enemyNear(u)) return [u, t]; // shot: straight line is the arrow
-  if (md(u, t) === 1 || hasAb(u, 'Teleport')) return [u, t];
+  if (meleeOK(u, t) || hasAb(u, 'Teleport')) return [u, t];
   let best = null; for (const c of reach(u, moveOf(u)).values()) { const sc = md(c, t) * 10 + c.d; if (!best || sc < best.s) best = {c, s: sc}; }
-  const path = best ? chain(best.c) : [u]; if (md(path[path.length - 1], t) === 1) path.push({x: t.x, y: t.y}); return path;
+  const path = best ? chain(best.c) : [u]; if (meleeOK(path[path.length - 1], t)) path.push({x: t.x, y: t.y}); return path;
 }
+function dotLineW(g, x0, y0, x1, y1, col) { dotLine(g, x0, y0, x1, y1, col); const lo = Math.min(y0, y1), hi = Math.max(y0, y1); if (lo < BOY) dotLine(g, x0, y0 + PER, x1, y1 + PER, col); if (hi > BOY + PER) dotLine(g, x0, y0 - PER, x1, y1 - PER, col); }
 function dotLine(g, x0, y0, x1, y1, col) { const n = Math.ceil(Math.hypot(x1 - x0, y1 - y0) / 3); for (let i = 0; i <= n; i++) { const x = Math.round(x0 + (x1 - x0) * i / n), y = Math.round(y0 + (y1 - y0) * i / n); g.fillStyle = '#000'; g.fillRect(x - 1, y - 1, 3, 3); g.fillStyle = col; g.fillRect(x, y, 1, 1); } }
-const cellC = (x, y) => [BOX + x * CW + CW / 2, BOY + y * CW + CW / 2];
+const cellC = (x, y) => [hxp(x, y) + CW / 2, hyp(y) + RH / 2];
+const hexPath = (g, x, y, i = 0) => { const [cx, cy] = cellC(x, y), w = CW / 2 - i, r = CW / Math.sqrt(3) - i; g.beginPath(); g.moveTo(cx, cy - r); g.lineTo(cx + w, cy - r / 2); g.lineTo(cx + w, cy + r / 2); g.lineTo(cx, cy + r); g.lineTo(cx - w, cy + r / 2); g.lineTo(cx - w, cy - r / 2); g.closePath(); };
 // pass: 'all' = classic; 'bg' = field..plan lines + unit shadows; 'fg' = count badges, projectiles, fx (render layer draws unit sprites between)
 function drawBattle(g, pass = 'all') {
   g.imageSmoothingEnabled = false;
@@ -1539,46 +1561,31 @@ function drawBattle(g, pass = 'all') {
   if (!BG) g.clearRect(0, 0, BLW, BLH);
   const selU = B.sel && uById(B.sel), r = BG && selU && B.phase === 'plan' ? reach(selU, moveOf(selU)) : null, seeTerr = t => t.side === 'L' || B.phase !== 'pre' || B.tac.L.intel >= 2, fr = Math.floor(clock * 2) % 2;
   if (BG) {
-  if (pass === 'bg' && window.MHR && MHR.paintField && MHR.paintField()) g.clearRect(0, 0, BLW, BLH); // painted field sprite sits under this layer
-  else g.drawImage(SPR.field(BLW, BLH, CW, B.seed), 0, 0);
-  g.fillStyle = '#10102a'; g.fillRect(0, 0, BLW, BOY - 3); g.fillStyle = '#000'; g.fillRect(0, BOY - 3, BLW, 2);
-  txt(g, B.phase === 'pre' ? 'PRE-BATTLE' : 'ROUND ' + (B.phase === 'plan' ? B.round : B.round - 1) + ' - ' + (B.phase === 'plan' ? 'PLAN' : (B.stage || 'RESOLVE')), BLW / 2, 10, B.phase === 'resolve' ? '#58d854' : '#f8b800');
-  const hl = heroOf('L'), hr = heroOf('R');
-  txt(g, hl ? hl.name + ' ' + hl.mana + 'MP' : 'GARRISON', 3, 20, '#3cbcfc', 'left');
-  txt(g, hr ? hr.name : (B.sides.R.monster ? 'NEUTRALS' : 'GARRISON'), BLW - 3, 20, '#e40058', 'right');
-  const tl = s => { const t = B.tac[s].tactic; if (s === 'R' && B.tac.L.intel < 2) return '???'; return t ? TACTICS[t].name.toUpperCase() + (blunted(s) ? '-X' : '') : '-'; };
-  smallTxt(g, tl('L'), 3, 8, blunted('L') ? '#888' : '#f8b800', 'left'); smallTxt(g, tl('R'), BLW - 3, 8, blunted('R') ? '#888' : '#f8b800', 'right');
-  // checkered cells + crisp two-tone grid + frame, so tiles read clearly at any zoom
-  for (let y = 0; y < BH; y++) for (let x = 0; x < BW; x++) if ((x + y) % 2) { g.fillStyle = '#0000001a'; g.fillRect(BOX + x * CW, BOY + y * CW, CW, CW); }
-  g.fillStyle = '#00000040';
-  for (let x = 0; x <= BW; x++) g.fillRect(BOX + x * CW, BOY, 1, BH * CW);
-  for (let y = 0; y <= BH; y++) g.fillRect(BOX, BOY + y * CW, BW * CW, 1);
-  g.fillStyle = '#ffffff14';
-  for (let x = 0; x < BW; x++) g.fillRect(BOX + x * CW + 1, BOY, 1, BH * CW);
-  for (let y = 0; y < BH; y++) g.fillRect(BOX, BOY + y * CW + 1, BW * CW, 1);
-  g.fillStyle = '#000'; g.fillRect(BOX - 2, BOY - 1, BW * CW + 4, 1); g.fillRect(BOX - 2, BOY + BH * CW, BW * CW + 4, 2); g.fillRect(BOX - 2, BOY, 2, BH * CW); g.fillRect(BOX + BW * CW, BOY, 2, BH * CW);
-  g.fillStyle = '#0000002a'; g.fillRect(0, BOY + BH * CW + 2, BLW, BLH);
-  if (r) { for (const c of r.values()) if (c.d) { const X = BOX + c.x * CW, Y = BOY + c.y * CW; g.fillStyle = '#fcfc5440'; g.fillRect(X + 1, Y + 1, CW - 1, CW - 1); g.fillStyle = '#fcfc54a0'; g.fillRect(X + 2, Y + 2, CW - 3, 1); g.fillRect(X + 2, Y + CW - 2, CW - 3, 1); g.fillRect(X + 2, Y + 2, 1, CW - 3); g.fillRect(X + CW - 2, Y + 2, 1, CW - 3); }
-    for (const o of B.units) if (o.alive && o.side === 'R' && !o.hidden) { const X = BOX + o.x * CW, Y = BOY + o.y * CW, k = Math.floor(clock * 3) % 2; g.fillStyle = k ? '#e40058c0' : '#fc7460c0'; g.fillRect(X + 1, Y + 1, CW - 1, 2); g.fillRect(X + 1, Y + CW - 2, CW - 1, 2); g.fillRect(X + 1, Y + 1, 2, CW - 1); g.fillRect(X + CW - 2, Y + 1, 2, CW - 1); } }
-  for (const key in B.terr) { const t = B.terr[key], [x, y] = key.split(',').map(Number); if (t.k !== 'fog' && seeTerr(t)) g.drawImage(SPR.terr(t.k, fr), BOX + x * CW, BOY + y * CW); }
+  g.clearRect(0, 0, BLW, BLH); if (pass === 'bg' && window.MHR && MHR.paintField && MHR.paintField()) {} // painted field sprite sits under this layer
+  else g.drawImage(SPR.field(BLW, BLH, CW, B.seed), 0, BOY, BLW, PER, 0, BOY, BLW, PER); // field only inside the wrap band (copies tile seamlessly)
+  // hex grid: soft checker + two-tone outlines (crisp at any zoom); no outer frame top/bottom - the rows wrap
+  g.lineWidth = 1;
+  g.drawImage(hexGrid(), 0, 0);
+  if (r) { for (const c of r.values()) if (c.d) { hexPath(g, c.x, c.y, 1); g.fillStyle = '#fcfc5440'; g.fill(); hexPath(g, c.x, c.y, 2); g.strokeStyle = '#fcfc54a0'; g.stroke(); }
+    for (const o of B.units) if (o.alive && o.side === 'R' && !o.hidden) { const k = Math.floor(clock * 3) % 2; hexPath(g, o.x, o.y, 1.5); g.lineWidth = 2; g.strokeStyle = k ? '#e40058c0' : '#fc7460c0'; g.stroke(); g.lineWidth = 1; } }
+  for (const key in B.terr) { const t = B.terr[key], [x, y] = key.split(',').map(Number); if (t.k !== 'fog' && seeTerr(t)) g.drawImage(SPR.terr(t.k, fr), hxp(x, y), hyp(y)); }
   if (B.phase === 'pre') {
     const a = 0.16 + 0.08 * Math.sin(clock * 4); g.fillStyle = `rgba(60,188,252,${a})`;
-    for (const x of deployCols('L')) for (let y = 0; y < BH; y++) if (inDeploy('L', x, y)) g.fillRect(BOX + x * CW + 1, BOY + y * CW + 1, CW - 1, CW - 1);
-    g.fillStyle = '#000a'; g.fillRect(BOX, BOY + BH * CW - 9, CW * 2, 9); smallTxt(g, 'YOUR DEPLOY', BOX + CW, BOY + BH * CW - 2, '#3cbcfc', 'center');
-    if (UI.preTerr) { g.fillStyle = '#d858f820'; g.fillRect(BOX, BOY, BW * CW, BH * CW); }
-    const su = UI.preSel && uById(UI.preSel); if (su) { g.strokeStyle = '#f8b800'; g.lineWidth = 1; g.strokeRect(BOX + su.x * CW + 0.5, BOY + su.y * CW + 0.5, CW - 1, CW - 1); }
+    for (const x of deployCols('L')) for (let y = 0; y < BH; y++) if (inDeploy('L', x, y)) { hexPath(g, x, y, 1); g.fill(); }
+    if (UI.preTerr) { g.fillStyle = '#d858f820'; g.fillRect(BOX, BOY, BW * CW + CW / 2, PER); }
+    const su = UI.preSel && uById(UI.preSel); if (su) { g.strokeStyle = '#f8b800'; g.lineWidth = 1; hexPath(g, su.x, su.y, 1); g.stroke(); }
   }
-  for (const k of B.obst) { const [x, y] = k.split(',').map(Number); g.drawImage(SPR.boulder(), BOX + x * CW, BOY + y * CW); }
+  for (const k of B.obst) { const [x, y] = k.split(',').map(Number); g.drawImage(SPR.boulder(), hxp(x, y), hyp(y)); }
   if (B.siege) {
     const S = B.siege, necro = ['necro', 'inferno', 'dwarf'].includes(B.ctx.def.town.faction);
     for (let y = 0; y < BH; y++) {
-      const c = S.cells[y], X = BOX + S.x * CW, Y = BOY + y * CW;
+      const c = S.cells[y], X = hxp(S.x, y), Y = hyp(y);
       if (c.kind === 'tower') { const sh = S.shots.some(s => s.y === y && B.clock >= s.at && B.clock < s.at + 0.25); g.drawImage(SPR.tower(necro, sh ? 1 : 0), X, Y - 12); continue; }
       g.drawImage(SPR.wall(c.kind, c.shown <= 0 ? 2 : c.shown < c.max ? 1 : 0, necro), X, Y);
-      if (c.shown > 0) { g.fillStyle = '#000'; g.fillRect(X + 4, Y + CW - 3, 16, 3); g.fillStyle = '#58d854'; g.fillRect(X + 5, Y + CW - 2, Math.round(14 * c.shown / c.max), 1); }
+      if (c.shown > 0) { g.fillStyle = '#000'; g.fillRect(X + 4, Y + RH - 3, 16, 3); g.fillStyle = '#58d854'; g.fillRect(X + 5, Y + RH - 2, Math.round(14 * c.shown / c.max), 1); }
     }
     const fired = S.fire.some(t => B.clock >= t && B.clock < t + 0.3), cimg = SPR.catapult(fired ? 1 : 0);
-    g.drawImage(S.att === 'L' ? cimg : SPR.flip(cimg), BOX + S.cat.x * CW, BOY + S.cat.y * CW);
+    g.drawImage(S.att === 'L' ? cimg : SPR.flip(cimg), hxp(S.cat.x, S.cat.y), hyp(S.cat.y));
     if (B.phase === 'plan' && S.att === 'L' && wallIntact(S.target)) { const k = Math.floor(clock * 4) % 2, [cx, cy] = cellC(S.x, S.target); g.fillStyle = k ? '#f8b800' : '#e40058'; g.fillRect(cx - 7, cy, 5, 1); g.fillRect(cx + 3, cy, 5, 1); g.fillRect(cx, cy - 7, 1, 5); g.fillRect(cx, cy + 3, 1, 5); }
   }
   if (B.phase === 'plan') {
@@ -1586,26 +1593,26 @@ function drawBattle(g, pass = 'all') {
       const u = uById(id), p = B.plans[id]; if (!u || u.side !== 'L' || p.t === 'def') continue;
       const t = p.t === 'atk' ? uById(p.target) : p; if (!t) continue;
       const col = p.t === 'atk' ? '#e40058' : '#58d854', pts = planPath(u, p, t); // follow the real BFS route (never through rocks)
-      for (let i = 1; i < pts.length; i++) { const [x0, y0] = cellC(pts[i - 1].x, pts[i - 1].y), [x1, y1] = cellC(pts[i].x, pts[i].y); dotLine(g, x0, y0, x1, y1, col); }
+      for (let i = 1; i < pts.length; i++) { const [x0, y0] = cellC(pts[i - 1].x, pts[i - 1].y), [x1, y1] = cellC(pts[i].x, nearY(pts[i - 1].y, pts[i].y)); dotLineW(g, x0, y0, x1, y1, col); }
     }
   }
   }
   const vis = B.units.filter(u => !u.gone && !(u.hidden && u.side === 'R') && (u.alive || u.deadAt == null || B.clock < u.deadAt + 0.6)).sort((a, b) => a.ry - b.ry);
   for (const u of vis) {
-    let X = BOX + u.rx * CW, Y = BOY + u.ry * CW - 4, f = Math.floor(clock * 2 + u.ph) % 2, flash = false;
+    let X = hxp(u.rx, u.ry), Y = hyp(u.ry) - 6, f = Math.floor(clock * 2 + u.ph) % 2, flash = false;
     for (const a of u.atk) { const k = (B.clock - a.at) / 0.3; if (k >= 0 && k <= 1) { f = 2; const e = k < 0.6 ? k / 0.6 : (1 - k) / 0.4; X += a.dx * e * 9; Y += a.dy * e * 9; } }
     for (const h of u.hit) { const k = B.clock - h; if (k >= 0 && k < 0.22) { flash = Math.floor(k * 20) % 2 === 0; X += Math.floor(k * 40) % 2 ? 1 : -1; } }
     const dying = u.deadAt != null && B.clock >= u.deadAt;
     if (dying) { const k = Math.min(1, (B.clock - u.deadAt) / 0.6); g.globalAlpha = 1 - k; Y += k * 6; }
     else if (u.hidden) g.globalAlpha = 0.45 + 0.1 * Math.sin(clock * 5);
-    const tc = u.side === 'L' ? '#3cbcfc' : '#fc4878', sy = Math.round(BOY + u.ry * CW + 18), sx = Math.round(X);
+    const tc = u.side === 'L' ? '#3cbcfc' : '#fc4878', sy = Math.round(hyp(u.ry) + 16), sx = Math.round(X);
     if (BG) { g.fillStyle = '#00000060'; g.fillRect(sx + 4, sy + 1, 16, 3); g.fillRect(sx + 6, sy + 4, 12, 1);
     g.fillStyle = tc; g.fillRect(sx + 5, sy, 14, 1); g.fillRect(sx + 3, sy + 1, 2, 2); g.fillRect(sx + 19, sy + 1, 2, 2); g.fillRect(sx + 5, sy + 3, 14, 1); }
     if (pass === 'all') g.drawImage(flash ? SPR.unitFlash(u.type, f, u.side === 'R') : SPR.unitTeam(u.type, f, u.side === 'R', u.side === 'L' ? '#1c5cb0' : '#9c1840'), sx, Math.round(Y));
     g.globalAlpha = 1;
     if (!dying && FG) {
-      const s = u.side === 'R' && !(B.tac.L.intel >= 1) ? rough(u.shown) : String(u.shown), w = s.length * 6 + 3, bx = Math.round(X) + (u.side === 'L' ? -3 : CW - w + 3), by = BOY + u.ry * CW + CW - 9; // back corner, so the badge never covers the unit
-      g.fillStyle = '#000'; g.fillRect(bx - 1, by - 1, w + 2, 11); g.fillStyle = u.side === 'L' ? '#2058d0' : '#b01038'; g.fillRect(bx, by, w, 9); g.fillStyle = u.side === 'L' ? '#78c8fc' : '#fc7898'; g.fillRect(bx, by, w, 1);
+      const s = u.side === 'R' && !(B.tac.L.intel >= 1) ? rough(u.shown) : String(u.shown), w = s.length * 6 + 3, bx = Math.round(X) + (u.side === 'L' ? -3 : CW - w + 3), by = Math.round(hyp(u.ry) + RH - 6); // back corner, so the badge never covers the unit
+      g.fillStyle = '#000'; g.fillRect(bx - 1, by - 1, w + 2, 11); g.fillStyle = u.side === 'L' ? '#1c4cb8' : '#a01034'; g.fillRect(bx, by, w, 9); // plain number badge
       g.font = '8px PS2P, monospace'; g.textAlign = 'left'; g.fillStyle = '#000'; g.save(); g.translate(bx + 3, by + 9); g.scale(0.75, 0.875); g.fillText(s, 0, 0); g.restore(); g.fillStyle = '#fcfcfc'; g.save(); g.translate(bx + 2, by + 8); g.scale(0.75, 0.875); g.fillText(s, 0, 0); g.restore();
       if (B.phase === 'plan' && B.plans[u.id] && B.plans[u.id].t === 'def' && u.side === 'L') { g.fillStyle = '#000'; g.fillRect(X + 1, Y + 3, 7, 8); g.fillStyle = '#f8b800'; g.fillRect(X + 2, Y + 4, 5, 5); g.fillRect(X + 3, Y + 9, 3, 1); }
     }
@@ -1613,20 +1620,37 @@ function drawBattle(g, pass = 'all') {
   if (!FG) return;
   if (pass !== 'fgn') for (const p of B.proj) { // 'fgn': the render layer draws projectiles itself
     const k = (B.clock - p.at) / p.dur; if (k < 0 || k > 1) continue;
-    const [x0, y0] = cellC(p.fx, p.fy), [x1, y1] = cellC(p.tx, p.ty), x = x0 + (x1 - x0) * k, y = y0 + (y1 - y0) * k - Math.sin(k * Math.PI) * (p.arc || 14) - 4;
+    const [x0, y0] = cellC(p.fx, p.fy), [x1, y1] = cellC(p.tx, nearY(p.fy, p.ty)), x = x0 + (x1 - x0) * k, y = y0 + (y1 - y0) * k - Math.sin(k * Math.PI) * (p.arc || 14) - 4;
     if (p.kind === 'arrow') { const a = Math.atan2(y1 - y0 - Math.cos(k * Math.PI) * 14 * Math.PI, x1 - x0); for (let i = 0; i < 9; i++) { g.fillStyle = i < 2 ? '#fcfcfc' : i > 6 ? '#e40058' : '#c8a060'; g.fillRect(Math.round(x - Math.cos(a) * i), Math.round(y - Math.sin(a) * i), i < 2 ? 2 : 1, i < 2 ? 2 : 1); } }
     else if (p.kind === 'boulder') { g.fillStyle = '#000'; g.fillRect(Math.round(x) - 3, Math.round(y) - 3, 6, 6); g.fillStyle = '#8c8c8c'; g.fillRect(Math.round(x) - 2, Math.round(y) - 2, 4, 4); g.fillStyle = '#c8c8c8'; g.fillRect(Math.round(x) - 1, Math.round(y) - 2, 2, 1); }
     else { g.fillStyle = '#000'; g.fillRect(Math.round(x) - 2, Math.round(y) - 2, 5, 5); g.fillStyle = p.col; g.fillRect(Math.round(x) - 1, Math.round(y) - 1, 3, 3); g.fillStyle = '#fcfcfc'; g.fillRect(Math.round(x), Math.round(y), 1, 1); }
   }
-  for (const key in B.terr) { const t = B.terr[key], [x, y] = key.split(',').map(Number); if (t.k === 'fog' && seeTerr(t)) { g.globalAlpha = 0.42; g.drawImage(SPR.terr('fog', fr), BOX + x * CW, BOY + y * CW); g.globalAlpha = 1; } }
+  for (const key in B.terr) { const t = B.terr[key], [x, y] = key.split(',').map(Number); if (t.k === 'fog' && seeTerr(t)) { g.globalAlpha = 0.42; g.drawImage(SPR.terr('fog', fr), hxp(x, y), hyp(y)); g.globalAlpha = 1; } }
   for (const e of B.eff) drawSpellFx(g, e);
   for (const f of UI.fx) if (f.t >= 0) { const [x, y] = cellC(f.x, f.y); txt(g, f.text, x, y - 10 - Math.round(f.t * 16), f.col); }
   if (B.phase === 'plan') {
     const s = B.spell.L && uById(B.spell.L.target);
-    if (s) { const k = Math.floor(clock * 4) % 2; g.strokeStyle = '#d858f8'; g.lineWidth = 1; g.strokeRect(BOX + s.x * CW + 1.5 - k, BOY + s.y * CW + 1.5 - k, CW - 3 + k * 2, CW - 3 + k * 2); }
-    if (selU) { const k = Math.floor(clock * 4) % 2; g.fillStyle = '#f8b800'; const X = BOX + selU.x * CW, Y = BOY + selU.y * CW; for (const [cx, cy] of [[0, 0], [CW - 5, 0], [0, CW - 1], [CW - 5, CW - 1]]) g.fillRect(X + cx - k + (cx ? 2 * k : 0), Y + cy, 5, 1); for (const [cx, cy] of [[0, 0], [CW - 1, 0], [0, CW - 5], [CW - 1, CW - 5]]) g.fillRect(X + cx, Y + cy - k + (cy ? 2 * k : 0), 1, 5); }
+    if (s) { g.strokeStyle = Math.floor(clock * 4) % 2 ? '#d858f8' : '#fcb8fc'; hexPath(g, s.x, s.y, 1); g.stroke(); }
+    if (selU) { const k = Math.floor(clock * 4) % 2; hexPath(g, selU.x, selU.y, 0.5 + k); g.lineWidth = 2; g.strokeStyle = '#f8b800'; g.stroke(); g.lineWidth = 1; }
   }
 }
+let gridC = null;
+function hexGrid() { // static hex grid layer, drawn once (352 hexes would cost ~3ms per frame)
+  if (gridC) return gridC; gridC = document.createElement('canvas'); gridC.width = BLW; gridC.height = BLH; const g = gridC.getContext('2d'); g.lineWidth = 1;
+  for (let y = 0; y < BH; y++) for (let x = 0; x < BW; x++) { hexPath(g, x, y); if ((x + (y >> 1)) % 2) { g.fillStyle = '#0000001a'; g.fill(); } g.strokeStyle = '#00000048'; g.stroke(); hexPath(g, x, y, 1); g.strokeStyle = '#ffffff12'; g.stroke(); }
+  g.fillStyle = '#000'; g.fillRect(BOX - 3, BOY, 2, PER); g.fillRect(BOX + BW * CW + CW / 2 + 1, BOY, 2, PER); return gridC;
+}
+function drawBattleHeader(g) { // pinned strip above the scrolling, wrapping field
+  g.imageSmoothingEnabled = false; g.clearRect(0, 0, g.canvas.width, g.canvas.height);
+  g.fillStyle = '#10102a'; g.fillRect(0, 0, BLW, HDR - 2); g.fillStyle = '#000'; g.fillRect(0, HDR - 2, BLW, 2);
+  txt(g, B.phase === 'pre' ? 'PRE-BATTLE' : 'ROUND ' + (B.phase === 'plan' ? B.round : B.round - 1) + ' - ' + (B.phase === 'plan' ? 'PLAN' : (B.stage || 'RESOLVE')), BLW / 2, 10, B.phase === 'resolve' ? '#58d854' : '#f8b800');
+  const hl = heroOf('L'), hr = heroOf('R');
+  txt(g, hl ? hl.name + ' ' + hl.mana + 'MP' : 'GARRISON', 3, 20, '#3cbcfc', 'left');
+  txt(g, hr ? hr.name : (B.sides.R.monster ? 'NEUTRALS' : 'GARRISON'), BLW - 3, 20, '#e40058', 'right');
+  const tl = s => { const t = B.tac[s].tactic; if (s === 'R' && B.tac.L.intel < 2) return '???'; return t ? TACTICS[t].name.toUpperCase() + (blunted(s) ? '-X' : '') : '-'; };
+  smallTxt(g, tl('L'), 3, 8, blunted('L') ? '#888' : '#f8b800', 'left'); smallTxt(g, tl('R'), BLW - 3, 8, blunted('R') ? '#888' : '#f8b800', 'right');
+}
+const hcv = document.createElement('canvas'); hcv.width = BLW; hcv.height = HDR; const hctx = hcv.getContext('2d');
 function drawSpellFx(g, e) {
   const k = (B.clock - e.at) / 0.6; if (k < 0 || k > 1) return;
   const [x, y] = cellC(e.tx, e.ty);
@@ -1636,17 +1660,37 @@ function drawSpellFx(g, e) {
   if (e.k === 'haste') for (let i = 0; i < 4; i++) { g.fillStyle = '#3cbcfc'; g.fillRect(x - 14 + ((k * 40 + i * 9) % 28), y - 8 + i * 5, 6, 1); }
   if (e.k === 'slow') { const r = Math.round(14 * (1 - k)) + 3; g.strokeStyle = '#f8b800'; g.lineWidth = 1; g.strokeRect(x - r + 0.5, y - r + 0.5, r * 2, r * 2); }
 }
-function renderBattleScreen() {
-  const pix = window.MHR && MHR.ready();
-  if (!pix) drawBattle(bctx);
+// battle camera: B.cam = {z, cx, cy} (zoom on top of the fit scale, view centre in field px). x is clamped to the field,
+// y wraps freely (the field is drawn as vertically tiled copies; copies other than the one under the view centre are dimmed)
+function battleView() {
   const pe = $('pre'), pre = B.phase === 'pre' && pe.style.display !== 'none', wide = pre && innerWidth >= 900, pw = wide ? pe.offsetWidth * CAM.dpr : 0, ph = pre && !wide ? pe.offsetHeight * CAM.dpr : 0;
-  const aw = CAM.w - pw, ah = CAM.h - ph, fit = Math.min(aw / BLW, ah / BLH), s = Math.max(1, fit >= 3 ? Math.floor(fit) : Math.floor(fit * 4) / 4);
-  BV = {s, ox: Math.floor((aw - BLW * s) / 2), oy: Math.max(0, Math.floor((ah - BLH * s) / 2))};
+  const aw = CAM.w - pw, ah = CAM.h - ph, fit = Math.min(aw / BLW, (ah) / (PER + HDR + 8)), s0 = Math.max(0.5, fit);
+  const C = B.cam || (B.cam = {z: Math.min(2.4, Math.max(1, (ah * 0.92) / ((PER + HDR) * s0))), cx: BLW / 2, cy: BOY + PER / 2});
+  const s = s0 * C.z, hs = Math.min(s, aw / BLW), hh = Math.round(HDR * hs), top = hh, vh = ah - hh;
+  const half = aw / 2 / s; C.cx = BLW * s <= aw ? BLW / 2 : Math.max(half, Math.min(BLW - half, C.cx));
+  C.cy = BOY + (((C.cy - BOY) % PER) + PER) % PER;
+  BV = {s, s0, ox: Math.round(aw / 2 - C.cx * s), oy: Math.round(top + vh / 2 - C.cy * s), hs, hh, aw, ah, top};
+  return BV;
+}
+function battleZoom(z, sx = BV.aw / 2, sy = BV.top + (BV.ah - BV.top) / 2) {
+  const C = B.cam, lx = (sx - BV.ox) / BV.s, ly = (sy - BV.oy) / BV.s; C.z = Math.max(1, Math.min(4, z)); battleView();
+  C.cx += lx - (sx - BV.ox) / BV.s; C.cy += ly - (sy - BV.oy) / BV.s; battleView();
+}
+function battlePan(dx, dy) { if (!B || !B.cam) return; B.cam.cx -= dx / BV.s; B.cam.cy -= dy / BV.s; battleView(); }
+const bandKs = () => { const k0 = Math.floor((BV.top - (BV.oy + BOY * BV.s)) / (PER * BV.s)), k1 = Math.ceil((BV.ah - (BV.oy + BOY * BV.s)) / (PER * BV.s)); const out = []; for (let k = k0; k <= k1; k++) out.push(k); return out; };
+function renderBattleScreen() {
+  const pix = window.MHR && MHR.ready(); battleView(); drawBattleHeader(hctx);
+  const s = BV.s;
   ctx.imageSmoothingEnabled = false; ctx.fillStyle = '#10101e'; ctx.fillRect(0, 0, CAM.w, CAM.h);
   let sx = 0, sy = 0; for (const k of B.shake || []) { const e = B.clock - k.at; if (e >= 0 && e < 0.25) { const m = k.mag * (1 - e / 0.25) * s; sx += Math.round(Math.sin(e * 90) * m); sy += Math.round(Math.cos(e * 70) * m * 0.6); } }
   if (pix && MHR.battle(sx, sy)) return; // Pixi render layer
-  if (pix) drawBattle(bctx);
-  ctx.drawImage(bcv, BV.ox + sx, BV.oy + sy, BLW * s, BLH * s);
+  drawBattle(bctx);
+  ctx.save(); ctx.beginPath(); ctx.rect(0, BV.top, BV.aw, BV.ah - BV.top); ctx.clip();
+  for (const k of bandKs()) { const oy = BV.oy + sy + k * PER * s; ctx.drawImage(bcv, BV.ox + sx, oy, BLW * s, BLH * s); }
+  for (const k of bandKs()) if (k) { ctx.fillStyle = '#05050c66'; ctx.fillRect(BV.ox + sx, BV.oy + sy + (BOY + k * PER) * s, BLW * s, PER * s); } // dim the wrapped copies
+  ctx.fillStyle = '#f8b80080'; for (const k of [0, 1]) ctx.fillRect(BV.ox + sx, Math.round(BV.oy + sy + (BOY + k * PER) * s) - 1, BLW * s, 2); // the seam
+  ctx.restore();
+  ctx.drawImage(hcv, Math.round((BV.aw - BLW * BV.hs) / 2), 0, BLW * BV.hs, BV.hh);
 }
 function renderTitle() {
   const g = bctx; g.imageSmoothingEnabled = false;
@@ -1709,8 +1753,21 @@ function syncBars() {
 // ---------- main loop (all timers use real elapsed time, so speed is frame-rate independent) ----------
 let last = performance.now();
 const STEP = 0.13;
+// frame cap (MENU > GRAPHICS: 30 default, 60) + DEBUG overlay (MENU > DEBUG)
+const FCAP = () => +(localStorage.getItem('mh-fps') || 30), DBG = {on: localStorage.getItem('mh-debug') === '1', fr: [], t: 0};
+function debugTick(now) {
+  DBG.fr.push(now); while (DBG.fr.length && DBG.fr[0] < now - 5000) DBG.fr.shift();
+  let el = $('dbg'); if (!DBG.on) { if (el) el.style.display = 'none'; return; }
+  if (now - DBG.t < 500) return; DBG.t = now;
+  if (!el) { el = document.createElement('pre'); el.id = 'dbg'; document.body.appendChild(el); } el.style.display = '';
+  const f = DBG.fr, n = f.length, avg = n > 1 ? (n - 1) * 1000 / (f[n - 1] - f[0]) : 0; let mx = 0; for (let i = 1; i < n; i++) mx = Math.max(mx, f[i] - f[i - 1]);
+  const d = window.MHR && MHR.debug && MHR.debug(), pm = performance.memory, MB = b => (b / 1048576).toFixed(1) + 'MB';
+  el.textContent = `FPS ${avg.toFixed(0)} avg / ${mx ? (1000 / mx).toFixed(0) : 0} min (5s) cap ${FCAP()}\nrenderer ${window.MHR ? MHR.mode() : 'canvas'} ${localStorage.getItem('mh-quality') === 'low' ? 'LOW' : 'HIGH'}  dpr ${devicePixelRatio} -> ${CAM.dpr}${d ? ' x' + d.res.toFixed(2) : ''}\n` +
+    (d ? `GPU tex ~${MB(d.mem)}  sprites ${d.sprites}  particles ${d.parts}\natlases [${d.atlases.join(', ')}]\n` : `canvas ${cv.width}x${cv.height} ~${MB(cv.width * cv.height * 4)}\n`) + (pm ? `JS heap ${MB(pm.usedJSHeapSize)} / ${MB(pm.jsHeapSizeLimit)}` : 'JS heap n/a');
+}
 function loop(now) {
-  const dt = Math.min(0.1, (now - last) / 1000); last = now; clock += dt;
+  if (now - last < 1000 / FCAP() - 4) { requestAnimationFrame(loop); return; }
+  const dt = Math.min(0.1, (now - last) / 1000); last = now; clock += dt; debugTick(now);
   fitCanvas();
   if (msgTimer > 0 && (msgTimer -= dt) <= 0 && UI.mode === 'map') $('msg').textContent = '';
   if (!UI.panel) {
@@ -1722,7 +1779,7 @@ function loop(now) {
   if (B && B.phase !== 'resolve') UI.skip = false;
   if (B && B.autoB && B.phase === 'plan' && !UI.panel) { planSide('L', true); resolveRound(); }
   if (B) { B.clock += bdt; while (B && B.ev.length && B.ev[0].at <= B.clock) B.ev.shift().fn(); }
-  if (B) for (const u of B.units) { const k = 1 - Math.exp(-dt * 9); u.rx += (u.gx - u.rx) * k; u.ry += (u.gy - u.ry) * k; }
+  if (B) for (const u of B.units) { const k = 1 - Math.exp(-dt * 9); if (u.gy - u.ry > BH / 2) u.ry += BH; else if (u.ry - u.gy > BH / 2) u.ry -= BH; u.rx += (u.gx - u.rx) * k; u.ry += (u.gy - u.ry) * k; } // short way across the seam
   UI.fx = UI.fx.filter(f => (f.t += B ? bdt : dt) < f.life);
   if (G) {
     const spd = dt / STEP * 1.05;
@@ -1851,7 +1908,7 @@ function openTech() {
 }
 function openMenu() {
   const has = !!localStorage.getItem(SAVE_KEY), auto = !!localStorage.getItem(SAVE_KEY + '-auto');
-  showPanel(() => `<h2>MENU</h2><div class="bar">${btn('SAVE', 'save', '', 'g', !G || UI.mode !== 'map')}${btn('LOAD', 'load', '', 'alt', !has)}${btn('LOAD AUTOSAVE', 'loadauto', '', 'alt', !auto)}${btn('NEW GAME', 'new', '', 'y')}${btn('CAMPAIGN', 'campaign', '', 'y')}${btn('TUTORIAL', 'tutorial', '', 'p')}${window.MHR ? btn('GRAPHICS: ' + MHR.label(), 'renderer', '', 'alt') : ''}${G ? btn('CLOSE', 'close', '', 'g') : ''}</div>
+  showPanel(() => `<h2>MENU</h2><div class="bar">${btn('SAVE', 'save', '', 'g', !G || UI.mode !== 'map')}${btn('LOAD', 'load', '', 'alt', !has)}${btn('LOAD AUTOSAVE', 'loadauto', '', 'alt', !auto)}${btn('NEW GAME', 'new', '', 'y')}${btn('CAMPAIGN', 'campaign', '', 'y')}${btn('TUTORIAL', 'tutorial', '', 'p')}${window.MHR ? btn('GRAPHICS: ' + MHR.label(), 'renderer', '', 'alt') : ''}${btn('FPS CAP: ' + FCAP(), 'fpscap', '', 'alt')}${btn('QUALITY: ' + (localStorage.getItem('mh-quality') === 'low' ? 'LOW' : 'HIGH'), 'quality', '', 'alt')}${btn('DEBUG: ' + (DBG.on ? 'ON' : 'OFF'), 'debug', '', 'alt')}${G ? btn('CLOSE', 'close', '', 'g') : ''}</div>
     <h3>HOW TO PLAY</h3><p>Explore, grab resources, flag mines and grow your army. Build dwellings in town; creatures grow each week (day 1 of every week).
     Capture the enemy town to win. Lose all towns and heroes and you lose.</p>
     <h3>BATTLE</h3><p>PLAN: tap your stack, then tap an empty tile (move), an enemy (attack) or the stack again (defend). Cast one spell per round with SPELL.
@@ -1919,6 +1976,9 @@ const ACTIONS = {
   cast: k => { closePanel(); if (!B) return; if (!k) { B.spell.L = null; B.spellPick = null; msg('No spell this round'); } else { B.spellPick = k; msg('Tap a target for ' + SPELLS[k].name); SFX.magic(); } },
   endday: () => { if (UI.mode !== 'map' || UI.panel) return; const w = endDayWarnings(); if (!w.length) return endDay();
     showPanel(() => `<h2>END DAY?</h2><p>You still have things to do today:</p>${w.map(x => `<div class="it"><div class="t">${x}</div></div>`).join('')}<div class="bar" style="margin-top:8px">${btn('END DAY', 'enddayok', '', 'y')}${btn('CANCEL', 'close', '', 'g')}</div>`); },
+  fpscap: () => { localStorage.setItem('mh-fps', FCAP() === 30 ? '60' : '30'); refreshPanel(); },
+  quality: () => { localStorage.setItem('mh-quality', localStorage.getItem('mh-quality') === 'low' ? 'high' : 'low'); refreshPanel(); },
+  debug: () => { DBG.on = !DBG.on; localStorage.setItem('mh-debug', DBG.on ? '1' : '0'); refreshPanel(); },
   enddayok: () => { closePanel(); endDay(); }, town: () => { const h = curHero(), t = (h && townAt(h.x, h.y) && townAt(h.x, h.y).owner === 'player') ? townAt(h.x, h.y) : G.towns.find(t => t.owner === 'player'); t ? openTown(t) : msg('You have no town!'); },
   hero: () => openHero(), menu: () => openMenu(),
   next: () => { const hs = myHeroes(); if (!hs.length) return; const i = hs.indexOf(curHero()); G.sel = hs[(i + 1) % hs.length].id; UI.preview = null; msg(curHero().name + ' selected'); centerOn(curHero().x, curHero().y); },
@@ -2036,8 +2096,7 @@ $('panel').addEventListener('click', e => { if (e.target.id === 'panel') closePa
 function autoBtns() { const a = document.querySelector('[data-a=autob]'), st = document.querySelector('[data-a=autostop]'); if (!a) return;
   a.textContent = !B || !B.autoB ? 'AUTO BATTLE' : B.autoSkip ? 'SKIPPING…' : 'SKIP ▸▸'; if (st) st.style.display = B && B.autoB ? '' : 'none'; }
 function battleTap(mx, my) {
-  const gx = Math.floor((mx - BOX) / CW), gy = Math.floor((my - BOY) / CW);
-  if (gx < 0 || gy < 0 || gx >= BW || gy >= BH) return;
+  const c = hexAt(mx, my); if (!c) return; const [gx, gy] = c;
   if (B.phase === 'pre') { preTap(gx, gy); return; }
   if (B.phase !== 'plan') return;
   const u0 = uAt(gx, gy), u = u0 && u0.hidden && u0.side === 'R' ? null : u0;
@@ -2073,7 +2132,8 @@ const ptrs = new Map(); let drag = null;
 const pinchDist = () => { const [a, b] = [...ptrs.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
 cv.addEventListener('pointerdown', e => {
   cv.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, {x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY});
-  if (ptrs.size === 1) drag = {moved: false, sx: e.clientX, sy: e.clientY}; else if (ptrs.size === 2) drag = {moved: true, pinch: pinchDist(), z: CAM.z};
+  if (ptrs.size === 1) { const c = UI.mode === 'battle' && B && B.phase === 'pre' && toCell(e.clientX, e.clientY), u = c && uAt(c[0], c[1]); drag = {moved: false, sx: e.clientX, sy: e.clientY, unit: !!(u && u.side === 'L')}; }
+  else if (ptrs.size === 2) drag = {moved: true, pinch: pinchDist(), z: UI.mode === 'battle' && B && B.cam ? B.cam.z : CAM.z};
 });
 cv.addEventListener('pointermove', e => {
   if (e.pointerType === 'mouse' && !ptrs.size && (UI.mode === 'map' || UI.mode === 'aiturn') && G && !UI.panel) { const r = cv.getBoundingClientRect(), sx = (e.clientX - r.left) * CAM.dpr, sy = (e.clientY - r.top) * CAM.dpr, tx = Math.floor((CAM.x + sx / CAM.z) / TS), ty = Math.floor((CAM.y + sy / CAM.z) / TS); const k = tx + ',' + ty; if (k !== UI.hoverK) { UI.hoverK = k; showTip(tx, ty, e.clientX, e.clientY); } else UI.tipT = 2.2; }
@@ -2083,8 +2143,10 @@ cv.addEventListener('pointermove', e => {
   if (drag.pinch && ptrs.size === 2) {
     const r = cv.getBoundingClientRect(), [a, b] = [...ptrs.values()];
     if (panOK) setZoom(drag.z * pinchDist() / drag.pinch, ((a.x + b.x) / 2 - r.left) * CAM.dpr, ((a.y + b.y) / 2 - r.top) * CAM.dpr);
+    else if (UI.mode === 'battle' && B && B.cam) battleZoom(drag.z * pinchDist() / drag.pinch, ((a.x + b.x) / 2 - r.left) * CAM.dpr, ((a.y + b.y) / 2 - r.top) * CAM.dpr);
   } else if (ptrs.size === 1) {
     if (Math.hypot(e.clientX - p.sx, e.clientY - p.sy) > 8) drag.moved = true;
+    if (drag.moved && UI.mode === 'battle' && B && !drag.unit) battlePan(dx * CAM.dpr, dy * CAM.dpr);
     if (drag.moved && panOK) { CAM.x -= dx * CAM.dpr / CAM.z; CAM.y -= dy * CAM.dpr / CAM.z; CAM.target = null; clampCam(); }
   }
 });
@@ -2092,19 +2154,24 @@ function ptrEnd(e) {
   if (!ptrs.has(e.pointerId)) return;
   ptrs.delete(e.pointerId);
   if (e.type === 'pointerup' && drag && !drag.moved && !ptrs.size) tapAt(e.clientX, e.clientY);
-  else if (e.type === 'pointerup' && drag && drag.moved && !drag.pinch && UI.mode === 'battle' && B && B.phase === 'pre') { const a = toCell(drag.sx, drag.sy), b = toCell(e.clientX, e.clientY); if (a && b) preDrag(a[0], a[1], b[0], b[1]); }
+  else if (e.type === 'pointerup' && drag && drag.moved && drag.unit && !drag.pinch && UI.mode === 'battle' && B && B.phase === 'pre') { const a = toCell(drag.sx, drag.sy), b = toCell(e.clientX, e.clientY); if (a && b) preDrag(a[0], a[1], b[0], b[1]); }
   if (!ptrs.size) drag = null;
 }
 cv.addEventListener('pointerup', ptrEnd); cv.addEventListener('pointercancel', ptrEnd);
-cv.addEventListener('wheel', e => { e.preventDefault(); if (UI.mode === 'battle' || UI.mode === 'title') return; const r = cv.getBoundingClientRect(); setZoom(CAM.z + (e.deltaY < 0 ? 1 : -1), (e.clientX - r.left) * CAM.dpr, (e.clientY - r.top) * CAM.dpr); }, {passive: false});
-function toCell(cx, cy) { const r = cv.getBoundingClientRect(), mx = ((cx - r.left) * CAM.dpr - BV.ox) / BV.s, my = ((cy - r.top) * CAM.dpr - BV.oy) / BV.s, gx = Math.floor((mx - BOX) / CW), gy = Math.floor((my - BOY) / CW); return gx >= 0 && gy >= 0 && gx < BW && gy < BH ? [gx, gy] : null; }
+cv.addEventListener('wheel', e => { e.preventDefault(); if (UI.mode === 'battle' && B && B.cam) { const r = cv.getBoundingClientRect(); if (e.shiftKey) battlePan(0, -e.deltaY); else battleZoom(B.cam.z * (e.deltaY < 0 ? 1.15 : 1 / 1.15), (e.clientX - r.left) * CAM.dpr, (e.clientY - r.top) * CAM.dpr); return; } if (UI.mode === 'title') return; const r = cv.getBoundingClientRect(); setZoom(CAM.z + (e.deltaY < 0 ? 1 : -1), (e.clientX - r.left) * CAM.dpr, (e.clientY - r.top) * CAM.dpr); }, {passive: false});
+function hexAt(mx, my) { // field px (any wrapped copy) -> [x, y] of the hex under it, or null
+  const ly = BOY + ((((my - BOY) % PER) + PER) % PER), r0 = Math.floor((ly - BOY) / RH); let best = null;
+  for (let r = r0 - 1; r <= r0 + 1; r++) { const y = wy(r), cyy = BOY + r * RH + RH / 2, x = Math.round((mx - BOX - CW / 2 - (y & 1) * CW / 2) / CW); if (x < 0 || x >= BW) continue; const d = Math.hypot(mx - (BOX + x * CW + (y & 1) * CW / 2 + CW / 2), ly - cyy); if (!best || d < best.d) best = {x, y, d}; }
+  return best && best.d < CW * 0.62 ? [best.x, best.y] : null;
+}
+function toCell(cx, cy) { const r = cv.getBoundingClientRect(); return hexAt(((cx - r.left) * CAM.dpr - BV.ox) / BV.s, ((cy - r.top) * CAM.dpr - BV.oy) / BV.s); }
 function tapAt(cx, cy) {
   UI.lastTap = [cx, cy];
   if (UI.panel) return;
   const r = cv.getBoundingClientRect(), sx = (cx - r.left) * CAM.dpr, sy = (cy - r.top) * CAM.dpr;
   if (UI.mode === 'title' || !G) { openMenu(); return; }
   if (UI.mode === 'map') { const tx = Math.floor((CAM.x + sx / CAM.z) / TS), ty = Math.floor((CAM.y + sy / CAM.z) / TS); if (inMap(tx, ty)) tapMap(tx, ty); }
-  else if (UI.mode === 'battle' && B) battleTap((sx - BV.ox) / BV.s, (sy - BV.oy) / BV.s);
+  else if (UI.mode === 'battle' && B) { if (sy < BV.hh) return; battleTap((sx - BV.ox) / BV.s, (sy - BV.oy) / BV.s); }
 }
 for (const id of ['mini', 'mmap']) $(id).addEventListener('click', e => { e.stopPropagation(); const r = e.target.getBoundingClientRect(); centerOn(Math.floor((e.clientX - r.left) / r.width * MW), Math.floor((e.clientY - r.top) / r.height * MH)); });
 for (const ev of ['pointerdown', 'pointerup']) $('mmap').addEventListener(ev, e => e.stopPropagation());
@@ -2112,7 +2179,8 @@ $('fs').onclick = e => { e.stopPropagation(); const d = document; if (d.fullscre
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') { closePanel(); return; }
   if (UI.panel) return;
-  if (UI.mode === 'battle' && B && B.phase === 'pre') { if (e.key === 'Enter') startFight(); return; }
+  if (UI.mode === 'battle' && B && B.phase === 'pre' && !e.key.startsWith('Arrow') && !'+=-'.includes(e.key)) { if (e.key === 'Enter') startFight(); return; }
+  if (UI.mode === 'battle' && B && B.cam) { const st = 40 * CAM.dpr, d = {ArrowUp: [0, st], ArrowDown: [0, -st], ArrowLeft: [st, 0], ArrowRight: [-st, 0]}[e.key]; if (d) { e.preventDefault(); battlePan(d[0], d[1]); return; } if (e.key === '+' || e.key === '=') { battleZoom(B.cam.z * 1.2); return; } if (e.key === '-') { battleZoom(B.cam.z / 1.2); return; } }
   if (UI.mode === 'battle') { if (e.key === 'b') { $('book').classList.contains('show') ? closeBook() : openBook(); return; } if (e.key === 'Escape') { closeBook(); return; } if (e.key === 'Enter' || e.key === ' ') { closeBook(); resolveRound(); } if (e.key === 'a') ACTIONS.auto(); if (e.key === 's') ACTIONS.spell(); return; }
   if (e.key === '+' || e.key === '=') { setZoom(CAM.z + 1); return; } if (e.key === '-') { setZoom(CAM.z - 1); return; }
   if (UI.mode !== 'map') return;
@@ -2124,6 +2192,6 @@ document.addEventListener('keydown', e => {
 });
 $('mute').onclick = e => { e.stopPropagation(); muted = !muted; localStorage.setItem('mh-mute', muted ? '1' : '0'); $('mute').textContent = muted ? 'MUTE' : 'SND'; };
 $('mute').textContent = muted ? 'MUTE' : 'SND';
-window.MHX = {dijkstra, aiChoosePath, get layers() { return layers; }, addRP, pickTech, effStats, techList, techState, countWord, countText, recruit, build, sacrifice, sacValue, upgradeStack, newGame, openTech, openTown, RS, facOf, savings, dailyResearch, bCost, startBattle, get UNITS() { return UNITS; }, take, tipFor, threatOf, surrenderPrice, payPlans, doRetreat, doSurrender, openFlee, tradeBulk, mktState, mktMax, celebrate, objAt, moraleChance, get G() { return G; }, get B() { return B; }, setPolicy, slotCount, income, learnKT, growthOf, unitCost, newDay, hire, finishFight, KG, pol, maxMana, fight, startFight, tac, blunted, moveOf, calcDmg, intelOf, knownTactics, learnTalent, reach, uById, loadGame, applyFormation, placeTerrain, curHero, gainXp, flood, get PT() { return PT; }, get ET() { return ET; }, battleToClient: (lx, ly) => { const r = cv.getBoundingClientRect(); return [r.left + (BV.ox + lx * BV.s) / CAM.dpr, r.top + (BV.oy + ly * BV.s) / CAM.dpr]; }, UI, CAM, ACTIONS, tapMap, battleTap, endDay, resolveRound, cell: (x, y) => [BOX + x * CW + CW / 2, BOY + y * CW + CW / 2], tileToClient: (x, y) => { const r = cv.getBoundingClientRect(); return [r.left + ((x * TS + TS / 2 - CAM.x) * CAM.z) / CAM.dpr, r.top + ((y * TS + TS / 2 - CAM.y) * CAM.z) / CAM.dpr]; }}; // test hook
+window.MHX = {dijkstra, aiChoosePath, get layers() { return layers; }, addRP, pickTech, effStats, techList, techState, countWord, countText, recruit, build, sacrifice, sacValue, upgradeStack, newGame, openTech, openTown, RS, facOf, savings, dailyResearch, bCost, startBattle, get UNITS() { return UNITS; }, take, tipFor, threatOf, surrenderPrice, payPlans, doRetreat, doSurrender, openFlee, tradeBulk, mktState, mktMax, celebrate, objAt, moraleChance, get G() { return G; }, get B() { return B; }, setPolicy, slotCount, income, learnKT, growthOf, unitCost, newDay, hire, finishFight, KG, pol, maxMana, fight, startFight, tac, blunted, moveOf, calcDmg, intelOf, knownTactics, learnTalent, reach, uById, loadGame, applyFormation, placeTerrain, curHero, gainXp, flood, get PT() { return PT; }, get ET() { return ET; }, battleToClient: (lx, ly) => { const r = cv.getBoundingClientRect(), mid = (BV.top + BV.ah) / 2; while (BV.oy + ly * BV.s < mid - PER * BV.s / 2) ly += PER; while (BV.oy + ly * BV.s > mid + PER * BV.s / 2) ly -= PER; return [r.left + (BV.ox + lx * BV.s) / CAM.dpr, r.top + (BV.oy + ly * BV.s) / CAM.dpr]; }, UI, CAM, ACTIONS, tapMap, battleTap, endDay, resolveRound, cell: (x, y) => cellC(x, y), battleView: () => battleView(), battlePan: (x, y) => battlePan(x, y), battleZoom: z => battleZoom(z), hexDist, hexN, meleeOK: (a, b) => meleeOK(a, b), tileToClient: (x, y) => { const r = cv.getBoundingClientRect(); return [r.left + ((x * TS + TS / 2 - CAM.x) * CAM.z) / CAM.dpr, r.top + ((y * TS + TS / 2 - CAM.y) * CAM.z) / CAM.dpr]; }}; // test hook
 openMenu();
 requestAnimationFrame(loop);
