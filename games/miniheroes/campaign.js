@@ -3,9 +3,10 @@
 'use strict';
 const CAMP_KEY = 'mh-campaign';
 // Tier-8 mythical creatures (one per player, quest reward only)
-const MYTHIC = {castle: 'Archangel', necro: 'Lich King', sylvan: 'Phoenix', inferno: 'Arch Fiend', stronghold: 'Thunder Titan', dwarf: 'Forge Colossus'};
+const MYTHIC = {castle: 'Archangel', necro: 'Lich King', sylvan: 'Phoenix', inferno: 'Arch Fiend', stronghold: 'Thunder Titan', dwarf: 'Mountain King'};
 const MYTHIC_BASE = {castle: 'Champion', necro: 'Ghost Dragon', sylvan: 'Emerald Dragon', inferno: 'Arch Devil', stronghold: 'Ancient Behemoth', dwarf: 'Thunder Dreadnought'};
 for (const f in MYTHIC) { const b = UNITS[MYTHIC_BASE[f]]; UNITS[MYTHIC[f]] = {...b, fac: f, tier: 7, up: true, upName: null, base: MYTHIC[f], att: b.att + 6, def: b.def + 6, hp: Math.round(b.hp * 1.8), dmg: b.dmg.map(d => Math.round(d * 1.5)), move: b.move + 1, ab: [...new Set([...b.ab, 'Fly', 'SpellImm'])], cost: 9000, growth: 0, col: '#fcfc54', mythic: 1}; }
+UNITS['Forge Colossus'] = UNITS['Mountain King']; // 1.5 rename (old saves / campaign carry)
 SPR.mythicLook && SPR.mythicLook(MYTHIC_BASE, MYTHIC);
 const SAY = (who, t) => ({who, t});
 const MISSIONS = [

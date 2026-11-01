@@ -2030,6 +2030,7 @@ function migrate(g) {
   }
   g.heroes.forEach(h => { h.sk = h.sk || {}; if (!h.tal) { h.tal = {}; h.tp = Math.max(0, h.lvl - 1); } });
   setDims(g.map); layers = null;
+  const ren = a => a && a.forEach(s => { if (s.type === 'Forge Colossus') s.type = 'Mountain King'; }); (g.heroes || []).forEach(h => ren(h.army)); (g.towns || []).forEach(t => ren(t.garrison));
   return g;
 }
 function startGame(fn, note) {

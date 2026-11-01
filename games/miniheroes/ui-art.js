@@ -43,12 +43,28 @@
     g.globalAlpha = pa * Math.min(1, (1 - t) * 3); g.drawImage(c, x - w / 2, y - w / 2 - (e.k === 'lightning' ? w * 0.25 : 0), w, w); g.globalAlpha = pa;
   };
   // ---- soft fog edges: 1 px per tile, scaled up with smoothing (a cheap gradient; no per-pixel loops)
-  drawFog = function (c) {
+  // Broz fog edge strip (dark left -> clear right, tiles along y), rotated per side over revealed tiles next to fog
+  const fogEdge = img('fog-edge.webp'); fogEdge.onload = () => { try { if (layers) layers.fogN = -1; } catch (e) {} };
+  const softFog = function (c) {
     c.width = WW; c.height = WH; const g = c.getContext('2d'), s = document.createElement('canvas'); s.width = MW + 2; s.height = MH + 2; const sg = s.getContext('2d');
     sg.fillStyle = '#05050c'; sg.fillRect(0, 0, MW + 2, MH + 2); for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) if (G.fog[y][x]) sg.clearRect(x + 1, y + 1, 1, 1);
     const m = document.createElement('canvas'); m.width = (MW + 2) * 4; m.height = (MH + 2) * 4; const mg = m.getContext('2d'); mg.imageSmoothingEnabled = true; mg.drawImage(s, 0, 0, m.width, m.height);
     g.imageSmoothingEnabled = true; g.drawImage(m, -TS, -TS, (MW + 2) * TS, (MH + 2) * TS);
     for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) if (!G.fog[y][x]) { let n = 0; for (const [dx, dy] of DIRS8) if (inMap(x + dx, y + dy) && G.fog[y + dy][x + dx]) n++; if (!n) { g.fillStyle = '#05050c'; g.fillRect(x * TS, y * TS, TS, TS); } }
+  };
+  drawFog = function (c) {
+    if (!fogEdge.complete || !fogEdge.naturalWidth) return softFog(c);
+    c.width = WW; c.height = WH; const g = c.getContext('2d'); g.fillStyle = '#05050c'; g.imageSmoothingEnabled = true;
+    const fogged = (x, y) => inMap(x, y) && !G.fog[y][x], D = TS * 0.8, sh = fogEdge.naturalHeight / 4;
+    for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) if (!G.fog[y][x]) g.fillRect(x * TS, y * TS, TS, TS);
+    for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) {
+      if (!G.fog[y][x]) continue;
+      for (const [dx, dy, rot] of [[-1, 0, 0], [0, -1, 1], [1, 0, 2], [0, 1, 3]]) {
+        if (!fogged(x + dx, y + dy)) continue;
+        const sy = ((x * 7 + y * 13 + rot) % 4) * sh; g.save(); g.translate(x * TS + TS / 2, y * TS + TS / 2); g.rotate(rot * Math.PI / 2);
+        g.drawImage(fogEdge, 0, sy, fogEdge.naturalWidth, sh, -TS / 2, -TS / 2 - 2, D, TS + 4); g.restore();
+      }
+    }
   };
   // ---- shrine / spell learning popup + artifact popup art
   CELE_COL.spell = ['#b07cff', '#e2ccff'];

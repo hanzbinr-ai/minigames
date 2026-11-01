@@ -25,7 +25,7 @@ FACTIONS = {
   'sylvan': (['Sprite', 'Wolf Rider', 'Elf Archer', 'Druid', 'Unicorn', 'Treant', 'Green Dragon'], ['Faerie', 'Moon Rider', 'Grand Elf', 'Elder Druid', 'Silver Unicorn', 'Ancient Treant', 'Emerald Dragon'], 'Phoenix'),
   'inferno': (['Imp', 'Hell Hound', 'Succubus', 'Demon', 'Efreet', 'Pit Fiend', 'Devil'], ['Familiar', 'Cerberus', 'Temptress', 'Horned Demon', 'Efreet Sultan', 'Pit Lord', 'Arch Devil'], 'Arch Fiend'),
   'stronghold': (['Goblin', 'Wolf Raider', 'Orc Axeman', 'Ogre Shaman', 'Roc', 'Cyclops', 'Behemoth'], ['Hobgoblin', 'Warg Raider', 'Orc Chieftain', 'Ogre Magi', 'Thunderbird', 'Cyclops King', 'Ancient Behemoth'], 'Thunder Titan'),
-  'dwarf': (['Miner', 'Shieldbearer', 'Crossbow Engineer', 'Runesmith', 'Bear Rider', 'Steam Golem', 'Iron Dreadnought'], ['Foreman', 'Shieldguard', 'Siege Engineer', 'Runelord', 'Bear Lord', 'Iron Golem', 'Thunder Dreadnought'], 'Forge Colossus'),
+  'dwarf': (['Miner', 'Shieldbearer', 'Crossbow Engineer', 'Runesmith', 'Bear Rider', 'Steam Golem', 'Iron Dreadnought'], ['Foreman', 'Shieldguard', 'Siege Engineer', 'Runelord', 'Bear Lord', 'Iron Golem', 'Thunder Dreadnought'], 'Mountain King'),
 }
 MYTHIC_ORDER = ['castle', 'necro', 'sylvan', 'inferno', 'stronghold', 'dwarf']
 CUTS = {'castle-base': [172, 352, 481, 700, 875, 1019], 'castle-up': [185, 362, 506, 722, 893, 1030],
@@ -152,9 +152,15 @@ def frames(fig, fly):
 
 # ---- Broz's chibi sheets (navy background, 8 figures T1..T8 with labels underneath) ----
 BROZ = {  # faction: (sheet in src/broz, Broz column -> data tier order)
-    'necro': (1, [0, 1, 2, 3, 4, 5, 6]), 'sylvan': (0, [0, 1, 2, 3, 4, 5, 6]),
-    'inferno': (11, [0, 1, 3, 2, 4, 5, 6]),      # Broz T3 horned demon = our T4 Demon, Broz T4 succubus = our T3 Succubus
-    'stronghold': (10, [0, 1, 2, 3, 4, 5, 6]), 'dwarf': (9, [0, 2, 1, 3, 4, 5, 6])}  # Broz T2 crossbow / T3 shield swapped vs data
+    # redone sheets (Nov 1): T1-T7 match the data order
+    'necro': (23, [0, 1, 2, 3, 4, 5, 6]), 'sylvan': (22, [0, 1, 2, 3, 4, 5, 6]), 'inferno': (20, [0, 1, 2, 3, 4, 5, 6]),
+    'stronghold': (21, [0, 1, 2, 3, 4, 5, 6]), 'dwarf': (19, [0, 1, 2, 3, 4, 5, 6])}
+# replacement sheet (white bg, 4 figures with captions): (column -> faction, slot) where slot 0-6 = base tier, 7 = mythic
+FIX_SHEET, FIXES = 18, {0: ('dwarf', 4), 1: ('inferno', 7), 2: ('sylvan', 7), 3: ('stronghold', 7)}
+def fix_figs():
+    im = Image.open(os.path.join(HERE, 'src', 'broz', str(FIX_SHEET) + '.jpg')).convert('RGB'); w, h = im.size
+    im = im.crop((0, 0, w, int(h * 0.74))); rgba = cut_background(im); q = w // 4
+    return [clean(rgba.crop((i * q, 0, (i + 1) * q, rgba.height))) for i in range(4)]
 ARCHANGEL = 8
 def cut_navy(im):
     im = im.convert('RGB'); w, h = im.size; px = im.load()
@@ -193,11 +199,51 @@ def elite(fig):  # upgraded look for Broz's base art: warm gold rim + a touch br
     big = Image.new('L', (W2, H2), 0); big.paste(a, (pad, pad)); rim = big.filter(ImageFilter.MaxFilter(5)).filter(ImageFilter.GaussianBlur(1.2))
     out = Image.new('RGBA', (W2, H2), (255, 196, 64, 0)); out.putalpha(rim.point(lambda v: int(v * 0.85)))
     f2 = ImageEnhance.Color(ImageEnhance.Brightness(fig).enhance(1.08)).enhance(1.18); out.alpha_composite(f2, (pad, pad)); return out
+def drop_edge_bits(im):  # remove neighbour fragments: alpha blobs touching the left/right crop edge that are much smaller than the main figure
+    a = im.getchannel('A'); w, h = a.size; px = a.load(); lab = [0] * (w * h); comps = []
+    for y0 in range(h):
+        for x0 in range(w):
+            if px[x0, y0] < 40 or lab[y0 * w + x0]: continue
+            cid = len(comps) + 1; st = [(x0, y0)]; lab[y0 * w + x0] = cid; n = 0; edge = False; pts = []
+            while st:
+                x, y = st.pop(); n += 1; pts.append((x, y)); edge |= x <= 1 or x >= w - 2
+                for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+                    if 0 <= nx < w and 0 <= ny < h and not lab[ny * w + nx] and px[nx, ny] >= 40: lab[ny * w + nx] = cid; st.append((nx, ny))
+            comps.append((n, edge, pts))
+    if not comps: return im
+    big = max(c[0] for c in comps); out = im.copy(); op = out.load()
+    for n, edge, pts in comps:
+        if edge and n < big * 0.3:
+            for x, y in pts: op[x, y] = (0, 0, 0, 0)
+    return out
+UPSHEET = {'dwarf': 25, 'stronghold': 26, 'sylvan': 27, 'inferno': 28, 'castle': 29, 'necro': 30}  # Broz upgrade sheets: white bg, T1-T7 upgraded, captions below
+def up_figs(fac, n=7):
+    im = Image.open(os.path.join(HERE, 'src', 'broz', str(UPSHEET[fac]) + '.jpg')).convert('RGB'); w, h = im.size; px = im.load()
+    rows = [sum(1 for x in range(0, w, 2) if max(px[x, y]) < 110) for y in range(h)]
+    y = h - 1
+    while y > h // 2 and rows[y] < 2: y -= 1
+    bot = y
+    while y > h // 2 and any(rows[yy] >= 2 for yy in range(max(0, y - 14), y)): y -= 1
+    top = y - 4
+    cols = [sum(1 for yy in range(top + 4, bot + 1) if max(px[x, yy]) < 110) for x in range(w)]
+    cl, x = [], 0
+    while x < w:
+        if cols[x]:
+            s0 = e0 = x
+            while x < w and (cols[x] or any(cols[x:x + 26])): e0 = x if cols[x] else e0; x += 1
+            cl.append((s0 + e0) / 2)
+        x += 1
+    if len(cl) != n: raise SystemExit(f'upgrade sheet {fac}: found {len(cl)} captions, expected {n}')
+    rgba = cut_background(im.crop((0, 0, w, top)))
+    cuts = [0] + [round((cl[i] + cl[i + 1]) / 2) for i in range(n - 1)] + [w]
+    return [clean(drop_edge_bits(rgba.crop((cuts[i], 0, cuts[i + 1], rgba.height)))) for i in range(n)]
+def match_h(figs, ref, k=1.06):  # size each upgrade to its base figure (upgrades read slightly bigger)
+    return [f.resize((max(1, round(f.width * r.height * k / f.height)), round(r.height * k)), Image.LANCZOS) for f, r in zip(figs, ref)]
 def broz_figs(idx, n=8):
     rgba = cut_navy(Image.open(os.path.join(HERE, 'src', 'broz', str(idx) + '.jpg'))); c = rgba.info['centers']
     if len(c) != n: raise SystemExit(f'broz sheet {idx}: found {len(c)} labels, expected {n}')
     cuts = [0] + [round((c[i] + c[i + 1]) / 2) for i in range(n - 1)] + [rgba.width]
-    return [clean(rgba.crop((cuts[i], 0, cuts[i + 1], rgba.height))) for i in range(n)]
+    return [clean(drop_edge_bits(rgba.crop((cuts[i], 0, cuts[i + 1], rgba.height)))) for i in range(n)]
 
 def main():
     os.makedirs(OUT, exist_ok=True); os.makedirs(PREV, exist_ok=True)
@@ -205,7 +251,7 @@ def main():
     o = 0
     for k, n in ANIMS.items(): man['anims'][k] = [o, n]; o += n
     nfr = o; myth = {}
-    mfigs = None
+    mfigs = None; global FIXF; FIXF = fix_figs()
     mr = cut_background(Image.open(os.path.join(HERE, 'src', 'mythic.jpg')))
     mraw = [clean(mr.crop((max(0, a - 2), 0, min(mr.width, b + 2), mr.height))) for a, b in segments(mr, 6, 'mythic')]
     for fac, (base, up, mname) in FACTIONS.items():
@@ -215,14 +261,20 @@ def main():
             myth[fac] = scale_row([clean(ar)] * 3)[0]
         rows = []
         if fac in BROZ:
-            sh, order = BROZ[fac]; bf = broz_figs(sh); bs = scale_row([bf[order[i]] for i in range(7)] + [bf[7]])
-            rows = list(zip(base, bs[:7])) + list(zip(up, scale_row([elite(bf[order[i]]) for i in range(7)] + [elite(bf[7])])[:7]))
+            sh, order = BROZ[fac]; bf = broz_figs(sh)
+            for c, (ff, slot) in FIXES.items():
+                if ff == fac:
+                    j = order[slot] if slot < 7 else 7; old = bf[j]; nf = FIXF[c]; k = old.height / nf.height  # match the replaced figure's size on the sheet
+                    bf[j] = nf.resize((max(1, round(nf.width * k)), old.height), Image.LANCZOS)
+            bs = scale_row([bf[order[i]] for i in range(7)] + [bf[7]])
+            rows = list(zip(base, bs[:7])) + list(zip(up, match_h(up_figs(fac), bs[:7])))
             myth[fac] = bs[7]
         for key, names in (() if fac in BROZ else ((fac + '-base', base), (fac + '-up', up))):
             rgba = cut_background(Image.open(os.path.join(HERE, 'src', key + '.jpg')))
             crops = [rgba.crop((max(0, a - 2), 0, min(rgba.width, b + 2), rgba.height)) for a, b in segments(rgba, 7, key)]
             if key == 'castle-up': crops[1] = degreen(crops[1])  # neighbour's quiver arrows overlap the halberd
             figs = scale_row([clean(c) for c in crops])
+            if key == 'castle-up': figs = match_h(up_figs('castle'), [f for _, f in rows[:7]])
             rows += list(zip(names, figs)); raws = None
         rows.append((mname, myth[fac]))
         atlas = Image.new('RGBA', (CELL * nfr, CELL * len(rows)), (0, 0, 0, 0)); ui = Image.new('RGBA', (UI * len(rows), UI), (0, 0, 0, 0))
