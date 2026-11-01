@@ -111,6 +111,7 @@
       if (UI.panel && UI.panel.tech) talentTree();
       if (UI.panel && UI.panel.chestHero && !PB.querySelector('.evart')) PB.insertAdjacentHTML('afterbegin', `<div class="evhead">${evArt('chest', 180)}</div>`), PB.classList.add('evpop');
       if (G && G.over && !PB.querySelector('.endart')) endScreen();
+      mainMenuButtons();
     } finally { mo.observe(PB, {childList: true}); }
   }
   const mo = new MutationObserver(decorate);
@@ -121,7 +122,7 @@
   function detail(o) {
     PB.querySelectorAll('.dcard').forEach(e => e.remove());
     PB.insertAdjacentHTML('beforeend', `<div class="dcard"><div class="dbox">${ico(o.icon, 96, o.state)}<h3>${o.name}</h3><p>${o.desc}</p>${o.cost ? `<p class="dcost">${o.cost}</p>` : ''}${o.why ? `<p class="no">${o.why}</p>` : ''}
-      <div class="bar">${o.act ? `<button class="btn g" data-a="${o.act}" data-v="${o.v}" ${o.can ? '' : 'disabled'}>${o.label}</button>` : ''}<button class="btn alt" data-a="dclose">CLOSE</button></div></div></div>`);
+      <div class="bar">${o.act ? `<button class="btn g" data-a="${o.act}" data-v="${o.v}" ${o.can ? '' : 'disabled'}>${o.label}</button>` : ''}<button class="btn alt" data-a="dclose">${o.cancel || 'CLOSE'}</button></div></div></div>`);
   }
   ACTIONS.dclose = () => { PB.querySelectorAll('.dcard').forEach(e => e.remove()); UI.det = null; };
   ACTIONS.det = v => { const [kind, k] = v.split(':'); UI.det = v; (kind === 'p' ? polDetail : talDetail)(k); };
@@ -161,6 +162,21 @@
     h2.insertAdjacentHTML('beforebegin', `<div class="endart ${win ? 'win' : 'lose'}"><img src="${A}${win ? 'win' : 'lose'}.webp" alt="${win ? 'Victory' : 'Defeat'}"></div>`);
     const st = PB.querySelector('.bar'); if (st && !st.querySelector('[data-a=home]')) st.insertAdjacentHTML('beforeend', '<button class="btn alt" data-a="home">MAIN MENU</button>');
     PB.classList.add('endp');
+  }
+  // ---- MAIN MENU: '← MAIN MENU' top-left on every Campaign / Duel / New Game setup screen; MAIN MENU in the in-game MENU with a confirm
+  for (const name of ['openSetup', 'openCampaign', 'openBonus']) { const f = window[name]; if (typeof f !== 'function') continue;
+    window[name] = function () { const r = f.apply(this, arguments); if (UI.panel) { UI.panel.setupScr = true; decorate(); } return r; }; }
+  const leaveNow = () => { PB.querySelectorAll('.dcard').forEach(e => e.remove()); UI.panel = null; $('panel').classList.remove('show'); closeBook && closeBook(); B = null; G = null; UI.mode = 'title'; UI.walk = null; UI.ai = null; showHome(); };
+  ACTIONS.mmenu = () => {
+    if (!G) return leaveNow();
+    const auto = !G.over && UI.mode === 'map', battle = !!B;
+    detail({icon: 'logistics', name: 'Leave to main menu?', desc: battle ? 'The current battle will be abandoned. Your autosave from the start of this day is kept; progress since then is lost.'
+      : auto ? 'Your game will be autosaved now (Day ' + G.day + '). Use CONTINUE on the main menu to pick it up. Manual saves are not changed.' : 'Unsaved progress will be lost.', act: 'mmleave', v: '', can: true, label: 'MAIN MENU', cancel: 'CANCEL'});
+  };
+  ACTIONS.mmleave = () => { if (G && !G.over && !B && UI.mode === 'map') { try { localStorage.setItem(SAVE_KEY + '-auto', JSON.stringify(G)); } catch (e) {} } leaveNow(); };
+  function mainMenuButtons() {
+    if (UI.panel && UI.panel.setupScr && !PB.querySelector('.mmback')) PB.insertAdjacentHTML('afterbegin', '<button class="btn alt mmback" data-a="mmenu">← MAIN MENU</button>');
+    const h2 = PB.querySelector('h2'); if (G && h2 && h2.textContent.trim() === 'MENU' && !PB.querySelector('[data-a=mmenu]')) { const bar = PB.querySelector('.bar'); if (bar) bar.insertAdjacentHTML('beforeend', '<button class="btn r" data-a="mmenu">MAIN MENU</button>'); }
   }
   // boot: replace the start-up menu with the home screen
   if (!G) showHome();
