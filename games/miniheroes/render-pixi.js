@@ -143,6 +143,20 @@
   const badge = {};
   const threatTex = c => badge[c] || (badge[c] = tex((() => { const k = document.createElement('canvas'); k.width = 16; k.height = 22; const g = k.getContext('2d');
     g.fillStyle = c + '90'; g.fillRect(1, 18, 14, 3); g.fillRect(3, 21, 10, 1); g.fillStyle = '#000'; g.fillRect(9, 0, 9, 6); g.fillStyle = c; g.fillRect(10, 1, 7, 4); return k; })()));
+  // animated water on the painted map: one tiling ripple sprite (additive) masked to the water tiles; mask rebuilt per map
+  let shim = null, shimMap = null, shimMask = null;
+  function rippleTex() { const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d'); g.lineCap = 'round';
+    for (let i = 0; i < 14; i++) { const x = (i * 53) % 128, y = (i * 37) % 128, r = 10 + (i * 7) % 18; g.strokeStyle = `rgba(200,235,255,${0.18 + (i % 3) * 0.08})`; g.lineWidth = 1.5 + (i % 2);
+      for (const ox of [0, -128, 128]) for (const oy of [0, -128, 128]) { g.beginPath(); g.arc(x + ox, y + oy, r, Math.PI * 1.15, Math.PI * 1.85); g.stroke(); } }
+    return tex(c); }
+  function waterShimmer() {
+    if (LOWQ()) { if (shim) shim.visible = false; return; }
+    if (!shim) { shim = new PIXI.TilingSprite({texture: rippleTex(), width: 16, height: 16}); shim.blendMode = 'add'; W.addChildAt(shim, W.getChildIndex(land) + 1); }
+    if (shimMap !== layers.map) { shimMap = layers.map; if (shimMask) shimMask.destroy(); shimMask = new PIXI.Graphics(); let n = 0;
+      for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) if (G.map[y][x] === 4) { shimMask.rect(x * TS + 2, y * TS + 2, TS - 4, TS - 4); n++; }
+      shimMask.fill(0xffffff); W.addChild(shimMask); shim.mask = shimMask; shim.width = MW * TS; shim.height = MH * TS; shim.visible = n > 0; }
+    shim.tilePosition.set(clock * 6, Math.sin(clock * 0.7) * 6); shim.alpha = 0.55 + 0.25 * Math.sin(clock * 1.9);
+  }
   function drawMap() {
     const t0 = performance.now();
     ensureLayers(); clampCam(); fit();
@@ -151,6 +165,7 @@
     if (layers !== lastLayers) { land.texture = PA ? MAPA.land : tex(layers.land); land.scale.set(PA ? 1 / P2 : 1); fog.texture = tex(layers.fog); if (PA) fog.texture.source.scaleMode = 'linear'; lastLayers = layers; lastFog = -1; }
     if (layers.fogN !== lastFog) { fog.texture.source.update(); lastFog = layers.fogN; }
     water.visible = !PA; if (!PA) water.texture = tex(layers.water[Math.floor(clock * 3) % 4]);
+    if (PA) waterShimmer(); else if (shim) shim.visible = false;
     const V = viewRect();
     if (dyn.width < V.w || dyn.height < V.h) { dyn = document.createElement('canvas'); dyn.width = Math.ceil(V.w / 64) * 64; dyn.height = Math.ceil(V.h / 64) * 64; dctx = dyn.getContext('2d'); dynT = tex(dyn); dynS.texture = dynT; }
     renderWorld({dyn: true, g: dctx, skipObj}); dynT.source.update(); dynS.position.set(V.x, V.y);

@@ -56,7 +56,7 @@ const UNIT_DEFS = [
 ];
 const FACTION_UNITS = {};
 // 1.3 hex-field retune (6 neighbours, 22x16 wrapped field): price multiplier per faction for tiers 1-3 / 4-5 / 6-7
-const HEX_TUNE = {castle: [1.016, 0.94, 0.985], necro: [0.988, 1.05, 0.93], sylvan: [0.984, 0.95, 0.97], inferno: [0.992, 0.956, 1.035], stronghold: [1.012, 1.04, 1.025], dwarf: [1.014, 1.04, 1.01]};
+const HEX_TUNE = {castle: [1.016, 0.94, 0.985], necro: [0.95, 1.04, 0.93], sylvan: [1.02, 0.97, 0.93], inferno: [0.992, 0.98, 1.035], stronghold: [1.012, 1.04, 1.025], dwarf: [0.995, 0.97, 1.0]};
 for (const [fac, tier, base, up, ab, ab2, m, col] of UNIT_DEFS) {
   const [att, def, hp, dmg, move, cost, growth] = TIER_T[tier];
   const mk = (name, isUp) => {

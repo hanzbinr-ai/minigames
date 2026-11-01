@@ -7,7 +7,7 @@ body{touch-action:none;font-size:9px}
 #top{grid-area:top;display:flex;align-items:center;gap:6px;padding:4px 6px;background:#1c1c3a;border-bottom:3px solid #000;box-shadow:0 3px 0 #a00030;min-width:0}
 #top .tb{flex:none;padding:5px 6px;font-size:8px;border-width:3px;box-shadow:2px 2px 0 #000}
 #res{flex:1;display:flex;flex-wrap:wrap;gap:2px 10px;align-items:center;min-width:0}
-#res span{display:inline-flex;align-items:center;gap:3px;white-space:nowrap}#res img{width:16px;height:16px;image-rendering:pixelated}
+#res span{display:inline-flex;align-items:center;gap:3px;white-space:nowrap}#res img{width:20px;height:20px;image-rendering:auto;border-radius:4px}
 #res b{color:var(--yellow)}#cal{color:#3cbcfc;white-space:nowrap}
 #ttl{color:var(--yellow);text-shadow:2px 2px 0 #000;white-space:nowrap;display:none}
 @media (max-width:899px),(max-height:499px){#top{flex-wrap:wrap}#res{order:9;flex-basis:100%;justify-content:space-around}#cal{flex:1;text-align:center;font-size:8px}}
@@ -139,6 +139,37 @@ body.battle #msg{bottom:4px;font-size:8px}
 @media (max-width:600px){#book .bk{grid-template-columns:1fr;grid-template-rows:1fr 1fr;height:88%}#book .pg.l{transform-origin:center bottom;border-right:2px solid #000}#book .pg.r{transform-origin:center top}
  @keyframes bkl{0%{transform:rotateX(88deg);opacity:.2}100%{transform:none;opacity:1}}@keyframes bkr{0%{transform:rotateX(-88deg);opacity:.2}100%{transform:none;opacity:1}}}
 #dbg{position:fixed;left:4px;top:40px;z-index:99;margin:0;padding:4px 6px;background:#000c;color:#58d854;font:9px/1.35 monospace;pointer-events:none;white-space:pre}
+
+/* 1.5 painted UI */
+.ico-pi{background:none!important;padding:0!important;border:0!important;width:auto!important;height:auto!important}
+.ico{display:inline-block;flex:none;background-image:url(art/icons.webp);background-repeat:no-repeat;vertical-align:middle;border-radius:8px;image-rendering:auto}
+.ico.gold{box-shadow:0 0 0 2px #f8c840,0 0 12px #f8b80090}.ico.glow{animation:iglow 1.4s ease-in-out infinite}
+@keyframes iglow{50%{box-shadow:0 0 0 2px #7ce0ff,0 0 16px #3cbcfc}}
+.evart{display:inline-block;background-image:url(art/events.webp);background-repeat:no-repeat}
+#home{position:fixed;inset:0;z-index:30;display:none;flex-direction:column;justify-content:flex-end;align-items:center;background:#0b1430;overflow:hidden}
+#home .hbg{position:absolute;inset:0;background:url(art/home.webp) center top/cover no-repeat}
+#home nav{position:relative;display:flex;gap:12px;flex-wrap:wrap;justify-content:center;padding:14px 12px calc(18px + env(safe-area-inset-bottom));width:100%;background:linear-gradient(#0b143000,#0b1430e0 35%)}
+.hbtn{display:flex;align-items:center;gap:10px;min-width:150px;padding:10px 18px;font:700 15px/1.1 system-ui,'Segoe UI',sans-serif;letter-spacing:.06em;color:#f4ead0;background:linear-gradient(#24365e,#16223f);border:2px solid #c9a14a;border-radius:8px;box-shadow:0 0 0 2px #0008,0 6px 14px #0009;cursor:pointer}
+.hbtn img{width:30px;height:30px}.hbtn.hot{background:linear-gradient(#2f6a3a,#1b4424)}.hbtn:disabled{opacity:.45;filter:grayscale(1)}.hbtn:not(:disabled):hover{filter:brightness(1.2)}
+#home .hver{position:absolute;right:8px;top:6px;font:11px system-ui;color:#fff8}
+@media (max-aspect-ratio:1/1){#home .hbg{background-size:190% auto;background-position:50% 4%}#home nav{flex-direction:column;align-items:stretch;padding:12px 24px 22px}.hbtn{justify-content:flex-start}}
+.fgrid{display:grid!important;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px}
+.fcard{display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 4px;background:#14182c;border:2px solid #333a55;border-radius:8px;color:#fff;font:inherit;font-size:10px;cursor:pointer}
+.fgrid .fcard{background:#14182c!important;color:#fff!important}.fcard canvas,.fcard img{width:56px!important;height:56px!important;object-fit:contain}.fcard.y{border-color:var(--fc);box-shadow:0 0 12px var(--fc)}.fcard .rq{font-size:34px;line-height:56px}
+.pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px;margin:8px 0}
+.pcard{position:relative;display:flex;flex-direction:column;align-items:center;gap:5px;padding:8px 4px;background:#141a30;border:2px solid #3a3f5c;border-radius:8px;color:#e8e2cc;font:inherit;font-size:9px;cursor:pointer;border-top-color:var(--pc)}
+.pcard.on{border-color:#f8c840;box-shadow:0 0 14px #f8b800a0;background:#2a2410}.pcard.on b{position:absolute;top:2px;right:4px;font-size:7px;color:#f8c840}.pcard.lock{opacity:.45}
+.ttree{display:flex;flex-direction:column;gap:6px;margin:8px 0}
+.tlv{display:grid;grid-template-columns:44px repeat(3,1fr);gap:6px;align-items:center}.tlv>b{font-size:10px;color:#f8c840;text-align:center}.tlv>b small{display:block;color:#aaa;font-size:8px}
+.tnode{position:relative;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 2px;background:#12172b;border:2px solid #2c3352;border-radius:10px;color:#ddd;font:inherit;font-size:8px;cursor:pointer}
+.tnode .ico{border-radius:50%!important;filter:hue-rotate(var(--h))}.tnode.gold{border-color:#f8c840;background:#2a2410}.tnode.gold .ico{box-shadow:0 0 0 3px #f8c840,0 0 14px #f8b800}
+.tnode.glow{border-color:#3cbcfc}.tnode.glow .ico{animation:iglow 1.4s ease-in-out infinite}.tnode.lock .ico,.tnode.dim .ico{filter:hue-rotate(var(--h)) grayscale(.85) brightness(.55)}
+.tnode .pad{position:absolute;top:18px;font-style:normal;font-size:20px;text-shadow:0 2px 3px #000}
+.dcard{position:fixed;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;background:#0009}
+.dbox{width:min(320px,88vw);display:flex;flex-direction:column;align-items:center;gap:6px;padding:16px;text-align:center;background:linear-gradient(#1a2444,#10162c);border:2px solid #c9a14a;border-radius:12px;box-shadow:0 10px 30px #000}
+.dbox .ico{border-radius:50%}.dbox h3{color:#f8c840;margin:4px 0 0}.dbox .dcost{color:#f8c840}
+.srow{display:flex;gap:6px;margin:4px 0}.evhead{text-align:center}.endart img{width:100%;max-height:46vh;object-fit:cover;border-radius:8px;border:2px solid #c9a14a}
+#cele .cbox .ico,#cele .cbox .evart{margin-bottom:2px}
 </style></head><body>
 <div id="app">
  <header id="top">
@@ -175,6 +206,8 @@ body.battle #msg{bottom:4px;font-size:8px}
 <script src="game.js"></script>
 <script src="campaign.js"></script>
 <script src="meet.js"></script>
+<script src="ui-art-data.js"></script>
+<script src="ui-art.js"></script>
 <script src="vendor/pixi.min.js" defer></script>
 <script src="render-pixi.js" defer></script>
 </body></html>

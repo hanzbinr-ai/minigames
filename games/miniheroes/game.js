@@ -457,7 +457,7 @@ function visitTown(h, t) {
   if (levels) {
     const learnt = Object.keys(SPELLS).filter(k => SPELLS[k].lvl <= levels && !h.spells.includes(k));
     h.spells.push(...learnt); h.mana = maxMana(h);
-    if (learnt.length && h.owner === 'player') msg(h.name + ' learned ' + learnt.map(k => SPELLS[k].name).join(', '));
+    if (learnt.length && h.owner === 'player') { msg(h.name + ' learned ' + learnt.map(k => SPELLS[k].name).join(', ')); celebrate('spell', 'MAGE GUILD', h.name + ' learned ' + learnt.map(k => SPELLS[k].name).join(', ')); }
   }
   if (h.owner === 'ai') aiVisit(h, t);
 }
@@ -1258,7 +1258,7 @@ function aiKingdom() {
   for (let guard = 0; K.kp > 0 && guard < 20; guard++) { let done = false; for (const br of order) { const i = KTALENTS[br].findIndex((t, j) => ktState(o, br, j) === 'open'); if (i >= 0) { learnKT(o, KTALENTS[br][i].k); done = true; break; } } if (!done) break; }
   for (const k of [...AI_POLICY_PREF[K.faction] || [], ...Object.keys(POLICIES)]) { if (K.slots.length >= slotCount(o)) break; if (!K.slots.includes(k) && !policyOK(o, k)) K.slots.push(k); }
 }
-const policyIcons = o => (KG(o) ? KG(o).slots : []).map(k => `<i class="pi" style="background:${POLICY_CATS[POLICIES[k].cat].col}" title="${POLICIES[k].name}: ${POLICIES[k].desc}">${POLICIES[k].icon}</i>`).join('');
+let policyIcons = o => (KG(o) ? KG(o).slots : []).map(k => `<i class="pi" style="background:${POLICY_CATS[POLICIES[k].cat].col}" title="${POLICIES[k].name}: ${POLICIES[k].desc}">${POLICIES[k].icon}</i>`).join('');
 const canSeeEnemyKingdom = () => G.heroes.some(h => h.owner === 'player' && h.sk && h.sk.scouting);
 function openKingdom() {
   if (!G || !KG('player')) return;
@@ -1575,13 +1575,13 @@ function drawBattle(g, pass = 'all') {
     if (UI.preTerr) { g.fillStyle = '#d858f820'; g.fillRect(BOX, BOY, BW * CW + CW / 2, PER); }
     const su = UI.preSel && uById(UI.preSel); if (su) { g.strokeStyle = '#f8b800'; g.lineWidth = 1; hexPath(g, su.x, su.y, 1); g.stroke(); }
   }
-  for (const k of B.obst) { const [x, y] = k.split(',').map(Number); g.drawImage(SPR.boulder(), hxp(x, y), hyp(y)); }
+  for (const k of B.obst) { const [x, y] = k.split(',').map(Number); if (!(window.PROPS && PROPS.draw(g, PROPS.obst(k), x, y, CW * 1.8))) g.drawImage(SPR.boulder(), hxp(x, y), hyp(y)); }
   if (B.siege) {
     const S = B.siege, necro = ['necro', 'inferno', 'dwarf'].includes(B.ctx.def.town.faction);
     for (let y = 0; y < BH; y++) {
       const c = S.cells[y], X = hxp(S.x, y), Y = hyp(y);
-      if (c.kind === 'tower') { const sh = S.shots.some(s => s.y === y && B.clock >= s.at && B.clock < s.at + 0.25); g.drawImage(SPR.tower(necro, sh ? 1 : 0), X, Y - 12); continue; }
-      g.drawImage(SPR.wall(c.kind, c.shown <= 0 ? 2 : c.shown < c.max ? 1 : 0, necro), X, Y);
+      if (c.kind === 'tower') { const sh = S.shots.some(s => s.y === y && B.clock >= s.at && B.clock < s.at + 0.25); if (!(window.PROPS && PROPS.draw(g, 'tower', S.x, y, CW * 2.6))) g.drawImage(SPR.tower(necro, sh ? 1 : 0), X, Y - 12); if (sh) { g.fillStyle = '#fce4a0'; g.fillRect(X + CW / 2 - 2, Y - 14, 4, 4); } continue; }
+      const wst = c.shown <= 0 ? 2 : c.shown < c.max ? 1 : 0; if (!(window.PROPS && PROPS.draw(g, PROPS.wall(c.kind, wst), S.x, y, CW * 1.8))) g.drawImage(SPR.wall(c.kind, wst, necro), X, Y);
       if (c.shown > 0) { g.fillStyle = '#000'; g.fillRect(X + 4, Y + RH - 3, 16, 3); g.fillStyle = '#58d854'; g.fillRect(X + 5, Y + RH - 2, Math.round(14 * c.shown / c.max), 1); }
     }
     const fired = S.fire.some(t => B.clock >= t && B.clock < t + 0.3), cimg = SPR.catapult(fired ? 1 : 0);
@@ -1714,7 +1714,7 @@ const imgCache = {};
 const imgURL = (k, f) => imgCache[k] || (imgCache[k] = f().toDataURL());
 const unitImg = t => imgURL('u' + t, () => SPR.unit(t, 0, false));
 const portraitImg = h => imgURL('p' + h.name, () => SPR.portrait(h.name, h.owner));
-const resImg = r => imgURL('r' + r, () => SPR.pile(r));
+let resImg = r => imgURL('r' + r, () => SPR.pile(r));
 let hudSig = '';
 function meter(v, m, c) { return `<div class="meter"><i style="width:${Math.max(0, Math.min(100, v / Math.max(1, m) * 100))}%;background:${c}"></i></div>`; }
 function updateHud() {
