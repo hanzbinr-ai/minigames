@@ -156,7 +156,7 @@ BROZ = {  # faction: (sheet in src/broz, Broz column -> data tier order)
     'necro': (23, [0, 1, 2, 3, 4, 5, 6]), 'sylvan': (22, [0, 1, 2, 3, 4, 5, 6]), 'inferno': (20, [0, 1, 2, 3, 4, 5, 6]),
     'stronghold': (21, [0, 1, 2, 3, 4, 5, 6]), 'dwarf': (19, [0, 1, 2, 3, 4, 5, 6])}
 # replacement sheet (white bg, 4 figures with captions): (column -> faction, slot) where slot 0-6 = base tier, 7 = mythic
-FIX_SHEET, FIXES = 18, {0: ('dwarf', 4), 1: ('inferno', 7), 2: ('sylvan', 7), 3: ('stronghold', 7)}
+FIX_SHEET, FIXES = 18, {1: ('inferno', 7), 2: ('sylvan', 7), 3: ('stronghold', 7)}
 def fix_figs():
     im = Image.open(os.path.join(HERE, 'src', 'broz', str(FIX_SHEET) + '.jpg')).convert('RGB'); w, h = im.size
     im = im.crop((0, 0, w, int(h * 0.74))); rgba = cut_background(im); q = w // 4
@@ -216,7 +216,7 @@ def drop_edge_bits(im):  # remove neighbour fragments: alpha blobs touching the 
         if edge and n < big * 0.3:
             for x, y in pts: op[x, y] = (0, 0, 0, 0)
     return out
-UPSHEET = {'dwarf': 25, 'stronghold': 26, 'sylvan': 27, 'inferno': 28, 'castle': 29, 'necro': 30}  # Broz upgrade sheets: white bg, T1-T7 upgraded, captions below
+UPSHEET = {'dwarf': 25, 'stronghold': 33, 'sylvan': 27, 'inferno': 28, 'castle': 32, 'necro': 30}  # Broz upgrade sheets: white bg, T1-T7 upgraded, captions below
 def up_figs(fac, n=7):
     im = Image.open(os.path.join(HERE, 'src', 'broz', str(UPSHEET[fac]) + '.jpg')).convert('RGB'); w, h = im.size; px = im.load()
     rows = [sum(1 for x in range(0, w, 2) if max(px[x, y]) < 110) for y in range(h)]
@@ -262,11 +262,15 @@ def main():
         rows = []
         if fac in BROZ:
             sh, order = BROZ[fac]; bf = broz_figs(sh)
+            if fac == 'dwarf':  # Broz's standalone Bear Rider (white bg, caption below), kept smaller than the T6 golem
+                im = Image.open(os.path.join(HERE, 'src', 'broz', '31.jpg')).convert('RGB'); br = clean(cut_background(im.crop((0, 0, im.width, int(im.height * 0.74)))))
+                hh = round(bf[order[5]].height * 0.8); bf[order[4]] = br.resize((max(1, round(br.width * hh / br.height)), hh), Image.LANCZOS)
             for c, (ff, slot) in FIXES.items():
                 if ff == fac:
                     j = order[slot] if slot < 7 else 7; old = bf[j]; nf = FIXF[c]; k = old.height / nf.height  # match the replaced figure's size on the sheet
                     bf[j] = nf.resize((max(1, round(nf.width * k)), old.height), Image.LANCZOS)
             bs = scale_row([bf[order[i]] for i in range(7)] + [bf[7]])
+            if fac == 'dwarf': bs[4] = bs[4].resize((round(bs[4].width * 0.78), round(bs[4].height * 0.78)), Image.LANCZOS)  # Bear Rider reads smaller than the Iron/Steam Golem
             rows = list(zip(base, bs[:7])) + list(zip(up, match_h(up_figs(fac), bs[:7])))
             myth[fac] = bs[7]
         for key, names in (() if fac in BROZ else ((fac + '-base', base), (fac + '-up', up))):
