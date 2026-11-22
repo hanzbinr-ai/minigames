@@ -30,11 +30,11 @@ function slotHtml(side, key) {
     return `<button class="${sel ? 'sel' : M.sel ? 'tgt' : ''}" data-a="mslot" data-v="${key}:${i}" title="${a ? a.count + ' ' + a.type : 'empty'}">${a ? `${unitPic(a.type)}<s>${a.count}</s>` : ''}</button>`; }).join('')}</div>`;
 }
 function heroCol(side, other, key) {
-  const h = side.hero; let s = `<h3>${side.name.toUpperCase()}${h ? ' LV' + h.lvl : ''}</h3>${slotHtml(side, key)}`;
+  const h = side.hero; let s = `<h3>${side.name}${h ? ' LV' + h.lvl : ''}</h3>${slotHtml(side, key)}`;
   if (h && other.hero) {
-    s += `<h3>ARTIFACTS</h3><div class="mart">${h.arts.map((k, i) => btn(ARTIFACTS[k].name + ' →', 'mart', key + ':' + i, 'alt')).join('') || '<small>none</small>'}</div>`;
-    s += `<h3>SPELLS</h3><small>${h.spells.map(k => SPELLS[k].name).join(', ') || 'none'}</small>`;
-    s += `<h3>SKILLS</h3><small>${Object.keys(h.sk).map(k => SKILLS[k].name + ' ' + 'I'.repeat(h.sk[k])).join(', ') || 'none'}</small>`;
+    s += `<h3>Artifacts</h3><div class="mart">${h.arts.map((k, i) => btn(ARTIFACTS[k].name + ' →', 'mart', key + ':' + i, 'alt')).join('') || '<small>none</small>'}</div>`;
+    s += `<h3>Spells</h3><small>${h.spells.map(k => SPELLS[k].name).join(', ') || 'none'}</small>`;
+    s += `<h3>Skills</h3><small>${Object.keys(h.sk).map(k => SKILLS[k].name + ' ' + 'I'.repeat(h.sk[k])).join(', ') || 'none'}</small>`;
     const tk = teachable(h, other.hero);
     if (h.sk.scholar) s += `<div class="mart">${tk.length ? tk.map(k => btn('TEACH ' + SKILLS[k].name, 'mteach', key + ':' + k, 'p')).join('') : '<small>' + (G.teach && G.teach[pairKey(h, other.hero)] === weekOf() ? 'Already taught this week' : 'Nothing to teach') + '</small>'}</div>`;
   }
@@ -42,11 +42,11 @@ function heroCol(side, other, key) {
 }
 function showMeet() {
   const M = UI.meet, sel = M.sel && M[M.sel.side].arr[M.sel.i];
-  showPanel(() => { const M = UI.meet, sel = M.sel && M[M.sel.side].arr[M.sel.i]; return `<h2>${M.town ? 'GARRISON EXCHANGE' : 'HERO MEETING'}</h2>
+  showPanel(() => { const M = UI.meet, sel = M.sel && M[M.sel.side].arr[M.sel.i]; return `<h2>${M.town ? 'Garrison Exchange' : 'Hero Meeting'}</h2>
     <p>${sel ? `Selected <b class="hl">${sel.type}</b>. Move <b id="mcntv">${M.n}</b> of ${sel.count}: <input id="mcnt" type="range" min="1" max="${sel.count}" value="${M.n}"> then tap a slot (empty = move, same unit = merge, other = swap).` : 'Tap a stack, then tap a slot. Each hero keeps at least 1 stack.'}</p>
     ${M.log.length ? '<p class="ok">' + M.log.join('<br>') + '</p>' : ''}
     <div class="mt"><div>${heroCol(M.L, M.R, 'L')}</div><div>${heroCol(M.R, M.L, 'R')}</div></div>
-    <div class="bar" style="margin-top:8px">${sel ? btn('CANCEL', 'mcancel', '', 'alt') : ''}${btn('DONE', 'mdone', '', 'g')}</div>`; }, {sticky: true, after: () => { const r = $('mcnt'); if (r) r.oninput = () => { UI.meet.n = +r.value; $('mcntv').textContent = r.value; }; }});
+    <div class="bar" style="margin-top:8px">${sel ? btn('Cancel', 'mcancel', '', 'alt') : ''}${btn('Done', 'mdone', '', 'g')}</div>`; }, {sticky: true, after: () => { const r = $('mcnt'); if (r) r.oninput = () => { UI.meet.n = +r.value; $('mcntv').textContent = r.value; }; }});
 }
 // core transfer: n creatures from (fs, fi) to (ts, ti)
 function meetMove(fs, fi, ts, ti, n) {

@@ -79,9 +79,9 @@
   window.evArt = evArt;
   // ---- HOME screen
   const home = document.createElement('div'); home.id = 'home';
-  const HB = [['CONTINUE', 'h_cont', 0], ['NEW GAME', 'new', 1], ['CAMPAIGN', 'campaign', 2], ['DUEL', 'h_duel', 3], ['SETTINGS', 'h_set', 4]];
+  const HB = [['Continue', 'h_cont', 0], ['New Game', 'new', 1], ['Campaign', 'campaign', 2], ['Duel', 'h_duel', 3], ['Settings', 'h_set', 4]];
   const homeHtml = () => { const can = !!(localStorage.getItem(SAVE_KEY + '-auto') || localStorage.getItem(SAVE_KEY));
-    return `<div class="hbg"></div><nav>${HB.map(([l, a, i]) => `<button class="hbtn${a === 'campaign' ? ' hot' : ''}" data-a="${a}" ${a === 'h_cont' && !can ? 'disabled' : ''}><img src="${A}home-i${i}.webp" alt="">${l}</button>`).join('')}</nav><small class="hver">v${'1.5.3'}</small>`; };
+    return `<div class="hbg"></div><nav>${HB.map(([l, a, i]) => `<button class="hbtn${a === 'campaign' ? ' hot' : ''}" data-a="${a}" ${a === 'h_cont' && !can ? 'disabled' : ''}><img src="${A}home-i${i}.webp" alt="">${l}</button>`).join('')}</nav><small class="hver">v${'1.5.4'}</small>`; };
   window.showHome = () => { home.innerHTML = homeHtml(); home.style.display = 'flex'; UI.panel = null; $('panel').classList.remove('show'); UI.mode = G ? UI.mode : 'title'; };
   const hideHome = () => { home.style.display = 'none'; };
   document.body.appendChild(home);
@@ -160,7 +160,7 @@
   function endScreen() {
     const win = G.over === 'win', h2 = PB.querySelector('h2'); if (!h2) return;
     h2.insertAdjacentHTML('beforebegin', `<div class="endart ${win ? 'win' : 'lose'}"><img src="${A}${win ? 'win' : 'lose'}.webp" alt="${win ? 'Victory' : 'Defeat'}"></div>`);
-    const st = PB.querySelector('.bar'); if (st && !st.querySelector('[data-a=home]')) st.insertAdjacentHTML('beforeend', '<button class="btn alt" data-a="home">MAIN MENU</button>');
+    const st = PB.querySelector('.bar'); if (st && !st.querySelector('[data-a=home]')) st.insertAdjacentHTML('beforeend', '<button class="btn alt" data-a="home">Main Menu</button>');
     PB.classList.add('endp');
   }
   // ---- MAIN MENU: '← MAIN MENU' top-left on every Campaign / Duel / New Game setup screen; MAIN MENU in the in-game MENU with a confirm
@@ -171,12 +171,12 @@
     if (!G) return leaveNow();
     const auto = !G.over && UI.mode === 'map', battle = !!B;
     detail({icon: 'logistics', name: 'Leave to main menu?', desc: battle ? 'The current battle will be abandoned. Your autosave from the start of this day is kept; progress since then is lost.'
-      : auto ? 'Your game will be autosaved now (Day ' + G.day + '). Use CONTINUE on the main menu to pick it up. Manual saves are not changed.' : 'Unsaved progress will be lost.', act: 'mmleave', v: '', can: true, label: 'MAIN MENU', cancel: 'CANCEL'});
+      : auto ? 'Your game will be autosaved now (Day ' + G.day + '). Use Continue on the main menu to pick it up. Manual saves are not changed.' : 'Unsaved progress will be lost.', act: 'mmleave', v: '', can: true, label: 'Main Menu', cancel: 'Cancel'});
   };
   ACTIONS.mmleave = () => { if (G && !G.over && !B && UI.mode === 'map') { try { localStorage.setItem(SAVE_KEY + '-auto', JSON.stringify(G)); } catch (e) {} } leaveNow(); };
   function mainMenuButtons() {
-    if (UI.panel && UI.panel.setupScr && !PB.querySelector('.mmback')) PB.insertAdjacentHTML('afterbegin', '<button class="btn alt mmback" data-a="mmenu">← MAIN MENU</button>');
-    const h2 = PB.querySelector('h2'); if (G && h2 && h2.textContent.trim() === 'MENU' && !PB.querySelector('[data-a=mmenu]')) { const bar = PB.querySelector('.bar'); if (bar) bar.insertAdjacentHTML('beforeend', '<button class="btn r" data-a="mmenu">MAIN MENU</button>'); }
+    if (UI.panel && UI.panel.setupScr && !PB.querySelector('.mmback')) PB.insertAdjacentHTML('afterbegin', '<button class="btn alt mmback" data-a="mmenu">← Main Menu</button>');
+    const h2 = PB.querySelector('h2'); if (G && h2 && h2.textContent.trim() === 'Menu' && !PB.querySelector('[data-a=mmenu]')) { const bar = PB.querySelector('.bar'); if (bar) bar.insertAdjacentHTML('beforeend', '<button class="btn r" data-a="mmenu">Main Menu</button>'); }
   }
   // boot: replace the start-up menu with the home screen
   if (!G) showHome();

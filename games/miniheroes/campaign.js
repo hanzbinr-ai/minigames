@@ -38,18 +38,18 @@ const MIS = id => MISSIONS.find(m => m.id === id);
 // ---------- campaign menu ----------
 function openCampaign() {
   const c = CP();
-  showPanel(() => { const c = CP(); return `<h2>CAMPAIGN</h2><p>Stars: <b class="hl">${totalStars(c)}</b>/18 · Hard mode ${hardUnlocked(c) ? btn(c.hard ? 'HARD: ON' : 'HARD: OFF', 'chard', '', c.hard ? 'y' : 'alt') : '<span class="no">locked (12 stars)</span>'}</p>
+  showPanel(() => { const c = CP(); return `<h2>Campaign</h2><p>Stars: <b class="hl">${totalStars(c)}</b>/18 · Hard mode ${hardUnlocked(c) ? btn(c.hard ? 'Hard: On' : 'Hard: Off', 'chard', '', c.hard ? 'y' : 'alt') : '<span class="no">locked (12 stars)</span>'}</p>
     ${c.carry ? `<p>Hero: <b>${c.carry.name}</b> LV${c.carry.lvl} · ${Object.keys(c.carry.sk).map(k => SKILLS[k].name).join(', ') || 'no skills'}${c.carry.art ? ' · ' + ARTIFACTS[c.carry.art].name : ''}</p>` : ''}
     ${MISSIONS.map(m => { const st = c.stars[m.id] || 0, open = m.id <= c.unlocked; return `<div class="it"><div class="t">${m.id}. ${m.name} ${'★'.repeat(st)}${'☆'.repeat(3 - st)}<small>${m.goal}${m.limit ? ' (by day ' + m.limit + ')' : ''} · ★ win · ★ by day ${m.par} · ★ losses under 25% · ${FACTIONS[m.pf].name} vs ${FACTIONS[m.af].name} · ${MAP_SIZES[m.size].name}</small></div>${btn(open ? 'PLAY' : 'LOCKED', 'cpick', m.id, open ? 'g' : 'alt', !open)}</div>`; }).join('')}
-    <div class="bar" style="margin-top:8px">${btn('RESET CAMPAIGN', 'creset', '', 'alt')}${btn('BACK', G ? 'close' : 'new', '', 'alt')}</div>`; }, {sticky: !G});
+    <div class="bar" style="margin-top:8px">${btn('Reset Campaign', 'creset', '', 'alt')}${btn('Back', G ? 'close' : 'new', '', 'alt')}</div>`; }, {sticky: !G});
 }
 function openBonus(id) {
   const m = MIS(id), f = m.pf, strong = FACTIONS[f].units[3];
-  showPanel(() => `<h2>${m.id}. ${m.name.toUpperCase()}</h2><p>${m.goal}${m.limit ? ' before day ' + m.limit : ''}.</p><h3>CHOOSE A STARTING BONUS</h3>
+  showPanel(() => `<h2>${m.id}. ${m.name}</h2><p>${m.goal}${m.limit ? ' before day ' + m.limit : ''}.</p><h3>Choose a Starting Bonus</h3>
     <div class="it"><div class="t">+4000 GOLD<small>Build and recruit faster</small></div>${btn('TAKE', 'cstart', id + ':gold', 'y')}</div>
     <div class="it"><div class="t">4 ${strong.toUpperCase()}<small>A strong stack joins your hero</small></div>${btn('TAKE', 'cstart', id + ':unit', 'y')}</div>
     <div class="it"><div class="t">ARTIFACT<small>A random artifact for your hero</small></div>${btn('TAKE', 'cstart', id + ':art', 'y')}</div>
-    <div class="bar">${btn('BACK', 'campaign', '', 'alt')}</div>`, {sticky: !G});
+    <div class="bar">${btn('Back', 'campaign', '', 'alt')}</div>`, {sticky: !G});
 }
 
 // ---------- mission setup ----------
@@ -123,7 +123,7 @@ function campStars() {
 function campFinish(r) {
   G.over = r; UI.mode = 'over'; UI.walk = null; UI.ai = null; const m = MIS(G.camp.id);
   r === 'win' ? SFX.win() : SFX.lose();
-  if (r === 'lose') { showPanel(() => `<h2 style="color:var(--red)">MISSION FAILED</h2><p>${m.name}: ${m.goal} was not achieved.</p><div class="bar">${btn('RETRY', 'cpick', m.id, 'y')}${btn('CAMPAIGN', 'campaign', '', 'alt')}</div>`, {sticky: true}); return; }
+  if (r === 'lose') { showPanel(() => `<h2 style="color:var(--red)">Mission Failed</h2><p>${m.name}: ${m.goal} was not achieved.</p><div class="bar">${btn('Retry', 'cpick', m.id, 'y')}${btn('Campaign', 'campaign', '', 'alt')}</div>`, {sticky: true}); return; }
   const s = campStars(), c = CP(); c.stars[m.id] = Math.max(c.stars[m.id] || 0, s.stars); c.unlocked = Math.max(c.unlocked, Math.min(MISSIONS.length, m.id + 1)); if (m.id === MISSIONS.length) c.done = true; saveCP(c);
   G.camp.result = s;
   const h = G.heroes.find(x => x.owner === 'player' && x.id !== G.camp.escort) || G.heroes.find(x => x.owner === 'player');
@@ -132,11 +132,11 @@ function campFinish(r) {
 }
 function openCarry() {
   const h = UI.keepHero, m = MIS(G.camp.id), s = G.camp.result, best = h.arts.slice().sort((a, b) => ARTIFACTS[b].val - ARTIFACTS[a].val)[0];
-  showPanel(() => `<h2 style="color:var(--green)">MISSION COMPLETE ${'★'.repeat(s.stars)}${'☆'.repeat(3 - s.stars)}</h2>
+  showPanel(() => `<h2 style="color:var(--green)">Mission Complete ${'★'.repeat(s.stars)}${'☆'.repeat(3 - s.stars)}</h2>
     <p>Day ${s.day} (par ${m.par}) · losses ${Math.round(s.lossRate * 100)}% (under 25% = star)</p>
-    <h3>${h.name} CARRIES OVER</h3><p>Level ${h.lvl}, stats and the best artifact${best ? ' (<b>' + ARTIFACTS[best].name + '</b>)' : ''}. The army does not. Keep up to 3 skills:</p>
+    <h3>${h.name} Carries Over</h3><p>Level ${h.lvl}, stats and the best artifact${best ? ' (<b>' + ARTIFACTS[best].name + '</b>)' : ''}. The army does not. Keep up to 3 skills:</p>
     <div class="bar">${Object.keys(h.sk).map(k => btn((UI.keep.includes(k) ? '✔ ' : '') + SKILLS[k].name, 'ckeep', k, UI.keep.includes(k) ? 'g' : 'alt')).join('') || 'No skills yet.'}</div>
-    <div class="bar" style="margin-top:8px">${m.id < MISSIONS.length ? btn('NEXT MISSION', 'cnext', m.id + 1, 'y') : ''}${btn('CAMPAIGN MENU', 'cdone', '', 'alt')}</div>`, {sticky: true});
+    <div class="bar" style="margin-top:8px">${m.id < MISSIONS.length ? btn('Next Mission', 'cnext', m.id + 1, 'y') : ''}${btn('Campaign Menu', 'cdone', '', 'alt')}</div>`, {sticky: true});
 }
 function saveCarry() {
   const h = UI.keepHero, c = CP(), best = h.arts.slice().sort((a, b) => ARTIFACTS[b].val - ARTIFACTS[a].val)[0], sk = {};
@@ -157,8 +157,8 @@ fight = function (h, target, after) {
   if (G && G.camp && h.owner === 'player' && target.monster && !target.monster.dipl) {
     const r = armyPower(h.army, h) / Math.max(1, armyPower(target.monster.army)), o = target.monster, s = o.army[0];
     const rolled = ((o.id * 7919 + G.day) % 100) / 100; // deterministic per monster+day
-    if (r >= 4 && rolled < 0.6 && h.army.length < MAX_STACKS) { UI.dip = {h, o, after, join: true}; showPanel(() => `<h2>DIPLOMACY</h2><p>The ${s.count} ${s.type} are awed by your army and offer to <b class="hl">JOIN</b> you for free.</p><div class="bar">${btn('ACCEPT', 'dipyes', '', 'g')}${btn('FIGHT', 'dipfight', '', 'alt')}</div>`, {sticky: true}); return; }
-    if (r >= 2.5) { UI.dip = {h, o, after, join: false}; showPanel(() => `<h2>DIPLOMACY</h2><p>The ${s.count} ${s.type} fear you and offer to <b class="hl">FLEE</b>.</p><div class="bar">${btn('LET THEM GO', 'dipyes', '', 'g')}${btn('FIGHT', 'dipfight', '', 'alt')}</div>`, {sticky: true}); return; }
+    if (r >= 4 && rolled < 0.6 && h.army.length < MAX_STACKS) { UI.dip = {h, o, after, join: true}; showPanel(() => `<h2>Diplomacy</h2><p>The ${s.count} ${s.type} are awed by your army and offer to <b class="hl">JOIN</b> you for free.</p><div class="bar">${btn('Accept', 'dipyes', '', 'g')}${btn('Fight', 'dipfight', '', 'alt')}</div>`, {sticky: true}); return; }
+    if (r >= 2.5) { UI.dip = {h, o, after, join: false}; showPanel(() => `<h2>Diplomacy</h2><p>The ${s.count} ${s.type} fear you and offer to <b class="hl">FLEE</b>.</p><div class="bar">${btn('Let Them Go', 'dipyes', '', 'g')}${btn('Fight', 'dipfight', '', 'alt')}</div>`, {sticky: true}); return; }
   }
   return _fight(h, target, after);
 };
