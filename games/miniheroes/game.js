@@ -1689,15 +1689,19 @@ function drawSpellFx(g, e) {
 function battleView() {
   const pe = $('pre'), pre = B.phase === 'pre' && pe.style.display !== 'none', wide = pre && innerWidth >= 900, pw = wide ? pe.offsetWidth * CAM.dpr : 0, ph = pre && !wide ? pe.offsetHeight * CAM.dpr : 0;
   const aw = CAM.w - pw, ah = CAM.h - ph, fit = Math.min(aw / BLW, (ah) / (PER + HDR + 8)), s0 = Math.max(0.5, fit);
-  const C = B.cam || (B.cam = {z: Math.min(2.4, Math.max(1, (ah * 0.92) / ((PER + HDR) * s0))), cx: BLW / 2, cy: BOY + PER / 2});
+  // zMin: never show more than one copy of the wrapped field vertically. The field is landscape (BLW x PER), so on a
+  // portrait phone "fit width" (z=1) stacked ~3 dimmed copies on screen; now the smallest zoom fills the height with one.
+  const zMin = Math.max(1, (ah - Math.round(HDR * Math.min(s0, aw / BLW))) / (PER * s0));
+  const C = B.cam || (B.cam = {z: Math.max(zMin, Math.min(2.4, (ah * 0.92) / ((PER + HDR) * s0))), cx: BLW * s0 * zMin > aw ? 0 : BLW / 2, cy: BOY + PER / 2}); // too wide to fit: open on your own army (left)
+  C.z = Math.max(zMin, Math.min(Math.max(4, zMin * 1.6), C.z));
   const s = s0 * C.z, hs = Math.min(s, aw / BLW), hh = Math.round(HDR * hs), top = hh, vh = ah - hh;
   const half = aw / 2 / s; C.cx = BLW * s <= aw ? BLW / 2 : Math.max(half, Math.min(BLW - half, C.cx));
   C.cy = BOY + (((C.cy - BOY) % PER) + PER) % PER;
-  BV = {s, s0, ox: Math.round(aw / 2 - C.cx * s), oy: Math.round(top + vh / 2 - C.cy * s), hs, hh, aw, ah, top};
+  BV = {s, s0, zMin, ox: Math.round(aw / 2 - C.cx * s), oy: Math.round(top + vh / 2 - C.cy * s), hs, hh, aw, ah, top};
   return BV;
 }
 function battleZoom(z, sx = BV.aw / 2, sy = BV.top + (BV.ah - BV.top) / 2) {
-  const C = B.cam, lx = (sx - BV.ox) / BV.s, ly = (sy - BV.oy) / BV.s; C.z = Math.max(1, Math.min(4, z)); battleView();
+  const C = B.cam, lx = (sx - BV.ox) / BV.s, ly = (sy - BV.oy) / BV.s; C.z = z; battleView(); // battleView clamps to [zMin, max(4, 1.6 zMin)]
   C.cx += lx - (sx - BV.ox) / BV.s; C.cy += ly - (sy - BV.oy) / BV.s; battleView();
 }
 function battlePan(dx, dy) { if (!B || !B.cam) return; B.cam.cx -= dx / BV.s; B.cam.cy -= dy / BV.s; battleView(); }

@@ -10,9 +10,7 @@
   const POL_ICON = {tax: 'tax', lumber: 'wood', trade: 'trade', warchest: 'gold', conscript: 'militia', muster: 'leadership', fortify: 'defense', drill: 'attack',
     manafont: 'manaregen', tithe: 'research', carto: 'logistics', ley: 'air', crusade: 'tal_castle_2', divine: 'tal_castle_1', raisedead: 'tal_necro_0', dread: 'tal_necro_5',
     sacredwood: 'tal_sylvan_5', huntlaw: 'archery', hellforge: 'tal_inferno_2', pact: 'tal_inferno_3', warband: 'tal_stronghold_1', plunder: 'tal_stronghold_2',
-    guildhall: 'tal_dwarf_4', bulwark: 'tal_dwarf_2', codex: 'art_book', constructs: 'earth', growth: 'growth', construction: 'construction',
-    // Mage has no painted talent row yet (sheet 6 has six factions): borrow generic icons per tech level
-    tal_mage_0: 'gold', tal_mage_1: 'research', tal_mage_2: 'earth', tal_mage_3: 'lightning', tal_mage_4: 'shield', tal_mage_5: 'wisdom'};
+    guildhall: 'tal_dwarf_4', bulwark: 'tal_dwarf_2', codex: 'art_book', constructs: 'earth', growth: 'growth', construction: 'construction'};
   const BLD = {fort: 'defense', citadel: 'tal_castle_0', hall: 'gold', capitol: 'art_crown', market: 'trade', guild1: 'wisdom', guild2: 'manaregen', pit: 'fire', library: 'art_book'};
   const icoKey = k => IC.cells[k] ? k : POL_ICON[k] || SPELL_ICON[k] || ART_ICON[k] || null;
   // CSS sprite: works before the image decodes, scales to any px

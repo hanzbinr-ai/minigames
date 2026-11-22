@@ -4,7 +4,8 @@ Format: - [ ] [Owner] task  (Owner = Code or Broz)
 - [ ] [Hanz] Test 1.5.2 on a real phone (luck fx + hero LUCK display), screenshot MENU > DEBUG overlay
 - [x] [Code] Mage faction — 1.6.0, committed locally, not pushed (needs Hanz "push")
 - [ ] [Hanz] Test 1.6.0 Mage on a phone after push (new game as Mage, Starhold, Library, battle)
-- [ ] [Broz] Optional: painted Mage talent icon row (tal_mage_0..5) — tech tree uses generic icons for now
+- [x] [Broz] Painted Mage talent icon row (tal_mage_0..5) — wired in 1.6.0
+- [x] [Code] Portrait battle showed ~3 stacked copies of the wrapped field — min zoom now fills the height with one copy
 - [ ] [Code] Balance retune later should include Mage mid (65.6% in mage160-summary.txt)
 - [ ] [Broz] Small: space Thunderbird wing from Ogre Magi on Stronghold upgrade sheet
 - [ ] [Code] Retune balance later (Necro too strong, Sylvan too weak; see balance/runs/luck152-summary.txt)

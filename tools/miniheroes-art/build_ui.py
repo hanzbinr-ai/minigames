@@ -59,6 +59,10 @@ for r, (y, keys) in enumerate([(85, ['helm', 'armor', 'sword', 'shieldA', 'boots
 FAC = ['castle', 'necro', 'sylvan', 'inferno', 'stronghold', 'dwarf']
 for r, (f, y) in enumerate(zip(FAC, [108, 268, 430, 590, 752, 913])):
     for c, x in enumerate([140, 298, 458, 618, 775, 932]): icons.append((f'tal_{f}_{c}', circle(crop(6, x, y, 126))))
+# Mage talents: Broz painted these straight into art/icons.webp (cells 89-94 = x 576..896, y 320), there is no sheet-6 row.
+# Carry them over from the current atlas so a rebuild keeps them in the same cells.
+_old = Image.open(os.path.join(OUT, 'icons.webp')).convert('RGBA'); assert len(icons) == 89, len(icons)
+for i in range(6): icons.append((f'tal_mage_{i}', _old.crop((576 + 64 * i, 320, 640 + 64 * i, 384))))
 J['icons'] = pack('icons', icons, 64, 16)
 # --- 256px battle atlas: obstacles, siege, spell fx (sheet 7)
 bt = []
