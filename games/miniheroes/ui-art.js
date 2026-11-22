@@ -81,7 +81,7 @@
   const home = document.createElement('div'); home.id = 'home';
   const HB = [['CONTINUE', 'h_cont', 0], ['NEW GAME', 'new', 1], ['CAMPAIGN', 'campaign', 2], ['DUEL', 'h_duel', 3], ['SETTINGS', 'h_set', 4]];
   const homeHtml = () => { const can = !!(localStorage.getItem(SAVE_KEY + '-auto') || localStorage.getItem(SAVE_KEY));
-    return `<div class="hbg"></div><nav>${HB.map(([l, a, i]) => `<button class="hbtn${a === 'campaign' ? ' hot' : ''}" data-a="${a}" ${a === 'h_cont' && !can ? 'disabled' : ''}><img src="${A}home-i${i}.webp" alt="">${l}</button>`).join('')}</nav><small class="hver">v${'1.5.2'}</small>`; };
+    return `<div class="hbg"></div><nav>${HB.map(([l, a, i]) => `<button class="hbtn${a === 'campaign' ? ' hot' : ''}" data-a="${a}" ${a === 'h_cont' && !can ? 'disabled' : ''}><img src="${A}home-i${i}.webp" alt="">${l}</button>`).join('')}</nav><small class="hver">v${'1.5.3'}</small>`; };
   window.showHome = () => { home.innerHTML = homeHtml(); home.style.display = 'flex'; UI.panel = null; $('panel').classList.remove('show'); UI.mode = G ? UI.mode : 'title'; };
   const hideHome = () => { home.style.display = 'none'; };
   document.body.appendChild(home);

@@ -68,7 +68,10 @@ for k, x in zip(['fx_fireball', 'fx_lightning', 'fx_ice', 'fx_heal', 'fx_haste',
 J['battle'] = pack('battle-props', bt, 256, 8)
 # --- full images: home backdrop, win/lose art, event popups art
 im, k = sheet(16); im.crop((0, 0, im.width, int(470 * k))).save(os.path.join(OUT, 'home.webp'), 'WEBP', quality=80, method=6)
-for n, x in enumerate([160, 343, 528, 698, 880]): fit(crop(16, x - 52, 511, 34, 34), 48).save(os.path.join(OUT, f'home-i{n}.webp'), 'WEBP', quality=90)
+# Icon centers on the painted button row (sheet 16), not button midpoints. A shared
+# (button_x - 52, 34x34) crop sat too far right: it clipped each glyph and caught the
+# first letter of CONTINUE / NEW GAME / CAMPAIGN. SETTINGS happened to still look fine.
+for n, x in enumerate([92, 274, 461, 656, 832]): fit(crop(16, x, 510, 42, 42), 48).save(os.path.join(OUT, f'home-i{n}.webp'), 'WEBP', quality=90)
 crop(4, 255, 175, 500, 340).save(os.path.join(OUT, 'win.webp'), 'WEBP', quality=80); crop(4, 767, 185, 494, 360).save(os.path.join(OUT, 'lose.webp'), 'WEBP', quality=80)
 ev = [(k, unnavy(crop(3, x, 190, 230, 180), 46)) for k, x in [('chest', 183), ('monster', 512), ('shrine', 835)]]
 J['events'] = pack('events', ev, 256, 3)

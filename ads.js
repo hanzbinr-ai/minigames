@@ -21,5 +21,5 @@ window.Ads={
     const b=document.createElement('button');b.className='btn alt';b.textContent='✕ Tutup';
     const m=modal([slot('','IKLAN · layar penuh'),b]);b.onclick=()=>m.remove();return true}
 };
-if('serviceWorker' in navigator){const s=document.currentScript.src.replace(/ads\.js.*$/,'sw.js');addEventListener('load',()=>navigator.serviceWorker.register(s).catch(e=>console.warn('SW',e)))}
+if('serviceWorker' in navigator){const s=document.currentScript.src.replace(/ads\.js.*$/,'sw.js');addEventListener('load',()=>navigator.serviceWorker.register(s).then(r=>r.update()).catch(e=>console.warn('SW',e)));navigator.serviceWorker.addEventListener('controllerchange',()=>{if(window.__mgSwReloaded)return;window.__mgSwReloaded=1;location.reload()})}
 })();

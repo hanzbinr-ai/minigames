@@ -10,11 +10,13 @@ Read this first every session. Update it before ending a task.
 - Images/videos: convert to text in NOTES/ unless the visual itself matters.
 
 ## Status (2026-11-22)
-- Live: 1.5.2 (sw cache mg-v30-miniheroes-152), repo /workspace/minigames/portal, branch main. Not pushed.
+- Live: 1.5.3 (sw cache mg-v31-miniheroes-153), repo /workspace/minigames/portal, branch main. Not pushed.
 - Done: hex battle 22x16 with top/bottom wrap, camera pan/pinch, DEBUG overlay, FPS 30/60, quality High/Low, particle cap 150.
 - Done: Broz chibi units + upgrades for all 6 factions, painted map/battle/UI, home screen, faction grid (data-driven), talent/policy tap-for-detail, win/lose, event popups, siege, spell fx, fog, water.
 - Done: MAIN MENU button on setup screens + in-game MENU with confirm.
 - Done: Heroes 3-style luck in combat (1.5.2).
+- Done: 1.5.3 home-menu icon crops. build_ui.py was slicing sheet 16 with a shared (button_x - 52, 34x34) box that sat too far right, so CONTINUE/NEW GAME/CAMPAIGN (and slightly DUEL) icons were clipped and showed the first letter of the label. Recropped from the painted icon centers ([92, 274, 461, 656, 832], y 510, 42x42) and regenerated home-i0..4.webp. In-game HUD uses resImg / .ico atlas, not these files.
+- SW: skipWaiting + clients.claim were already in sw.js. The game page did not register the worker (only portal ads.js did), and neither path called registration.update() or reloaded on controllerchange — so a phone that only opens /games/miniheroes/ could keep a stale document (Hanz's screenshot still said v1.5.0). Game page now registers ../../sw.js, both paths call update(), and both reload once on controllerchange.
 - Balance (hex sim, N=40, luck 0 because the sim clears hero skills/arts): 1.5.2 matches a 1.5.1 control within noise (early necro ~73%, sylvan ~25%). The 44-59% gate was already missed on current 1.5.1 (and on the Nov 1 hex-raw baseline). Luck itself does not change the sim. Full logs: /workspace/minigames/balance/runs/luck152-summary.txt
 - Push only when Hanz says "push".
 
