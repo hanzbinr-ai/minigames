@@ -7,13 +7,13 @@
 Usage: python3 build_atlas.py      (run from anywhere; writes into games/miniheroes/art/)"""
 import json, math, os, random
 from collections import deque
-from PIL import Image, ImageFilter
+from PIL import Image, ImageChops, ImageFilter
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, '..', '..', 'games', 'miniheroes', 'art')
 PREV = os.path.join(HERE, 'lineups')
 CELL, BASE = 128, 122           # frame size and feet baseline; figures get >= 10px headroom (no cropped lances)
 MAXH, MAXW = 110, 122
-CELLS = {'castle': 192, 'necro': 192, 'sylvan': 192, 'inferno': 192, 'stronghold': 192, 'dwarf': 192}      # chibi Castle: bigger frames so battle sprites are downscaled < 2x (crisp without mipmaps)
+CELLS = {'castle': 192, 'necro': 192, 'sylvan': 192, 'inferno': 192, 'stronghold': 192, 'dwarf': 192, 'mage': 192}      # chibi Castle: bigger frames so battle sprites are downscaled < 2x (crisp without mipmaps)
 UI = 96                       # pre-baked UI portraits: 96px source, shown at 48 CSS px (2x)
 def setcell(c):
     global CELL, BASE, MAXH, MAXW
@@ -25,12 +25,14 @@ FACTIONS = {
   'sylvan': (['Sprite', 'Wolf Rider', 'Elf Archer', 'Druid', 'Unicorn', 'Treant', 'Green Dragon'], ['Faerie', 'Moon Rider', 'Grand Elf', 'Elder Druid', 'Silver Unicorn', 'Ancient Treant', 'Emerald Dragon'], 'Phoenix'),
   'inferno': (['Imp', 'Hell Hound', 'Succubus', 'Demon', 'Efreet', 'Pit Fiend', 'Devil'], ['Familiar', 'Cerberus', 'Temptress', 'Horned Demon', 'Efreet Sultan', 'Pit Lord', 'Arch Devil'], 'Arch Fiend'),
   'stronghold': (['Goblin', 'Wolf Raider', 'Orc Axeman', 'Ogre Shaman', 'Roc', 'Cyclops', 'Behemoth'], ['Hobgoblin', 'Warg Raider', 'Orc Chieftain', 'Ogre Magi', 'Thunderbird', 'Cyclops King', 'Ancient Behemoth'], 'Thunder Titan'),
+  'mage': (['Gremlin', 'Stone Gargoyle', 'Stone Golem', 'Mage', 'Djinn', 'Naga', 'Giant'], ['Master Gremlin', 'Obsidian Gargoyle', 'Marble Golem', 'Arch Mage', 'Elder Djinn', 'Naga Queen', 'Storm Giant'], 'Archon'),
   'dwarf': (['Miner', 'Shieldbearer', 'Crossbow Engineer', 'Runesmith', 'Bear Rider', 'Steam Golem', 'Iron Dreadnought'], ['Foreman', 'Shieldguard', 'Siege Engineer', 'Runelord', 'Bear Lord', 'Iron Golem', 'Thunder Dreadnought'], 'Mountain King'),
 }
+CC_SPLIT = {'mage'}  # Gremlin's ball and the Gargoyle wing share x columns: split by blobs instead of cut lines
 MYTHIC_ORDER = ['castle', 'necro', 'sylvan', 'inferno', 'stronghold', 'dwarf']
 CUTS = {'castle-base': [172, 352, 481, 700, 875, 1019], 'castle-up': [185, 362, 506, 722, 893, 1030],
         'mythic': [231, 425, 648, 854, 1054], 'stronghold-base': [135, 312, 506, 710, 890, 1078]}  # hand-measured where shadows touch
-FLY = {'Griffin', 'Royal Griffin', 'Ghost', 'Spectre', 'Sprite', 'Faerie', 'Phoenix', 'Roc', 'Thunderbird', 'Vampire', 'Vampire Lord', 'Efreet', 'Efreet Sultan', 'Bone Dragon', 'Ghost Dragon', 'Green Dragon', 'Emerald Dragon', 'Archangel'}
+FLY = {'Griffin', 'Royal Griffin', 'Ghost', 'Spectre', 'Sprite', 'Faerie', 'Phoenix', 'Roc', 'Thunderbird', 'Vampire', 'Vampire Lord', 'Efreet', 'Efreet Sultan', 'Bone Dragon', 'Ghost Dragon', 'Green Dragon', 'Emerald Dragon', 'Archangel', 'Stone Gargoyle', 'Obsidian Gargoyle', 'Djinn', 'Elder Djinn', 'Archon'}
 
 def is_white(p, lo=226, spread=26): return min(p) > lo and max(p) - min(p) < spread
 
@@ -107,6 +109,34 @@ def clean(fig):
             l = lab[y * w + x]
             if l in keep or (l == 0 and ap[x, y] > 0 and any(lab[yy * w + xx] in keep for xx, yy in ((min(w - 1, x + 1), y), (max(0, x - 1), y), (x, min(h - 1, y + 1)), (x, max(0, y - 1))))): nap[x, y] = ap[x, y]
     fig = fig.copy(); fig.putalpha(na); return fig.crop(fig.getbbox())
+
+def cc_figs(rgba, n):
+    """split a lineup by connected alpha blobs (for sheets whose figures overlap in x, so no straight cut exists):
+    the n biggest blobs are the figures, every other blob joins the figure whose centre is nearest in x"""
+    a = rgba.getchannel('A'); w, h = a.size; ap = a.load(); lab = [0] * (w * h); comps = []
+    for sy in range(h):
+        for sx in range(w):
+            if ap[sx, sy] < 60 or lab[sy * w + sx]: continue
+            cid = len(comps) + 1; st = [(sx, sy)]; lab[sy * w + sx] = cid; pts = []
+            while st:
+                x, y = st.pop(); pts.append((x, y))
+                for nx in (x - 1, x, x + 1):
+                    for ny in (y - 1, y, y + 1):
+                        if 0 <= nx < w and 0 <= ny < h and not lab[ny * w + nx] and ap[nx, ny] >= 60: lab[ny * w + nx] = cid; st.append((nx, ny))
+            xs = [p[0] for p in pts]; comps.append((len(pts), (min(xs) + max(xs)) / 2, pts))
+    big = sorted(sorted(comps, key=lambda c: -c[0])[:n], key=lambda c: c[1])
+    if len(big) < n or big[-1][0] < 0.05 * max(c[0] for c in big): raise SystemExit('cc_figs: could not find %d figures' % n)
+    groups = [[b] for b in big]
+    for c in comps:
+        if any(c is b for b in big) or c[0] < 30: continue
+        groups[min(range(n), key=lambda i: abs(big[i][1] - c[1]))].append(c)
+    out = []
+    for g in groups:
+        m = Image.new('L', (w, h), 0); mp = m.load()
+        for c in g:
+            for x, y in c[2]: mp[x, y] = 255
+        m = ImageChops.darker(m.filter(ImageFilter.MaxFilter(3)), a); f = rgba.copy(); f.putalpha(m); out.append(clean(f.crop(m.getbbox())))
+    return out
 
 def scale_row(figs):
     """one scale per lineup (keeps relative sizes: an imp stays smaller than a devil), never too tiny, never cropped"""
@@ -260,8 +290,18 @@ def main():
     mfigs = None; global FIXF; FIXF = fix_figs()
     mr = cut_background(Image.open(os.path.join(HERE, 'src', 'mythic.jpg')))
     mraw = [clean(mr.crop((max(0, a - 2), 0, min(mr.width, b + 2), mr.height))) for a, b in segments(mr, 6, 'mythic')]
+    only = [f for f in os.environ.get('ONLY', '').split(',') if f]  # ONLY=mage: rebuild just these factions, keep the rest of units.json
+    if only:
+        old = json.load(open(os.path.join(OUT, 'units.json')))
+        for k in ('atlases', 'cells', 'ui'): man[k] = {f: v for f, v in old[k].items() if f not in only}
+        man['units'] = {u: v for u, v in old['units'].items() if v['atlas'] not in only}
     for fac, (base, up, mname) in FACTIONS.items():
-        setcell(CELLS.get(fac, 128)); myth[fac] = scale_row(mraw)[MYTHIC_ORDER.index(fac)]
+        if only and fac not in only: continue
+        setcell(CELLS.get(fac, 128))
+        if fac in MYTHIC_ORDER: myth[fac] = scale_row(mraw)[MYTHIC_ORDER.index(fac)]
+        else:  # Broz painted these T8s alone on a white card (src/mythic-<name>.jpg), same style as mythic.jpg: size against that lineup
+            ma = clean(cut_background(Image.open(os.path.join(HERE, 'src', 'mythic-' + mname.lower().replace(' ', '-') + '.jpg'))))
+            myth[fac] = scale_row(mraw + [ma])[-1]
         if fac == 'castle':  # Broz's chibi Archangel (white card with a caption)
             ar = cut_navy(Image.open(os.path.join(HERE, 'src', 'broz', str(ARCHANGEL) + '.jpg')))
             myth[fac] = scale_row([clean(ar)] * 3)[0]
@@ -281,9 +321,11 @@ def main():
             myth[fac] = bs[7]
         for key, names in (() if fac in BROZ else ((fac + '-base', base), (fac + '-up', up))):
             rgba = cut_background(Image.open(os.path.join(HERE, 'src', key + '.jpg')))
-            crops = [rgba.crop((max(0, a - 2), 0, min(rgba.width, b + 2), rgba.height)) for a, b in segments(rgba, 7, key)]
-            if key == 'castle-up': crops[1] = degreen(crops[1])  # neighbour's quiver arrows overlap the halberd
-            figs = scale_row([clean(c) for c in crops])
+            if fac in CC_SPLIT: figs = scale_row(cc_figs(rgba, 7))
+            else:
+                crops = [rgba.crop((max(0, a - 2), 0, min(rgba.width, b + 2), rgba.height)) for a, b in segments(rgba, 7, key)]
+                if key == 'castle-up': crops[1] = degreen(crops[1])  # neighbour's quiver arrows overlap the halberd
+                figs = scale_row([clean(c) for c in crops])
             if key == 'castle-up':
                 uf = up_figs('castle'); im = Image.open(os.path.join(HERE, 'src', 'broz', '34.jpg')).convert('RGB')  # standalone human Arbalester (replaces the sheet's frog-headed one)
                 uf[2] = clean(cut_background(im.crop((0, 0, im.width, int(im.height * 0.84))))); figs = match_h(uf, [f for _, f in rows[:7]])
@@ -305,7 +347,7 @@ def main():
         setcell(128)
         print(fac, len(rows), 'units', os.path.getsize(os.path.join(OUT, fn)) // 1024, 'KB')
     with open(os.path.join(OUT, 'units.json'), 'w') as f: json.dump(man, f, separators=(',', ':'))
-    for fac in FACTIONS:  # town backdrops: 960 wide WebP
+    for fac in ([] if only else FACTIONS):  # town backdrops: 960 wide WebP (ONLY= runs leave the baked towns alone)
         src = os.path.join(HERE, 'src', 'town', fac + '.jpg')
         if os.path.exists(src):
             im = Image.open(src).convert('RGB'); im = im.resize((960, round(960 * im.height / im.width)), Image.LANCZOS)

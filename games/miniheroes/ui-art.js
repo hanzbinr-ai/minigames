@@ -10,8 +10,10 @@
   const POL_ICON = {tax: 'tax', lumber: 'wood', trade: 'trade', warchest: 'gold', conscript: 'militia', muster: 'leadership', fortify: 'defense', drill: 'attack',
     manafont: 'manaregen', tithe: 'research', carto: 'logistics', ley: 'air', crusade: 'tal_castle_2', divine: 'tal_castle_1', raisedead: 'tal_necro_0', dread: 'tal_necro_5',
     sacredwood: 'tal_sylvan_5', huntlaw: 'archery', hellforge: 'tal_inferno_2', pact: 'tal_inferno_3', warband: 'tal_stronghold_1', plunder: 'tal_stronghold_2',
-    guildhall: 'tal_dwarf_4', bulwark: 'tal_dwarf_2', growth: 'growth', construction: 'construction'};
-  const BLD = {fort: 'defense', citadel: 'tal_castle_0', hall: 'gold', capitol: 'art_crown', market: 'trade', guild1: 'wisdom', guild2: 'manaregen', pit: 'fire'};
+    guildhall: 'tal_dwarf_4', bulwark: 'tal_dwarf_2', codex: 'art_book', constructs: 'earth', growth: 'growth', construction: 'construction',
+    // Mage has no painted talent row yet (sheet 6 has six factions): borrow generic icons per tech level
+    tal_mage_0: 'gold', tal_mage_1: 'research', tal_mage_2: 'earth', tal_mage_3: 'lightning', tal_mage_4: 'shield', tal_mage_5: 'wisdom'};
+  const BLD = {fort: 'defense', citadel: 'tal_castle_0', hall: 'gold', capitol: 'art_crown', market: 'trade', guild1: 'wisdom', guild2: 'manaregen', pit: 'fire', library: 'art_book'};
   const icoKey = k => IC.cells[k] ? k : POL_ICON[k] || SPELL_ICON[k] || ART_ICON[k] || null;
   // CSS sprite: works before the image decodes, scales to any px
   const ico = (k, px = 32, cls = '') => { const key = icoKey(k), c = key && IC.cells[key]; if (!c) return ''; const s = px / IC.size;
@@ -133,7 +135,7 @@
   const home = document.createElement('div'); home.id = 'home';
   const HB = [['Continue', 'h_cont', 0], ['New Game', 'new', 1], ['Campaign', 'campaign', 2], ['Duel', 'h_duel', 3], ['Settings', 'h_set', 4]];
   const homeHtml = () => { const can = !!(localStorage.getItem(SAVE_KEY + '-auto') || localStorage.getItem(SAVE_KEY));
-    return `<div class="hbg"><div class="hcastle"></div><h1 class="htitle"><span>Mini</span> Heroes</h1></div><div class="hheroes"></div><nav>${HB.map(([l, a, i]) => `<button class="hbtn${a === 'campaign' ? ' hot' : ''}" data-a="${a}" ${a === 'h_cont' && !can ? 'disabled' : ''}><img src="${A}home-i${i}.webp" alt="">${l}</button>`).join('')}</nav><small class="hver">v${'1.5.5'}</small>`; };
+    return `<div class="hbg"><div class="hcastle"></div><h1 class="htitle"><img src="art/home-logo.webp" alt="Mini Heroes" draggable="false"></h1></div><div class="hheroes"></div><nav>${HB.map(([l, a, i]) => `<button class="hbtn${a === 'campaign' ? ' hot' : ''}" data-a="${a}" ${a === 'h_cont' && !can ? 'disabled' : ''}><img src="${A}home-i${i}.webp" alt="">${l}</button>`).join('')}</nav><small class="hver">v${'1.6.0'}</small>`; };
   window.showHome = () => { home.innerHTML = homeHtml(); home.style.display = 'flex'; UI.panel = null; $('panel').classList.remove('show'); UI.mode = G ? UI.mode : 'title'; };
   const hideHome = () => { home.style.display = 'none'; };
   document.body.appendChild(home);

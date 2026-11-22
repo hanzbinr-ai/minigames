@@ -27,3 +27,8 @@ Hanz (2026-11-22): on portrait home, put a castle scene at the top (behind the M
 Optional instead of (1)+(2): one **full portrait home sheet** (`art/home-portrait.webp`, e.g. 1080×1920) with castle in the top, title baked or left open, character lineup in the middle, and dark clear space in the bottom third for the five menu buttons.
 
 When these land, Code should swap them in for `town-castle.webp` + the CSS title, and keep desktop on `home.webp` unless a new landscape sheet is provided.
+
+## Delivered by Broz (2026-11-22)
+
+- `art/home-castle.webp` — 768×1024, golden-hour castle on a cliff, open sky in the upper third, bottom fades to dark navy. No characters, no title.
+- `art/home-logo.webp` — 1438×838 transparent WebP, redrawn MINI HEROES stone-and-gold logo (wings + blue diamond), ~60 px padding, green-keyed and despilled. Checked on navy: clean edges.

@@ -10,7 +10,16 @@ Read this first every session. Update it before ending a task.
 - Images/videos: convert to text in NOTES/ unless the visual itself matters.
 
 ## Status (2026-11-22)
-- Live: 1.5.5 (sw cache mg-v35-miniheroes-155), repo /workspace/minigames/portal, branch main. Not pushed.
+- Live (GitHub Pages): up to 22a0404 (1.5.5, sw mg-v35-miniheroes-155). Local, NOT pushed: 1.6.0 Mage (sw mg-v36-miniheroes-160) — waiting for Hanz to say "push".
+- Done: 1.6.0 Mage faction (7th faction, Hanz approved "Ok neh gas"). Spec: NOTES/mage-faction-draft.md, art notes: NOTES/mage-style.md.
+  - data.js: 7 UNIT_DEFS (Gremlin→Master Gremlin … Giant→Storm Giant) + `upRange` mod (only the upgrade shoots: Master Gremlin range 5). FACTIONS.mage (town Starhold, heroes Solmyr/Josephine, spec Leyline +2 SP), Library building (1000g + 2 gems), policies codex/constructs, AI_POLICY_PREF, TECH.mage (m1a..m6c, capstone ARCANUM), START_SKILLS, tavern extras Astral/Iona/Cyra.
+  - game.js: Leyline in stat(h,'sp'); Library `study()` = 2 gems → 0.5 RP (town + tech panel, AI studies when gems > 4); spells cast in battle +0.2 RP each (battle cap); ARCANUM +15% Mage dmg after a spell that battle; Codex = Guild 1 also teaches Lightning Bolt; Living Constructs = Machines +2 def.
+  - campaign.js: Archon (T8) from Storm Giant. Faction pickers, duel, random AI and neutral towns pick Mage via FACTION_KEYS. No new campaign mission.
+  - Art: build_atlas.py now takes `ONLY=mage` (rebuilds one faction, merges units.json, leaves towns/other atlases alone) and `cc_figs` (splits a lineup by alpha blobs; Gremlin's ball and the Gargoyle wing overlap in x). Archon read from src/mythic-archon.jpg, scaled against mythic.jpg. Output art/units-mage.webp 3072x2880 + units-mage-ui.webp 1440x96. Tech icons: Mage has no painted talent row, ui-art.js maps tal_mage_0..5 to generic icons.
+  - Home: portrait uses art/home-castle.webp (top 64%) + art/home-logo.webp (img, replaces the CSS title), home-heroes.webp at 1280/445 with 7 heroes; desktop uses Broz's 1280x720 home.webp (logo baked in). Version label v1.6.0.
+  - Balance: Mage at draft costs won only 8-18% → Mage-only HEX_TUNE [0.85, 0.92, 0.89]. N=40: Mage early 45.6% / mid 65.6% / late 50.6%. Other factions untouched. balance/runs/mage160-summary.txt
+  - Shots: /workspace/minigames/shots/mage-*.png
+
 - Done: hex battle 22x16 with top/bottom wrap, camera pan/pinch, DEBUG overlay, FPS 30/60, quality High/Low, particle cap 150.
 - Done: Broz chibi units + upgrades for all 6 factions, painted map/battle/UI, home screen, faction grid (data-driven), talent/policy tap-for-detail, win/lose, event popups, siege, spell fx, fog, water.
 - Done: MAIN MENU button on setup screens + in-game MENU with confirm.
@@ -33,7 +42,7 @@ Read this first every session. Update it before ending a task.
 - Luck: each living stack has luck -3..+3 (default 0). Sources: Luck secondary skill (Basic/Advanced/Expert = +1/+2/+3) and the Four-Leaf Clover artifact (+1). Both use existing skill/artifact hooks; no new map objects. After the random damage roll, positive luck has luck/24 chance of LUCKY (damage x2); negative luck has the same chance of Unlucky (damage x0.5). Applies to ranged, melee and retaliation. Undead and Machine stacks are immune (same as morale). Floating text LUCKY! (gold-green) / Unlucky (grey) plus a battle log line, same fx path as MORALE! (no extra particles). Luck and morale are shown on the hero panel/HUD and on stack inspect in battle.
 - Upgraded unit costs same as base; upgrade buildings pricier; town shows only upgraded tier once built.
 - Mobile budget: only battling factions' atlases loaded, <200 MB, 30 fps default.
-- Next faction planned: Mage (later patch).
+- Mage added in 1.6.0 (T8 Archon). Next faction: none planned.
 
 ## To-do
 - see TASKS.md

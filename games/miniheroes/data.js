@@ -53,16 +53,24 @@ const UNIT_DEFS = [
   ['dwarf', 4, 'Bear Rider', 'Bear Lord', ['Charge', 'Tough'], ['Cleave'], {def: 2, hp: 1.061, cost: 1.066}, '#7c5030'],
   ['dwarf', 5, 'Steam Golem', 'Iron Golem', ['Machine', 'Tough'], ['SpellImm'], {move: -1, def: 4, hp: 1.215, dmg: 1.1, cost: 1.001}, '#9c9cac'],
   ['dwarf', 6, 'Iron Dreadnought', 'Thunder Dreadnought', ['Machine', 'Splash'], ['Tough'], {range: 6, move: -2, def: 3, dmg: 1.0, cost: 1.001, hp: 1.104}, '#606878'],
+  // 1.6 Mage (Starhold): stats from NOTES/mage-faction-draft.md. upRange = only the upgrade shoots.
+  ['mage', 0, 'Gremlin', 'Master Gremlin', ['Swarm'], [], {def: -1, upRange: 5}, '#7c8cb8'],
+  ['mage', 1, 'Stone Gargoyle', 'Obsidian Gargoyle', ['Fly', 'Machine'], ['Tough'], {def: 1, hp: 0.93, move: 2}, '#8c8c9c'],
+  ['mage', 2, 'Stone Golem', 'Marble Golem', ['Machine', 'Tough'], ['SpellImm'], {def: 3, hp: 1.167, dmg: 0.85, move: -1, cost: 1.023}, '#d8d0c8'],
+  ['mage', 3, 'Mage', 'Arch Mage', ['ManaSteal'], ['Splash'], {range: 6, def: -1, hp: 0.867, cost: 1.0375}, '#7b4fd6'],
+  ['mage', 4, 'Djinn', 'Elder Djinn', ['Fly', 'NoRetal'], ['Blind'], {hp: 0.96, move: 2}, '#3a8cf8'],
+  ['mage', 5, 'Naga', 'Naga Queen', ['NoRetal'], ['Cleave'], {att: 2, def: 1, dmg: 1.07, cost: 1.048}, '#3ca89c'],
+  ['mage', 6, 'Giant', 'Storm Giant', ['RockThrow'], ['SpellImm'], {range: 5, def: 1, hp: 1.047, move: -1, cost: 1.021}, '#3c5ca8'],
 ];
 const FACTION_UNITS = {};
 // 1.3 hex-field retune (6 neighbours, 22x16 wrapped field): price multiplier per faction for tiers 1-3 / 4-5 / 6-7
-const HEX_TUNE = {castle: [1.016, 0.94, 0.985], necro: [0.95, 1.04, 0.97], sylvan: [1.02, 0.97, 0.88], inferno: [0.992, 0.98, 1.035], stronghold: [1.012, 1.04, 1.025], dwarf: [0.995, 0.97, 1.0]};
+const HEX_TUNE = {castle: [1.016, 0.94, 0.985], necro: [0.95, 1.04, 0.97], sylvan: [1.02, 0.97, 0.88], inferno: [0.992, 0.98, 1.035], stronghold: [1.012, 1.04, 1.025], dwarf: [0.995, 0.97, 1.0], mage: [0.85, 0.92, 0.89]}; // mage: hex sim 1.6.0 at [1,1,1] won only 8-18% (see balance/runs/mage160-summary.txt)
 for (const [fac, tier, base, up, ab, ab2, m, col] of UNIT_DEFS) {
   const [att, def, hp, dmg, move, cost, growth] = TIER_T[tier];
   const mk = (name, isUp) => {
     const k = isUp ? 1 : 0, dm = (m.dmg || 1) * (1 + 0.2 * k);
     UNITS[name] = {fac, tier, up: isUp, base, upName: up, att: att + (m.att || 0) + 2 * k, def: Math.max(0, def + (m.def || 0) + 2 * k), hp: Math.round(hp * (m.hp || 1) * (1 + 0.2 * k)),
-      dmg: [Math.max(1, Math.round(dmg[0] * dm)), Math.max(1, Math.round(dmg[1] * dm))], move: Math.max(1, move + (m.move || 0) + (isUp && tier % 2 ? 1 : 0)), range: m.range ? m.range + k : 0,
+      dmg: [Math.max(1, Math.round(dmg[0] * dm)), Math.max(1, Math.round(dmg[1] * dm))], move: Math.max(1, move + (m.move || 0) + (isUp && tier % 2 ? 1 : 0)), range: m.range ? m.range + k : isUp && m.upRange ? m.upRange : 0,
       ab: isUp ? [...ab, ...ab2] : ab.slice(), cost: Math.round(cost * (m.cost || 1) * HEX_TUNE[fac][tier < 3 ? 0 : tier < 5 ? 1 : 2] / 5) * 5, growth, col};
   };
   mk(base, false); mk(up, true);
@@ -97,6 +105,8 @@ const FACTIONS = {
     pal: {wall: '#8c6c4c', roof: '#5c3c1c', sky: [180, 120, 60], ground: '#8c7a3c', emb: '#e40058'}, rp: 'Trophies: enemy creatures you kill (higher tier = more), x1.5 for underdog wins'},
   dwarf:      {name: 'Dwarf',      col: '#d0a050', town: 'Ironhold',   heroes: ['Gareth', 'Mira'],   spec: {k: 'banker', name: 'Banker', desc: '+250 gold per day'},
     pal: {wall: '#7c7468', roof: '#3c4c6c', sky: [70, 80, 110], ground: '#6c6c5c', emb: '#58c8f8'}, rp: 'Savings: gold + resources banked at the end of each day (more = better, with diminishing returns)'},
+  mage:       {name: 'Mage',       col: '#98b0fc', town: 'Starhold',   heroes: ['Solmyr', 'Josephine'], spec: {k: 'leyline', name: 'Leyline', desc: '+2 Spell Power'},
+    pal: {wall: '#d8d0c8', roof: '#3c5ca8', sky: [140, 180, 230], ground: '#6c8c6c', emb: '#f8e0a0'}, rp: 'Study: spend gems at the Library, and every spell your hero casts in battle'},
 };
 for (const f in FACTIONS) FACTIONS[f].units = FACTION_UNITS[f];
 const FACTION_KEYS = Object.keys(FACTIONS);
@@ -111,6 +121,7 @@ const BUILDINGS = {
   citadel: {name: 'Citadel',       cost: {gold: 2500, ore: 5},                    req: ['fort'],           desc: '+50% creature growth'},
   guild1:  {name: 'Mage Guild 1',  cost: {gold: 2000, wood: 5, ore: 5},           req: [],                 desc: 'Teaches level 1 spells'},
   guild2:  {name: 'Mage Guild 2',  cost: {gold: 1000, wood: 4, ore: 4, gems: 4},  req: ['guild1'],         desc: 'Teaches level 2 spells'},
+  library: {name: 'Library',       cost: {gold: 1000, gems: 2},                    req: [], faction: 'mage', desc: 'Study: spend gems for research'},
   pit:     {name: 'Sacrificial Pit', cost: {gold: 1000, ore: 5},                  req: [], faction: 'inferno', desc: 'Sacrifice troops, resources or hero experience for research'},
   dw1: {name: 'Dwelling I',   cost: {gold: 300},                              req: [],                  tier: 0},
   dw2: {name: 'Dwelling II',  cost: {gold: 800, ore: 5},                      req: ['dw1'],             tier: 1},
@@ -121,7 +132,7 @@ const BUILDINGS = {
   dw7: {name: 'Dwelling VII', cost: {gold: 6000, wood: 10, ore: 10, gems: 8}, req: ['dw6', 'hall'],     tier: 6},
 };
 for (let i = 1; i <= 7; i++) BUILDINGS['up' + i] = {name: 'Upgrade ' + ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'][i - 1], cost: {gold: 400 + i * 500 + Math.round(0.7 * TIER_T[i - 1][5] * TIER_T[i - 1][6] / 100) * 100, wood: 2 + i, ore: 2 + i, gems: i > 3 ? i - 3 : 0}, req: ['dw' + i], upTier: i - 1};
-const AI_BUILD_ORDER = ['dw2', 'tavern', 'fort', 'dw3', 'up1', 'hall', 'dw4', 'guild1', 'up2', 'pit', 'dw5', 'citadel', 'up3', 'capitol', 'dw6', 'up4', 'guild2', 'up5', 'dw7', 'up6', 'up7', 'market'];
+const AI_BUILD_ORDER = ['dw2', 'tavern', 'fort', 'dw3', 'up1', 'hall', 'dw4', 'guild1', 'up2', 'pit', 'library', 'dw5', 'citadel', 'up3', 'capitol', 'dw6', 'up4', 'guild2', 'up5', 'dw7', 'up6', 'up7', 'market'];
 
 // Spells are cast in the PLAN phase and take effect first in the RESOLVE phase.
 const SPELLS = {
@@ -160,7 +171,7 @@ const TERRAIN = [
 
 const HERO_NAMES = ['Roland', 'Lyra', 'Gareth', 'Sylva', 'Tarnum', 'Mira'];
 const AI_NAMES = ['Sandro', 'Vidomina', 'Thant', 'Moandor'];
-const ALL_HERO_NAMES = [...new Set(Object.values(FACTIONS).flatMap(f => f.heroes).concat(HERO_NAMES, AI_NAMES, ['Thant', 'Moandor', 'Elysia', 'Brann', 'Korg', 'Nyx']))];
+const ALL_HERO_NAMES = [...new Set(Object.values(FACTIONS).flatMap(f => f.heroes).concat(HERO_NAMES, AI_NAMES, ['Thant', 'Moandor', 'Elysia', 'Brann', 'Korg', 'Nyx', 'Astral', 'Iona', 'Cyra']))];
 const BASE_MP = 20, BASE_INCOME = 500, HIRE_COST = 2500, MAX_STACKS = 7;
 const xpForLevel = l => 250 * l * (l + 1); // xp needed to reach level l+1
 
@@ -183,7 +194,8 @@ const SKILLS = {
 };
 const START_SKILLS = {Roland: {leadership: 1, archery: 1}, Lyra: {wisdom: 1, scouting: 1}, Gareth: {offense: 1, armorer: 1}, Sylva: {logistics: 1, pathfinding: 1},
   Tarnum: {offense: 1, ballistics: 1}, Mira: {estates: 1, wisdom: 1}, Sandro: {wisdom: 1, armorer: 1}, Vidomina: {offense: 1, logistics: 1}, Thant: {armorer: 1, leadership: 1}, Moandor: {archery: 1, scouting: 1},
-  Alaron: {archery: 1, pathfinding: 1}, Xeron: {offense: 1, wisdom: 1}, Calid: {wisdom: 1, scouting: 1}, Crag: {offense: 1, leadership: 1}};
+  Alaron: {archery: 1, pathfinding: 1}, Xeron: {offense: 1, wisdom: 1}, Calid: {wisdom: 1, scouting: 1}, Crag: {offense: 1, leadership: 1},
+  Solmyr: {wisdom: 1, scholar: 1}, Josephine: {wisdom: 1, armorer: 1}};
 
 // Random map setup
 const MAP_SIZES = {S: {w: 20, h: 15, name: 'Small'}, M: {w: 28, h: 20, name: 'Medium'}, L: {w: 36, h: 36, name: 'Large'}, XL: {w: 72, h: 72, name: 'X-Large'}};
@@ -289,6 +301,8 @@ const POLICIES = {
   plunder:   {cat: 'economy',  name: 'Plunder',         icon: 'PLU', faction: 'stronghold', desc: 'Stronghold: won battles loot 10% of enemy army value as gold'},
   guildhall: {cat: 'economy',  name: 'Merchant Guild',  icon: 'MER', faction: 'dwarf', desc: 'Dwarf: +2 ore and +1 gems per day'},
   bulwark:   {cat: 'military', name: 'Stone Bulwark',   icon: 'BUL', faction: 'dwarf', desc: 'Dwarf: all your battle stacks +2 defense'},
+  codex:     {cat: 'arcane',   name: 'Codex Arcanum',   icon: 'COD', faction: 'mage', desc: 'Mage: Mage Guilds teach 1 extra spell (Guild 1 also teaches Lightning Bolt)'},
+  constructs:{cat: 'military', name: 'Living Constructs', icon: 'CNS', faction: 'mage', desc: 'Mage: Machine stacks (Gargoyles, Golems) +2 defense'},
 };
 const POLICY_SWAP_COST = 1000, BASE_SLOTS = 2, MAX_SLOTS = 4;
 // Kingdom talents: 3 branches x 4 tiers + capstone. Kingdom Points: 1 per week + 1 per 3 mines owned.
@@ -316,7 +330,8 @@ const KTALENTS = {
   ],
 };
 const AI_POLICY_PREF = {castle: ['tax', 'conscript', 'crusade', 'warchest', 'divine', 'manafont'], necro: ['tax', 'raisedead', 'conscript', 'dread', 'warchest', 'manafont'],
-  sylvan: ['tax', 'huntlaw', 'conscript', 'sacredwood', 'warchest'], inferno: ['tax', 'hellforge', 'conscript', 'pact', 'warchest'], stronghold: ['warband', 'tax', 'conscript', 'plunder', 'warchest'], dwarf: ['tax', 'bulwark', 'guildhall', 'conscript', 'warchest']};
+  sylvan: ['tax', 'huntlaw', 'conscript', 'sacredwood', 'warchest'], inferno: ['tax', 'hellforge', 'conscript', 'pact', 'warchest'], stronghold: ['warband', 'tax', 'conscript', 'plunder', 'warchest'], dwarf: ['tax', 'bulwark', 'guildhall', 'conscript', 'warchest'],
+  mage: ['tax', 'codex', 'conscript', 'constructs', 'warchest', 'manafont']};
 
 // ---------- Faction research + tech trees ----------
 // One shared scale: about 1 point per 2-3 days of normal play. A day can bank at most RP_DAY_CAP points; one battle at most RP_BATTLE_CAP.
@@ -373,6 +388,14 @@ const TECH = {
     [{k: 'd4a', name: 'Steam Power', desc: 'Steam Golems +1 move, +15% dmg', fx: {u: {tiers: [5], move: 1, dmg: 15}}}, {k: 'd4b', name: 'Dreadnought Plating', desc: 'Dreadnoughts +4 def, +15% HP', fx: {u: {tiers: [6], def: 4, hp: 15}}}, {k: 'd4c', name: 'Master Runes', desc: 'Runesmiths +25% HP, +20% dmg', fx: {u: {tiers: [3], hp: 25, dmg: 20}}}],
     [{k: 'd5a', name: 'Shield Line', desc: 'All stacks +3 defense', fx: {u: {def: 3}}}, {k: 'd5b', name: 'Gunpowder', desc: 'Crossbow Engineers & Dreadnoughts +20% dmg', fx: {u: {tiers: [2, 6], dmg: 20}}}, {k: 'd5c', name: 'Iron Discipline', desc: '+15% morale chance in battle', fx: {morale: 15}}],
     [{k: 'd6a', name: 'IRON LEGION', desc: 'Golems & Dreadnoughts immune to spells, +25% HP and dmg', fx: {cap: 'legion'}}, {k: 'd6b', name: 'Mountain Hold', desc: 'All stacks +15% HP', fx: {u: {hp: 15}}}, {k: 'd6c', name: 'Golden Hoard', desc: '+1000 gold per day', fx: {inc: {gold: 1000}}}],
+  ],
+  mage: [
+    [{k: 'm1a', name: 'Star Charts', desc: '+300 gold per day', fx: {inc: {gold: 300}}}, {k: 'm1b', name: 'Gremlin Workshop', desc: 'Tier 1-2 +4 weekly growth', fx: {growth: {tiers: [0, 1], add: 4}}}, {k: 'm1c', name: 'Marble Quarry', desc: 'Buildings cost 15% less gold', fx: {bcost: 15}}],
+    [{k: 'm2a', name: 'Arcane Reservoir', desc: '+20% max mana', fx: {mana: 20}}, {k: 'm2b', name: 'Scriptorium', desc: '+25% research gain', fx: {rp: 25}}, {k: 'm2c', name: 'Apprentices', desc: 'Creatures cost 10% less', fx: {cost: 10}}],
+    [{k: 'm3a', name: 'Animated Stone', desc: 'Gremlins & Gargoyles +2 att +2 def', fx: {u: {tiers: [0, 1], att: 2, def: 2}}}, {k: 'm3b', name: 'Golem Cores', desc: 'Golems +20% HP, +3 def', fx: {u: {tiers: [2], hp: 20, def: 3}}}, {k: 'm3c', name: 'Focus Crystals', desc: 'Mages +20% dmg, +1 range', fx: {u: {tiers: [3], dmg: 20, range: 1}}}],
+    [{k: 'm4a', name: 'Bound Djinn', desc: 'Djinn +1 move, +15% dmg', fx: {u: {tiers: [4], move: 1, dmg: 15}}}, {k: 'm4b', name: 'Naga Blades', desc: 'Naga +3 att, +15% HP', fx: {u: {tiers: [5], att: 3, hp: 15}}}, {k: 'm4c', name: 'Giant Kin', desc: 'Giants +20% dmg, +1 range', fx: {u: {tiers: [6], dmg: 20, range: 1}}}],
+    [{k: 'm5a', name: 'Arcane Wards', desc: 'All stacks +2 defense', fx: {u: {def: 2}}}, {k: 'm5b', name: 'Empowered Strikes', desc: 'All stacks +8% damage', fx: {u: {dmg: 8}}}, {k: 'm5c', name: 'Living Stone', desc: 'Gargoyles & Golems +20% HP', fx: {u: {tiers: [1, 2], hp: 20}}}],
+    [{k: 'm6a', name: 'ARCANUM', desc: 'After your hero casts a spell, all Mage stacks +15% damage for the rest of that battle', fx: {cap: 'arcanum'}}, {k: 'm6b', name: 'Starward Bastion', desc: 'All stacks +15% HP', fx: {u: {hp: 15}}}, {k: 'm6c', name: 'Titan Lore', desc: 'Giants & Archon +5 att', fx: {u: {tiers: [6, 7], att: 5}}}],
   ],
 };
 // Count words for armies seen with low intel.

@@ -48,7 +48,7 @@ const heroById = id => G.heroes.find(h => h.id === id);
 const myHeroes = () => G.heroes.filter(h => h.owner === 'player');
 const curHero = () => { const h = heroById(G.sel); return h && h.owner === 'player' ? h : myHeroes()[0]; };
 const artBonus = (h, s) => h.arts.reduce((a, k) => a + (ARTIFACTS[k].stat === s ? ARTIFACTS[k].val : 0), 0);
-const stat = (h, s) => h[s] + artBonus(h, s);
+const stat = (h, s) => h[s] + artBonus(h, s) + (s === 'sp' && heroSpec(h) === 'leyline' ? 2 : 0); // Mage Leyline: +2 Spell Power
 const skl = (h, k) => SKILLS[k].v[(h && h.sk && h.sk[k]) || 0];
 const maxMp = h => Math.round((BASE_MP + artBonus(h, 'mp')) * (1 + skl(h, 'logistics') / 100 + techSum(h.owner, 'mp') / 100));
 const maxMana = h => Math.round(stat(h, 'kn') * 10 * (1 + skl(h, 'wisdom') / 100 + (pol(h.owner, 'manafont') ? 0.2 : 0) + (ktal(h.owner, 'scholars') ? 0.1 : 0) + techSum(h.owner, 'mana') / 100));
@@ -141,6 +141,7 @@ function battleResearch(ctx, attWon) {
     else if (f === 'sylvan' && won) { const had = ctx.snap[side].reduce((s, x) => s + x.count, 0), lost = D[side].reduce((s, x) => s + x.n, 0); if (had && lost / had < 0.25) addRP(o, 0.1, 'Clean victory (<25% losses)'); }
     if (f === 'inferno') { const b = sum(ctx.snap[foe]), wiped = D[foe].filter(x => x.n >= (b[x.type] || 0)).length; if (wiped) addRP(o, cap(0.1 * wiped), wiped + ' enemy stacks burned'); }
     if (f === 'stronghold' && D[foe].length) { const v = D[foe].reduce((s, x) => s + x.n * UNITS[x.type].cost, 0) / 3000 * (won && stronger ? 1.5 : 1); addRP(o, cap(v), 'Trophies: ' + D[foe].reduce((s, x) => s + x.n, 0) + ' killed' + (won && stronger ? ' (underdog x1.5)' : '')); }
+    if (f === 'mage' && ctx[side].casts) addRP(o, cap(0.2 * ctx[side].casts), ctx[side].casts + ' spell' + (ctx[side].casts > 1 ? 's' : '') + ' cast in battle');
     if (won && pol(o, 'plunder')) { const g = Math.round(D[foe].reduce((s, x) => s + x.n * UNITS[x.type].cost, 0) * 0.1); if (g) { G.res[o].gold += g; if (o === 'player') msg('Plunder: +' + g + ' gold'); } }
   }
 }
@@ -163,6 +164,14 @@ function sacValue(o, kind, t, i) {
   if (kind === 'xp') return h && h.owner === o && h.xp - (h.lvl > 1 ? xpForLevel(h.lvl - 1) : 0) >= 1000 ? 0.8 * m : 0;
   if (kind === 'troop') { const a = h && h.owner === o ? h.army : t.garrison, s = a && a[i]; return s && a.length > 1 ? Math.min(RP_BATTLE_CAP, s.count * UNITS[s.type].cost / 2500) * m : 0; }
   return 0;
+}
+// Mage: Library. Study = spend 2 gems for 0.5 research (daily cap still applies).
+const STUDY = {gems: 2, rp: 0.5};
+const studyValue = o => G.res[o].gems >= STUDY.gems ? STUDY.rp * (1 + techSum(o, 'sac') / 100) : 0;
+function study(o, t) {
+  if (!t.built.includes('library')) return 0; const v = studyValue(o); if (!v) return 0;
+  if (RS(o).today >= RP_DAY_CAP - 0.01) { if (o === 'player') msg('The Library is closed for today (research cap).'); return 0; }
+  G.res[o].gems -= STUDY.gems; return addRP(o, v, 'Study: ' + STUDY.gems + ' gems at the Library');
 }
 function sacrifice(o, t, kind, i) {
   if (!t.built.includes('pit')) return 0; const v = sacValue(o, kind, t, i); if (!v) return 0;
@@ -455,7 +464,7 @@ function take(h, o) {
 function visitTown(h, t) {
   const levels = t.built.includes('guild2') ? 2 : t.built.includes('guild1') ? 1 : 0;
   if (levels) {
-    const learnt = Object.keys(SPELLS).filter(k => SPELLS[k].lvl <= levels && !h.spells.includes(k));
+    const learnt = Object.keys(SPELLS).filter(k => (SPELLS[k].lvl <= levels || pol(h.owner, 'codex') && k === 'lightning') && !h.spells.includes(k)); // Codex: Guild 1 also teaches Lightning Bolt
     h.spells.push(...learnt); h.mana = maxMana(h);
     if (learnt.length && h.owner === 'player') { msg(h.name + ' learned ' + learnt.map(k => SPELLS[k].name).join(', ')); celebrate('spell', 'MAGE GUILD', h.name + ' learned ' + learnt.map(k => SPELLS[k].name).join(', ')); }
   }
@@ -676,6 +685,7 @@ function checkEnd() {
 function aiTownTurn(t) {
   if (G.cfg && G.cfg.tutorial) return;
   for (const k of AI_BUILD_ORDER) if (build(t, k)) break;
+  if (t.built.includes('library') && G.res.ai.gems > 4 && RS('ai') && RS('ai').today < 0.5) study('ai', t);
   if (t.built.includes('pit') && G.res.ai.gold > 7000 && RS('ai') && RS('ai').today < 0.5) sacrifice('ai', t, 'gold');
   const ai = G.heroes.filter(h => h.owner === 'ai');
   if (!ai.length || (ai.length < 2 && G.day > 10 && G.res.ai.gold > 6000)) hire(t);
@@ -816,7 +826,7 @@ function calcDmg(a, t, ranged) {
   const ua = US(a), ut = US(t), ha = heroOf(a.side), ht = heroOf(t.side);
   const oa = B.sides[a.side].owner, ot = B.sides[t.side].owner;
   const A = ua.att + (ha ? stat(ha, 'att') : 0) + (ktal(oa, 'warlord') ? 1 : 0) - (pol(ot, 'dread') ? 2 : 0) - techSum(ot, 'foeAtt') - (a.plague || 0) + (heroSpec(ha) === 'warchief' ? 1 : 0) + (pol(oa, 'hellforge') ? 1 : 0);
-  let D = ut.def + (ht ? stat(ht, 'def') : 0) + (B.fort === t.side ? 3 : 0) - (t.shred || 0) + (heroSpec(ht) === 'bastion' ? 1 : 0) + (pol(ot, 'hellforge') ? 1 : 0) + (pol(ot, 'bulwark') ? 2 : 0);
+  let D = ut.def + (ht ? stat(ht, 'def') : 0) + (B.fort === t.side ? 3 : 0) - (t.shred || 0) + (heroSpec(ht) === 'bastion' ? 1 : 0) + (pol(ot, 'hellforge') ? 1 : 0) + (pol(ot, 'bulwark') ? 2 : 0) + (pol(ot, 'constructs') && hasAb(t, 'Machine') ? 2 : 0);
   if (B.units.some(o => o.alive && o !== t && o.side === t.side && md(o, t) === 1 && hasAb(o, 'Rune'))) D += 3;
   if (tac(t.side, 'shieldwall')) { const sw = 3 + (hasTal(ht, 'bulwark') ? 2 : 0); if (hasTal(ht, 'phalanx')) D += sw + 5; else if (B.units.some(o => o.alive && o !== t && o.side === t.side && md(o, t) === 1)) D += sw; }
   if (tac(t.side, 'bloodlust')) D -= 2;
@@ -825,6 +835,7 @@ function calcDmg(a, t, ranged) {
   if (B.ctx.def.town && B.sides[t.side] === B.ctx.def) D += (pol(ot, 'fortify') ? 2 : 0) + (ktal(ot, 'garrisonlaw') ? 1 : 0);
   let d = a.count * (ua.dmg[0] + Math.random() * (ua.dmg[1] - ua.dmg[0]));
   d *= A >= D ? 1 + 0.05 * Math.min(60, A - D) : Math.max(0.3, 1 - 0.025 * (D - A));
+  if (B.sides[a.side].casts && ua.fac === 'mage' && techCap(oa, 'arcanum')) d *= 1.15; // ARCANUM: after a spell this battle
   const tags = [];
   if (!ranged) {
     const back = behind(a, t);
@@ -906,7 +917,7 @@ function castSpell(side, out) {
   if (s.k === 'haste') { t.haste = 1; fx(t, 'HASTE', '#3cbcfc', 0.4); }
   if (s.k === 'slow') { if (hasAb(t, 'Undead')) fx(t, 'IMMUNE', '#aaa', 0.4); else { t.slow = 1; fx(t, 'SLOW', '#f8b800', 0.4); } }
   B.eff.push({k: s.k, side, tx: t.x, ty: t.y, at: 0.05}); later(0.05, SFX.magic);
-  out.push(h.name + ' cast ' + sp.name);
+  out.push(h.name + ' cast ' + sp.name); B.sides[side].casts = (B.sides[side].casts || 0) + 1; // Mage research + ARCANUM
   if (t.tot <= 0) t.alive = false;
   t.count = Math.max(0, Math.ceil(t.tot / ut.hp));
 }
@@ -1844,7 +1855,7 @@ function closePanel() {
 const btn = (label, a, v, cls = 'alt', dis) => `<button class="btn sb ${cls}" data-a="${a}" data-v="${v ?? ''}" ${dis ? 'disabled' : ''}>${label}</button>`;
 // Town screen header: painted per-faction backdrop with a strip of building cards (built / can build / locked).
 // Falls back to the procedural pixel view (#tview) when the backdrop image is missing.
-const BLD_ICON = {fort: '🛡', citadel: '🏰', tavern: '🍺', hall: '🏛', capitol: '👑', market: '⚖', guild1: '✦', guild2: '✧', pit: '🔥'};
+const BLD_ICON = {fort: '🛡', citadel: '🏰', tavern: '🍺', hall: '🏛', capitol: '👑', market: '⚖', guild1: '✦', guild2: '✧', pit: '🔥', library: '📚'};
 function townScene(t, own) {
   const units = FACTIONS[t.faction].units, keys = Object.keys(BUILDINGS).filter(k => !BUILDINGS[k].faction || BUILDINGS[k].faction === t.faction);
   const card = k => { const b = BUILDINGS[k], built = t.built.includes(k), why = own && !built ? canBuild(t, k) : 'x', u = b.tier !== undefined ? units[b.tier] : b.upTier !== undefined ? UNITS[units[b.upTier]].upName : null;
@@ -1890,6 +1901,7 @@ function openTown(t) {
     if (t.built.includes('guild1')) s += `<h3>Mage Guild</h3><p>${Object.keys(SPELLS).filter(k => SPELLS[k].lvl <= (t.built.includes('guild2') ? 2 : 1)).map(k => SPELLS[k].name + ' (' + SPELLS[k].mana + ' mana): ' + SPELLS[k].desc).join('<br>')}<br>Heroes visiting learn these and refill mana.</p>`;
     if (t.built.includes('market')) s += marketHtml();
     if (t.built.includes('pit')) s += pitHtml(t);
+    if (t.built.includes('library')) s += libHtml(t);
     return s + `</div></div>`;
   }, {town: t.id, full: true, after: () => { const c = $('tview'); if (c) SPR.townView(c, t); }});
 }
@@ -1915,6 +1927,7 @@ function rpStatus(o) {
   if (f === 'castle') return 'Per won battle: 0.35 per star (max 3 stars = 1.05). Stars: win, no losses, enemy stronger, 8+ stacks or 80+ creatures.';
   if (f === 'necro') return 'Per battle: total HP of every creature that died (both sides) / 1500, max ' + RP_BATTLE_CAP + '.';
   if (f === 'stronghold') return 'Per battle: gold value of enemy creatures killed / 3000 (max ' + RP_BATTLE_CAP + '), x1.5 when you win against a stronger army.';
+  if (f === 'mage') return `Study at the Library (town): ${STUDY.gems} gems = ${STUDY.rp} research. Each spell your hero casts in battle +0.2 (max ${RP_BATTLE_CAP} per battle).`;
   if (f === 'inferno') return 'Sacrifice in the Sacrificial Pit (town): 2500 gold, 5 wood+5 ore or 1000 hero XP = 0.8 each, a creature stack = value/2500. Capturing an enemy mine +0.5, an enemy town +1.';
   return '';
 }
@@ -1923,6 +1936,10 @@ function pitHtml(t) {
   return `<h3>Sacrificial Pit</h3><p>Research today ${R.today.toFixed(2)} / ${RP_DAY_CAP}.</p>` +
     [['gold', '2500 GOLD'], ['res', '5 WOOD + 5 ORE'], ['xp', '1000 HERO XP' + (h ? ' (' + h.name + ')' : ' (needs a hero here)')]].map(([k, l]) => { const v = sacValue(o, k, t); return `<div class="it"><div class="t">${l}<small>${v ? '+' + v.toFixed(2) + ' research' : '<span class="no">Not available</span>'}</small></div>${btn('SACRIFICE', 'sac', k, 'p', !v)}</div>`; }).join('') +
     arr.map((a, i) => { const v = sacValue(o, 'troop', t, i); return `<div class="it">${unitPic(a.type)}<div class="t">${a.count} ${a.type}<small>${v ? '+' + v.toFixed(2) + ' research (stack is lost)' : '<span class="no">Keep at least one stack</span>'}</small></div>${btn('SACRIFICE', 'sac', 'troop:' + i, 'p', !v)}</div>`; }).join('');
+}
+function libHtml(t) {
+  const o = t.owner, R = RS(o), v = studyValue(o);
+  return `<h3>Library</h3><p>Research today ${R.today.toFixed(2)} / ${RP_DAY_CAP}.</p><div class="it"><div class="t">${STUDY.gems} GEMS<small>${v ? '+' + v.toFixed(2) + ' research' : '<span class="no">Need ' + STUDY.gems + ' gems</span>'}</small></div>${btn('STUDY', 'study', t.id, 'p', !v)}</div>`;
 }
 function openTech() {
   if (!G || !RS('player') || !facOf('player')) return;
@@ -1938,6 +1955,7 @@ function openTech() {
     });
     if (canSeeEnemyKingdom() && RS('ai')) s += `<h3>Enemy Research (${FACTIONS[facOf('ai')].name})</h3><p>${techList('ai').map(t => t.name).join(', ') || 'Nothing yet'}</p>`;
     const pt = G.towns.find(t => t.owner === o && t.built.includes('pit')); if (pt) s += pitHtml(pt); else if (f === 'inferno') s += '<p>Build a Sacrificial Pit in town to sacrifice.</p>';
+    const lt = G.towns.find(t => t.owner === o && t.built.includes('library')); if (lt) s += libHtml(lt); else if (f === 'mage') s += '<p>Build a Library in town to study.</p>';
     return s + '</div>';
   }, {full: true, tech: true, town: (G.towns.find(t => t.owner === 'player' && t.built.includes('pit')) || {}).id});
 }
@@ -2048,6 +2066,7 @@ const ACTIONS = {
   tech: () => G && UI.mode === 'map' && openTech(),
   ptech: k => { if (pickTech('player', k)) { SFX.lvl(); const t = TECH[facOf('player')].flat().find(x => x.k === k); celebrate('xp', t.name.toUpperCase() + '!', t.desc); hudSig = ''; } refreshPanel(); },
   upg: v => { const [w, i] = v.split(':'), t = G.towns.find(t => t.id === UI.panel.town), h = heroAt(t.x, t.y), arr = w === 'h' ? h.army : t.garrison; if (upgradeStack(t, arr, +i)) { SFX.pick(); msg('Upgraded to ' + arr[Math.min(+i, arr.length - 1)].type); hudSig = ''; } else SFX.bad(); refreshPanel(); },
+  study: v => { const t = G.towns.find(t => t.id === +v); if (t && study('player', t)) SFX.magic(); else SFX.bad(); hudSig = ''; refreshPanel(); },
   sac: v => { const t = G.towns.find(t => t.id === UI.panel.town); if (!t) return; const [k, i] = v.split(':'); if (sacrifice('player', t, k, +i)) SFX.magic(); else SFX.bad(); hudSig = ''; refreshPanel(); },
   setpf: v => { UI.setup.pf = v; refreshPanel(); }, setaf: v => { UI.setup.af = v; refreshPanel(); },
 };
@@ -2228,6 +2247,6 @@ document.addEventListener('keydown', e => {
 });
 $('mute').onclick = e => { e.stopPropagation(); muted = !muted; localStorage.setItem('mh-mute', muted ? '1' : '0'); $('mute').textContent = muted ? 'Muted' : 'Sound'; };
 $('mute').textContent = muted ? 'Muted' : 'Sound';
-window.MHX = {dijkstra, aiChoosePath, get layers() { return layers; }, addRP, pickTech, effStats, techList, techState, countWord, countText, recruit, build, sacrifice, sacValue, upgradeStack, newGame, openTech, openTown, RS, facOf, savings, dailyResearch, bCost, startBattle, get UNITS() { return UNITS; }, take, tipFor, threatOf, surrenderPrice, payPlans, doRetreat, doSurrender, openFlee, tradeBulk, mktState, mktMax, celebrate, objAt, moraleChance, moraleBase, heroLuck, luckOf, stackLuck, get G() { return G; }, get B() { return B; }, setPolicy, slotCount, income, learnKT, growthOf, unitCost, newDay, hire, finishFight, KG, pol, maxMana, fight, startFight, tac, blunted, moveOf, calcDmg, intelOf, knownTactics, learnTalent, reach, uById, loadGame, applyFormation, placeTerrain, curHero, gainXp, flood, get PT() { return PT; }, get ET() { return ET; }, battleToClient: (lx, ly) => { const r = cv.getBoundingClientRect(), mid = (BV.top + BV.ah) / 2; while (BV.oy + ly * BV.s < mid - PER * BV.s / 2) ly += PER; while (BV.oy + ly * BV.s > mid + PER * BV.s / 2) ly -= PER; return [r.left + (BV.ox + lx * BV.s) / CAM.dpr, r.top + (BV.oy + ly * BV.s) / CAM.dpr]; }, UI, CAM, ACTIONS, tapMap, battleTap, endDay, resolveRound, cell: (x, y) => cellC(x, y), battleView: () => battleView(), battlePan: (x, y) => battlePan(x, y), battleZoom: z => battleZoom(z), hexDist, hexN, meleeOK: (a, b) => meleeOK(a, b), tileToClient: (x, y) => { const r = cv.getBoundingClientRect(); return [r.left + ((x * TS + TS / 2 - CAM.x) * CAM.z) / CAM.dpr, r.top + ((y * TS + TS / 2 - CAM.y) * CAM.z) / CAM.dpr]; }}; // test hook
+window.MHX = {dijkstra, aiChoosePath, get layers() { return layers; }, addRP, study, pickTech, effStats, techList, techState, countWord, countText, recruit, build, sacrifice, sacValue, upgradeStack, newGame, openTech, openTown, RS, facOf, savings, dailyResearch, bCost, startBattle, get UNITS() { return UNITS; }, take, tipFor, threatOf, surrenderPrice, payPlans, doRetreat, doSurrender, openFlee, tradeBulk, mktState, mktMax, celebrate, objAt, moraleChance, moraleBase, heroLuck, luckOf, stackLuck, get G() { return G; }, get B() { return B; }, setPolicy, slotCount, income, learnKT, growthOf, unitCost, newDay, hire, finishFight, KG, pol, maxMana, fight, startFight, tac, blunted, moveOf, calcDmg, intelOf, knownTactics, learnTalent, reach, uById, loadGame, applyFormation, placeTerrain, curHero, gainXp, flood, get PT() { return PT; }, get ET() { return ET; }, battleToClient: (lx, ly) => { const r = cv.getBoundingClientRect(), mid = (BV.top + BV.ah) / 2; while (BV.oy + ly * BV.s < mid - PER * BV.s / 2) ly += PER; while (BV.oy + ly * BV.s > mid + PER * BV.s / 2) ly -= PER; return [r.left + (BV.ox + lx * BV.s) / CAM.dpr, r.top + (BV.oy + ly * BV.s) / CAM.dpr]; }, UI, CAM, ACTIONS, tapMap, battleTap, endDay, resolveRound, cell: (x, y) => cellC(x, y), battleView: () => battleView(), battlePan: (x, y) => battlePan(x, y), battleZoom: z => battleZoom(z), hexDist, hexN, meleeOK: (a, b) => meleeOK(a, b), tileToClient: (x, y) => { const r = cv.getBoundingClientRect(); return [r.left + ((x * TS + TS / 2 - CAM.x) * CAM.z) / CAM.dpr, r.top + ((y * TS + TS / 2 - CAM.y) * CAM.z) / CAM.dpr]; }}; // test hook
 openMenu();
 requestAnimationFrame(loop);
