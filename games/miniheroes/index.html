@@ -2,7 +2,7 @@
 <title>Mini Heroes · Mini Game</title><meta name="theme-color" content="#0e1424"><link rel="manifest" href="../../manifest.webmanifest"><link rel="icon" href="../../icons/icon-192.png"><link rel="stylesheet" href="../../style.css">
 <style>
 
-/* Mini Heroes 1.5.4 — painted fantasy theme (overrides portal style.css on this page only) */
+/* Mini Heroes 1.5.5 — painted fantasy theme (overrides portal style.css on this page only) */
 @font-face{font-family:'Cinzel';src:url(fonts/Cinzel-700.woff2) format('woff2');font-weight:700;font-style:normal;font-display:swap}
 @font-face{font-family:'Cinzel Decorative';src:url(fonts/CinzelDecorative-700.woff2) format('woff2');font-weight:700;font-style:normal;font-display:swap}
 @font-face{font-family:'Nunito';src:url(fonts/Nunito-600.woff2) format('woff2');font-weight:600;font-style:normal;font-display:swap}
@@ -79,7 +79,8 @@ body{touch-action:none}
 #zoom{position:absolute;right:6px;top:6px;display:flex;flex-direction:column;gap:6px}
 #zoom .btn{width:38px;height:38px;padding:0;font-size:14px;border-width:2px;box-shadow:0 4px 12px #0008}
 #chip{position:absolute;left:6px;top:6px;display:flex;gap:6px;align-items:center;background:#18223acc;border:2px solid #8a6a35;padding:3px 6px 3px 3px;cursor:pointer;max-width:70%}
-#chip img{width:40px;height:40px;image-rendering:auto;border:2px solid #8a6a35}
+#chip img,#chip .hp{width:40px;height:40px;image-rendering:auto;border:2px solid #8a6a35}
+.hp{display:inline-block;flex:none;width:40px;height:40px;background-repeat:no-repeat;background-color:#0e1424;background-size:calc(var(--cols)*100%) calc(var(--rows)*100%);background-position:calc(var(--col)*100%/max(var(--cols) - 1,1)) calc(var(--row)*100%/max(var(--rows) - 1,1));image-rendering:auto;border:2px solid #8a6a35;vertical-align:middle}
 #chip .bars{display:flex;flex-direction:column;gap:3px;font-size:11px}
 .meter{height:6px;width:90px;background:#000;border:1px solid #000}.meter i{display:block;height:100%}
 #bar{grid-area:bar;display:flex;flex-wrap:wrap;justify-content:center;gap:6px;padding:6px;background:#18223a;border-top:2px solid #8a6a35;padding-bottom:max(6px,env(safe-area-inset-bottom))}
@@ -87,7 +88,7 @@ body{touch-action:none}
 .btn.g{background:var(--green);color:#000}.btn.y{background:var(--yellow);color:#000}.btn.p{background:#d858f8;color:#000}
 .btn[disabled]{opacity:.35;pointer-events:none}
 #side{grid-area:side;display:none;overflow-y:auto;background:#18223a;border-left:2px solid #8a6a35;padding:8px;gap:8px;flex-direction:column}
-.hcard{display:flex;gap:8px;align-items:center}.hcard img{width:64px;height:64px;image-rendering:auto;border:2px solid #8a6a35}
+.hcard{display:flex;gap:8px;align-items:center}.hcard img,.hcard .hp{width:64px;height:64px;image-rendering:auto;border:2px solid #8a6a35}
 .hcard b{color:var(--yellow);font-size:14px}
 .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;text-align:center}.stats div{background:#0e1424;border:2px solid #8a6a35;padding:4px 0}.stats b{display:block;color:var(--yellow);font-size:14px}
 .slots{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px}.slot{position:relative;aspect-ratio:1;background:#0e1424;border:2px solid #8a6a35}
@@ -172,14 +173,15 @@ body.battle #msg{bottom:4px;font-size:11px}
 .evart{display:inline-block;background-image:url(art/events.webp);background-repeat:no-repeat}
 #home{position:fixed;inset:0;z-index:30;display:none;flex-direction:column;justify-content:flex-end;align-items:center;background:#0e1424;overflow:hidden}
 #home .hbg{position:absolute;inset:0;background:url(art/home.webp) center top/cover no-repeat}
-#home nav{position:relative;display:flex;gap:12px;flex-wrap:wrap;justify-content:center;padding:14px 12px calc(18px + env(safe-area-inset-bottom));width:100%;background:linear-gradient(#0e142400,#0e1424e0 35%)}
+#home .hbg::after{content:'';position:absolute;left:0;right:0;bottom:0;height:42%;background:linear-gradient(transparent,#0e1424 72%);pointer-events:none}
+#home nav{position:relative;display:flex;gap:12px;flex-wrap:wrap;justify-content:center;padding:14px 12px calc(18px + env(safe-area-inset-bottom));width:100%;background:linear-gradient(#0e142400,#0e1424e8 40%,#0e1424)}
 .hbtn{display:flex;align-items:center;gap:10px;min-width:150px;padding:10px 18px;font:700 15px/1.1 Cinzel,serif;letter-spacing:.06em;color:#f4ead0;background:linear-gradient(#24365e,#16223f);border:2px solid #8a6a35;border-radius:8px;--r:8px;box-shadow:0 0 0 2px #0008,0 6px 14px #0009;cursor:pointer}
 .hbtn img{width:30px;height:30px;object-fit:contain;flex:none}.hbtn.hot{background:linear-gradient(#2f6a3a,#1b4424)}.hbtn:disabled{opacity:.45;filter:grayscale(1)}.hbtn:not(:disabled):hover{filter:brightness(1.2)}
 #home .hver{position:absolute;right:8px;top:6px;font:14px Nunito,system-ui,sans-serif;color:#fff8}
-@media (max-aspect-ratio:1/1){#home .hbg{background-size:190% auto;background-position:50% 4%}#home nav{flex-direction:column;align-items:stretch;padding:12px 24px 22px}.hbtn{justify-content:flex-start}}
+@media (max-aspect-ratio:1/1){#home .hbg{background-size:240% auto;background-position:50% 0}#home .hbg::after{height:52%;background:linear-gradient(transparent 0%,#0e1424b0 20%,#0e1424 36%)}#home nav{flex-direction:column;align-items:stretch;padding:12px 24px 22px;background:linear-gradient(#0e142400,#0e1424 28%)}.hbtn{justify-content:flex-start}}
 .fgrid{display:grid!important;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px}
 .fcard{display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 4px;background:#18223a;border:2px solid #333a55;border-radius:8px;--r:8px;color:#fff;font:inherit;font-size:13px;cursor:pointer}
-.fgrid .fcard{background:#18223a!important;color:#fff!important}.fcard canvas,.fcard img{width:56px!important;height:56px!important;object-fit:contain}.fcard.y{border-color:var(--fc);box-shadow:0 0 12px var(--fc)}.fcard .rq{font-size:34px;line-height:56px}
+.fgrid .fcard{background:#18223a!important;color:#fff!important}.fcard canvas,.fcard img,.fcard .pu{width:56px!important;height:56px!important;object-fit:contain}.fcard.y{border-color:var(--fc);box-shadow:0 0 12px var(--fc)}.fcard .rq{font-size:34px;line-height:56px}
 .pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px;margin:8px 0}
 .pcard{position:relative;display:flex;flex-direction:column;align-items:center;gap:5px;padding:8px 4px;background:#18223a;border:2px solid #3a3f5c;border-radius:8px;--r:8px;color:#e8e2cc;font:inherit;font-size:12px;cursor:pointer;border-top-color:var(--pc)}
 .pcard.on{border-color:#e2b552;box-shadow:0 0 14px #d9a441a0;background:#2a2410}.pcard.on b{position:absolute;top:2px;right:4px;font-size:11px;color:#e2b552}.pcard.lock{opacity:.45}
@@ -215,7 +217,7 @@ body.battle #msg{bottom:4px;font-size:11px}
 #mini{border:2px solid var(--gold-dark);--r:8px;image-rendering:auto}
 #pre{background:#18223af2;border-color:var(--gold-dark);color:var(--ink);font-size:12px}
 #pre h2,#pre h3{font-family:Cinzel,serif}
-.skl span,.stats div,.slot,.msl button,.mkt,.fu img{background:var(--bg);border:2px solid var(--gold-dark);--r:8px}
+.skl span,.stats div,.slot,.msl button,.mkt,.fu img,.fu .pu{background:var(--bg);border:2px solid var(--gold-dark);--r:8px}
 .hbtn{font-family:Cinzel,serif;font-weight:700;color:#f4ead0;background:linear-gradient(#24365e,#16223f);border:2px solid var(--gold-dark);--r:8px;box-shadow:0 0 0 1px #e2b55255,0 6px 14px #0009}
 .hbtn.hot{background:linear-gradient(#2f6a3a,#1b4424)}
 #home .hver{font-family:Nunito,system-ui,sans-serif;color:#fff8}
@@ -225,7 +227,8 @@ body.battle #msg{bottom:4px;font-size:11px}
 #dbg{font:11px/1.35 ui-monospace,monospace;color:var(--green);background:#000c;--r:6px}
 #zoom .btn{width:38px;height:38px;padding:0;font-size:16px;box-shadow:0 4px 12px #0008}
 
-/* theme 1.5.4 follow-up */
+/* theme 1.5.5 follow-up */
+.mt h3 .hp{width:40px;height:40px;margin-right:6px}
 .hbtn{text-transform:none;font-variant:normal}
 body.mh .btn.fcard,body.mh .fcard,body.mh .fgrid .fcard{font-family:Nunito,system-ui,sans-serif!important;font-weight:800;font-size:11px;line-height:1.15;letter-spacing:0;text-transform:none;white-space:normal;overflow:hidden;padding:6px 3px}
 .fgrid{grid-template-columns:repeat(auto-fill,minmax(104px,1fr))!important}

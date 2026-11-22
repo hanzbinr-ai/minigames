@@ -162,7 +162,7 @@
     ensureLayers(); clampCam(); fit();
     const PA = !!MAPA;
     if (PA && MAPA.map !== layers.map) { MAPA.land = tex(paintLand(layers.map)); MAPA.land.source.scaleMode = 'linear'; MAPA.map = layers.map; lastLayers = null; }
-    if (layers !== lastLayers) { land.texture = PA ? MAPA.land : tex(layers.land); land.scale.set(PA ? 1 / P2 : 1); fog.texture = tex(layers.fog); if (PA) fog.texture.source.scaleMode = 'linear'; lastLayers = layers; lastFog = -1; }
+    if (layers !== lastLayers) { land.texture = PA ? MAPA.land : tex(layers.land); land.scale.set(PA ? 1 / P2 : 1); fog.texture = tex(layers.fog); fog.texture.source.scaleMode = 'linear'; lastLayers = layers; lastFog = -1; }
     if (layers.fogN !== lastFog) { fog.texture.source.update(); lastFog = layers.fogN; }
     water.visible = !PA; if (!PA) water.texture = tex(layers.water[Math.floor(clock * 3) % 4]);
     if (PA) waterShimmer(); else if (shim) shim.visible = false;
@@ -221,9 +221,13 @@
     const t0 = performance.now(); fit(); const LQ = LOWQ(), ks = bandKs(), nk = ks.length;
     drawBattle(bctx, 'bg'); bgT.source.update();
     drawBattle(fgx, 'fgn'); fgT.source.update(); hdrT.source.update();
-    const PF = MAPA && MAPA.field;
+    const PF = MAPA && MAPA.field, tw = PF && (PF.width || 1024), th = PF && (PF.height || 800);
+    const fsc = PF && tw && th ? Math.max(BLW / tw, PER / th) : 1;
+    const fsrcW = BLW / fsc, fsrcH = PER / fsc, fsx = PF ? (tw - fsrcW) / 2 : 0, fsy = PF ? (th - fsrcH) / 2 : 0;
+    const FTex = PF && tw ? (MAPA._fieldCover && MAPA._fieldCoverK === tw + 'x' + th ? MAPA._fieldCover
+      : (MAPA._fieldCoverK = tw + 'x' + th, MAPA._fieldCover = new PIXI.Texture({source: PF.source, frame: new PIXI.Rectangle(fsx, fsy, fsrcW, fsrcH)}))) : null;
     // every layer is drawn once per wrapped copy (layer-major, so things crossing the seam overlap the next copy correctly)
-    pool(fieldL, PF ? nk : 0, sprite).forEach((s, i) => { if (i >= nk || !PF) return; s.texture = MAPA.field; s.position.set(0, BOY + ks[i] * PER); s.width = BLW; s.height = PER; });
+    pool(fieldL, FTex ? nk : 0, sprite).forEach((s, i) => { if (i >= nk || !FTex) return; s.texture = FTex; s.position.set(0, BOY + ks[i] * PER); s.width = BLW; s.height = PER; });
     pool(bgL, nk, sprite).forEach((s, i) => { if (i >= nk) return; s.texture = bgT; s.position.set(0, ks[i] * PER); });
     pool(fgL, nk, sprite).forEach((s, i) => { if (i >= nk) return; s.texture = fgT; s.position.set(0, ks[i] * PER); });
     const vis = B.units.filter(u => !u.gone && !(u.hidden && u.side === 'R') && (u.alive || u.deadAt == null || B.clock < u.deadAt + 0.9)).sort((a, b) => a.ry - b.ry), U = [];

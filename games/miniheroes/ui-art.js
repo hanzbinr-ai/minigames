@@ -42,28 +42,33 @@
     const t = e.k === 'arrow' ? (k - 0.45) / 0.55 : k, w = CW * (1.2 + 0.8 * Math.sin(Math.min(1, t * 1.4) * Math.PI / 2)), pa = g.globalAlpha;
     g.globalAlpha = pa * Math.min(1, (1 - t) * 3); g.drawImage(c, x - w / 2, y - w / 2 - (e.k === 'lightning' ? w * 0.25 : 0), w, w); g.globalAlpha = pa;
   };
-  // ---- soft fog edges: 1 px per tile, scaled up with smoothing (a cheap gradient; no per-pixel loops)
-  // Broz fog edge strip (dark left -> clear right, tiles along y), rotated per side over revealed tiles next to fog
-  const fogEdge = img('fog-edge.webp'); fogEdge.onload = () => { try { if (layers) layers.fogN = -1; } catch (e) {} };
-  const softFog = function (c) {
-    c.width = WW; c.height = WH; const g = c.getContext('2d'), s = document.createElement('canvas'); s.width = MW + 2; s.height = MH + 2; const sg = s.getContext('2d');
-    sg.fillStyle = '#05050c'; sg.fillRect(0, 0, MW + 2, MH + 2); for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) if (G.fog[y][x]) sg.clearRect(x + 1, y + 1, 1, 1);
-    const m = document.createElement('canvas'); m.width = (MW + 2) * 4; m.height = (MH + 2) * 4; const mg = m.getContext('2d'); mg.imageSmoothingEnabled = true; mg.drawImage(s, 0, 0, m.width, m.height);
-    g.imageSmoothingEnabled = true; g.drawImage(m, -TS, -TS, (MW + 2) * TS, (MH + 2) * TS);
-    for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) if (!G.fog[y][x]) { let n = 0; for (const [dx, dy] of DIRS8) if (inMap(x + dx, y + dy) && G.fog[y + dy][x + dx]) n++; if (!n) { g.fillStyle = '#05050c'; g.fillRect(x * TS, y * TS, TS, TS); } }
+  // ---- soft fog edges: 1 px per tile, upsampled with smoothing (cheap feather; no per-pixel loops).
+  // Rebuilt only when layers.fogN changes. Low quality uses a 2x intermediate and skips blur.
+  let fogLo = null, fogHi = null;
+  const ensureFogBuf = (buf, w, h) => {
+    if (!buf || buf.width !== w || buf.height !== h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
+    return buf;
   };
   drawFog = function (c) {
-    if (!fogEdge.complete || !fogEdge.naturalWidth) return softFog(c);
-    c.width = WW; c.height = WH; const g = c.getContext('2d'); g.fillStyle = '#05050c'; g.imageSmoothingEnabled = true;
-    const fogged = (x, y) => inMap(x, y) && !G.fog[y][x], D = TS * 0.8, sh = fogEdge.naturalHeight / 4;
-    for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) if (!G.fog[y][x]) g.fillRect(x * TS, y * TS, TS, TS);
-    for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) {
-      if (!G.fog[y][x]) continue;
-      for (const [dx, dy, rot] of [[-1, 0, 0], [0, -1, 1], [1, 0, 2], [0, 1, 3]]) {
-        if (!fogged(x + dx, y + dy)) continue;
-        const sy = ((x * 7 + y * 13 + rot) % 4) * sh; g.save(); g.translate(x * TS + TS / 2, y * TS + TS / 2); g.rotate(rot * Math.PI / 2);
-        g.drawImage(fogEdge, 0, sy, fogEdge.naturalWidth, sh, -TS / 2, -TS / 2 - 2, D, TS + 4); g.restore();
-      }
+    const low = localStorage.getItem('mh-quality') === 'low', sc = low ? 2 : 4;
+    c.width = WW; c.height = WH; const g = c.getContext('2d');
+    fogLo = ensureFogBuf(fogLo, MW + 2, MH + 2);
+    const sg = fogLo.getContext('2d');
+    sg.fillStyle = '#05050c'; sg.fillRect(0, 0, MW + 2, MH + 2);
+    for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) if (G.fog[y][x]) sg.clearRect(x + 1, y + 1, 1, 1);
+    fogHi = ensureFogBuf(fogHi, (MW + 2) * sc, (MH + 2) * sc);
+    const mg = fogHi.getContext('2d');
+    mg.imageSmoothingEnabled = true; mg.imageSmoothingQuality = low ? 'low' : 'high';
+    mg.clearRect(0, 0, fogHi.width, fogHi.height);
+    mg.drawImage(fogLo, 0, 0, fogHi.width, fogHi.height);
+    if (!low) { mg.filter = 'blur(1.25px)'; mg.drawImage(fogHi, 0, 0); mg.filter = 'none'; }
+    g.imageSmoothingEnabled = true; g.imageSmoothingQuality = low ? 'low' : 'high';
+    g.drawImage(fogHi, -TS, -TS, (MW + 2) * TS, (MH + 2) * TS);
+    // solid fill only deep fog (no revealed neighbour) so the feathered rim is left intact
+    g.fillStyle = '#05050c';
+    for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) if (!G.fog[y][x]) {
+      let n = 0; for (const [dx, dy] of DIRS8) if (inMap(x + dx, y + dy) && G.fog[y + dy][x + dx]) n++;
+      if (!n) g.fillRect(x * TS, y * TS, TS, TS);
     }
   };
   // ---- shrine / spell learning popup + artifact popup art
@@ -77,11 +82,58 @@
   };
   const evArt = (k, px) => { const c = EV.cells[k], s = px / EV.size; return `<span class="evart" style="width:${px}px;height:${px}px;background-position:${-c[0] * s}px ${-c[1] * s}px;background-size:${768 * s}px auto"></span>`; };
   window.evArt = evArt;
+  // ---- painted battle field (cover-crop, uniform scale — avoids squash/upsample blur)
+  const fieldImg = img('battle-field.webp');
+  window.paintBattleField = function (g) {
+    const im = fieldImg; if (!im.complete || !im.naturalWidth) return false;
+    const tw = im.naturalWidth, th = im.naturalHeight, sc = Math.max(BLW / tw, PER / th);
+    const srcW = BLW / sc, srcH = PER / sc, sx = (tw - srcW) / 2, sy = (th - srcH) / 2;
+    const sm = g.imageSmoothingEnabled, sq = g.imageSmoothingQuality;
+    g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
+    g.drawImage(im, sx, sy, srcW, srcH, 0, BOY, BLW, PER);
+    g.imageSmoothingEnabled = sm; if (sq) g.imageSmoothingQuality = sq;
+    return true;
+  };
+
+  // ---- unit UI portraits from units-*-ui.webp (independent of deferred Pixi / units.json in render-pixi.js)
+  const paintedUnit = u => {
+    const man = window.UNIT_MAN, m = man && man.units[u], ui = m && man.ui && man.ui[m.atlas];
+    return !!(ui);
+  };
+  const refreshUnitPics = () => {
+    try { hudSig = ''; } catch (e) {}
+    try { if (PB) PB.querySelectorAll('.fcard').forEach(b => { b.classList.remove('fcard'); delete b.dataset.pic; }); decorate(); } catch (e) {}
+    try { if (typeof refreshPanel === 'function' && UI && UI.panel) refreshPanel(); } catch (e) {}
+  };
+  fetch(A + 'units.json').then(r => r.json()).then(m => {
+    const rows = {};
+    for (const u of Object.values(m.units)) rows[u.atlas] = Math.max(rows[u.atlas] || 0, u.row + 1);
+    window.UNIT_MAN = { units: m.units, ui: m.ui, rows };
+    refreshUnitPics();
+  }).catch(() => {});
+  fetch(A + 'heroes.json').then(r => r.json()).then(m => {
+    const byName = {};
+    const index = (heroes, src) => {
+      let cols = 0, rows = 0;
+      for (const p of Object.values(heroes || {})) { cols = Math.max(cols, p.col + 1); rows = Math.max(rows, p.row + 1); }
+      for (const [name, p] of Object.entries(heroes || {})) byName[name] = {src, col: p.col, row: p.row, cols, rows};
+      return src;
+    };
+    const srcs = new Set();
+    if (m.heroes) srcs.add(index(m.heroes, m.src));
+    if (m.extras && m.extras.heroes) srcs.add(index(m.extras.heroes, m.extras.src));
+    const imgs = {}, cell = m.cell || 192;
+    let left = srcs.size;
+    const ready = () => { window.HERO_MAN = {cell, byName, imgs}; try { hudSig = ''; } catch (e) {} try { if (typeof refreshPanel === 'function' && UI && UI.panel) refreshPanel(); } catch (e) {} };
+    for (const src of srcs) { const i = new Image(); i.onload = i.onerror = () => { if (--left <= 0) ready(); }; i.src = src; imgs[src] = i; }
+    if (!left) ready();
+  }).catch(() => {});
+
   // ---- HOME screen
   const home = document.createElement('div'); home.id = 'home';
   const HB = [['Continue', 'h_cont', 0], ['New Game', 'new', 1], ['Campaign', 'campaign', 2], ['Duel', 'h_duel', 3], ['Settings', 'h_set', 4]];
   const homeHtml = () => { const can = !!(localStorage.getItem(SAVE_KEY + '-auto') || localStorage.getItem(SAVE_KEY));
-    return `<div class="hbg"></div><nav>${HB.map(([l, a, i]) => `<button class="hbtn${a === 'campaign' ? ' hot' : ''}" data-a="${a}" ${a === 'h_cont' && !can ? 'disabled' : ''}><img src="${A}home-i${i}.webp" alt="">${l}</button>`).join('')}</nav><small class="hver">v${'1.5.4'}</small>`; };
+    return `<div class="hbg"></div><nav>${HB.map(([l, a, i]) => `<button class="hbtn${a === 'campaign' ? ' hot' : ''}" data-a="${a}" ${a === 'h_cont' && !can ? 'disabled' : ''}><img src="${A}home-i${i}.webp" alt="">${l}</button>`).join('')}</nav><small class="hver">v${'1.5.5'}</small>`; };
   window.showHome = () => { home.innerHTML = homeHtml(); home.style.display = 'flex'; UI.panel = null; $('panel').classList.remove('show'); UI.mode = G ? UI.mode : 'title'; };
   const hideHome = () => { home.style.display = 'none'; };
   document.body.appendChild(home);
@@ -99,9 +151,12 @@
     if (!PB) return; mo.disconnect();
     try {
       // faction select: data-driven card grid from whatever setpf / setaf buttons the setup panel renders
-      for (const a of ['setpf', 'setaf']) { const bs = PB.querySelectorAll(`[data-a=${a}]`); if (!bs.length || bs[0].classList.contains('fcard')) continue;
+      for (const a of ['setpf', 'setaf']) { const bs = PB.querySelectorAll(`[data-a=${a}]`); if (!bs.length) continue;
         bs[0].parentElement.classList.add('fgrid');
-        bs.forEach(b => { const k = b.dataset.v, F = FACTIONS[k]; b.classList.add('fcard'); b.style.setProperty('--fc', F ? F.col : '#888');
+        bs.forEach(b => { const k = b.dataset.v, F = FACTIONS[k], painted = !!(F && paintedUnit(F.units[F.units.length - 1])), mark = painted ? '1' : '0';
+          b.classList.add('fcard'); b.style.setProperty('--fc', F ? F.col : '#888');
+          if (b.dataset.pic === mark) return;
+          b.dataset.pic = mark;
           b.innerHTML = (F ? unitPic(F.units[F.units.length - 1]) : '<b class="rq">?</b>') + `<span>${F ? F.name : 'Random'}</span>`; }); }
       // spellbook + mage guild + hero spells: icons on cast buttons and spell rows
       PB.querySelectorAll('[data-a=cast]:not(.dec)').forEach(b => { b.classList.add('dec'); if (b.dataset.v) { const row = b.closest('.it'); (row || b).insertAdjacentHTML('afterbegin', ico(b.dataset.v, 36)); } });

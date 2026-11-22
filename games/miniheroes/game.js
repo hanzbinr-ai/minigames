@@ -386,7 +386,7 @@ function tapMap(tx, ty) {
   const oh = heroAt(tx, ty);
   if (oh && oh.owner === 'player') {
     if (oh !== h) { G.sel = oh.id; UI.preview = null; msg(oh.name + ' selected' + (townAt(tx, ty) ? ' · tap again for HERO or TOWN' : '')); SFX.click(); }
-    else if (townAt(tx, ty)) { const t = townAt(tx, ty); showPanel(() => `<h2>${oh.name} in ${t.name}</h2><div class="bar">${btn('Hero', 'pickhero', '', 'g')}${btn('Town', 'picktown', t.id, 'y')}${btn('Cancel', 'close', '', 'alt')}</div>`); }
+    else if (townAt(tx, ty)) { const t = townAt(tx, ty); showPanel(() => `<div class="hcard">${heroPic(oh)}<h2>${oh.name} in ${t.name}</h2></div><div class="bar">${btn('Hero', 'pickhero', '', 'g')}${btn('Town', 'picktown', t.id, 'y')}${btn('Cancel', 'close', '', 'alt')}</div>`); }
     else openHero();
     return;
   }
@@ -489,7 +489,7 @@ function nextLevelUp() {
   const h = heroById(UI.levelQ.shift()); if (!h) return nextLevelUp();
   const prim = shuffle(['att', 'def', 'sp', 'kn']).slice(0, 2), sec = skillOffers(h), pickd = {p: null, s: sec.length ? null : '-'};
   SFX.lvl();
-  showPanel(() => `<div class="hcard"><img src="${portraitImg(h)}" alt=""><h2>Level Up! ${h.name} is now level ${h.lvl}</h2></div><p class="y">+1 talent point (spend it in Hero &gt; Tactics Talents)</p>
+  showPanel(() => `<div class="hcard">${heroPic(h)}<h2>Level Up! ${h.name} is now level ${h.lvl}</h2></div><p class="y">+1 talent point (spend it in Hero &gt; Tactics Talents)</p>
     <h3>1. Primary Skill</h3><div class="bar">${prim.map(s => btn('+1 ' + STAT_NAMES[s], 'lvlp', s, pickd.p === s ? 'y' : 'alt')).join('')}</div>
     ${sec.length ? `<h3>2. Secondary Skill</h3>` + sec.map(k => { const n = (h.sk[k] || 0) + 1; return `<div class="it"><div class="t">${SKILL_LVL[n]} ${SKILLS[k].name}<small>${SKILLS[k].desc(SKILLS[k].v[n])}</small></div>${btn(pickd.s === k ? 'Chosen' : 'Pick', 'lvls', k, pickd.s === k ? 'y' : 'alt')}</div>`; }).join('') : '<p>All skill slots are at Expert.</p>'}
     <div class="bar" style="margin-top:8px">${btn('CONFIRM', 'lvlok', '', 'g', !pickd.p || !pickd.s)}</div>`, {lvlHero: h.id, sticky: true, pick: pickd});
@@ -1573,7 +1573,7 @@ function drawBattle(g, pass = 'all') {
   const selU = B.sel && uById(B.sel), r = BG && selU && B.phase === 'plan' ? reach(selU, moveOf(selU)) : null, seeTerr = t => t.side === 'L' || B.phase !== 'pre' || B.tac.L.intel >= 2, fr = Math.floor(clock * 2) % 2;
   if (BG) {
   g.clearRect(0, 0, BLW, BLH); if (pass === 'bg' && window.MHR && MHR.paintField && MHR.paintField()) {} // painted field sprite sits under this layer
-  else g.drawImage(SPR.field(BLW, BLH, CW, B.seed), 0, BOY, BLW, PER, 0, BOY, BLW, PER); // field only inside the wrap band (copies tile seamlessly)
+  else if (!(window.paintBattleField && paintBattleField(g))) g.drawImage(SPR.field(BLW, BLH, CW, B.seed), 0, BOY, BLW, PER, 0, BOY, BLW, PER); // field only inside the wrap band
   // hex grid: soft checker + two-tone outlines (crisp at any zoom); no outer frame top/bottom - the rows wrap
   g.lineWidth = 1;
   g.drawImage(hexGrid(), 0, 0);
@@ -1586,7 +1586,7 @@ function drawBattle(g, pass = 'all') {
     if (UI.preTerr) { g.fillStyle = '#d858f820'; g.fillRect(BOX, BOY, BW * CW + CW / 2, PER); }
     const su = UI.preSel && uById(UI.preSel); if (su) { g.strokeStyle = '#f8b800'; g.lineWidth = 1; hexPath(g, su.x, su.y, 1); g.stroke(); }
   }
-  for (const k of B.obst) { const [x, y] = k.split(',').map(Number); if (!(window.PROPS && PROPS.draw(g, PROPS.obst(k), x, y, CW * 1.8))) g.drawImage(SPR.boulder(), hxp(x, y), hyp(y)); }
+  for (const k of B.obst) { const [x, y] = k.split(',').map(Number), ow = CW * 2.7; if (!(window.PROPS && PROPS.draw(g, PROPS.obst(k), x, y, ow))) { const [cx, cy] = cellC(x, y); g.drawImage(SPR.boulder(), cx - ow / 2, cy + RH * 0.45 - ow, ow, ow); } }
   if (B.siege) {
     const S = B.siege, necro = ['necro', 'inferno', 'dwarf'].includes(B.ctx.def.town.faction);
     for (let y = 0; y < BH; y++) {
@@ -1655,11 +1655,13 @@ function drawBattleHeader(g) { // pinned strip above the scrolling, wrapping fie
   g.imageSmoothingEnabled = false; g.clearRect(0, 0, g.canvas.width, g.canvas.height);
   g.fillStyle = '#18223a'; g.fillRect(0, 0, BLW, HDR - 2); g.fillStyle = '#8a6a35'; g.fillRect(0, HDR - 2, BLW, 2);
   txt(g, B.phase === 'pre' ? 'Pre-Battle' : 'Round ' + (B.phase === 'plan' ? B.round : B.round - 1) + ' — ' + (B.phase === 'plan' ? 'Plan' : (B.stage || 'Resolve')), BLW / 2, 13, B.phase === 'resolve' ? '#5f9e3a' : '#d9a441');
-  const hl = heroOf('L'), hr = heroOf('R');
-  txt(g, hl ? hl.name + ' ' + hl.mana + 'MP' : 'Garrison', 3, 26, '#3f7fbf', 'left');
-  txt(g, hr ? hr.name : (B.sides.R.monster ? 'Neutrals' : 'Garrison'), BLW - 3, 26, '#b33a2e', 'right');
+  const hl = heroOf('L'), hr = heroOf('R'), ps = 24, pad = 3, py = HDR - 4 - ps;
+  if (hl) drawHeroPortrait(g, hl.name, pad, py, ps, hl.owner);
+  if (hr) drawHeroPortrait(g, hr.name, BLW - pad - ps, py, ps, hr.owner);
+  txt(g, hl ? hl.name + ' ' + hl.mana + 'MP' : 'Garrison', hl ? pad + ps + 4 : 3, 26, '#3f7fbf', 'left');
+  txt(g, hr ? hr.name : (B.sides.R.monster ? 'Neutrals' : 'Garrison'), hr ? BLW - pad - ps - 4 : BLW - 3, 26, '#b33a2e', 'right');
   const tl = s => { const t = B.tac[s].tactic; if (s === 'R' && B.tac.L.intel < 2) return '???'; return t ? TACTICS[t].name.toUpperCase() + (blunted(s) ? '-X' : '') : '-'; };
-  smallTxt(g, tl('L'), 3, 11, blunted('L') ? '#888' : '#d9a441', 'left'); smallTxt(g, tl('R'), BLW - 3, 11, blunted('R') ? '#888' : '#d9a441', 'right');
+  smallTxt(g, tl('L'), hl ? pad + ps + 4 : 3, 11, blunted('L') ? '#888' : '#d9a441', 'left'); smallTxt(g, tl('R'), hr ? BLW - pad - ps - 4 : BLW - 3, 11, blunted('R') ? '#888' : '#d9a441', 'right');
 }
 const hcv = document.createElement('canvas'); hcv.width = BLW; hcv.height = HDR; const hctx = hcv.getContext('2d');
 function drawSpellFx(g, e) {
@@ -1724,7 +1726,23 @@ const ownerCol = o => o === 'player' ? '#3f7fbf' : o === 'ai' ? '#b33a2e' : '#a8
 const imgCache = {};
 const imgURL = (k, f) => imgCache[k] || (imgCache[k] = f().toDataURL());
 const unitImg = t => imgURL('u' + t, () => SPR.unit(t, 0, false));
-const portraitImg = h => imgURL('p' + h.name, () => SPR.portrait(h.name, h.owner));
+const heroPic = h => {
+  const name = h && (h.name || h), owner = (h && h.owner) || 'player';
+  const loc = window.HERO_MAN && HERO_MAN.byName[name];
+  if (loc) return `<i class="hp" title="${name}" style="background-image:url('${loc.src}');--cols:${loc.cols};--rows:${loc.rows};--col:${loc.col};--row:${loc.row}"></i>`;
+  return `<img src="${imgURL('p' + name, () => SPR.portrait(name, owner))}" alt="">`;
+};
+const portraitImg = h => { const loc = window.HERO_MAN && HERO_MAN.byName[h && h.name], c = (window.HERO_MAN && HERO_MAN.cell) || 192, im = loc && HERO_MAN.imgs && HERO_MAN.imgs[loc.src];
+  if (im && im.complete && im.naturalWidth) return imgURL('ph' + h.name, () => { const cv = document.createElement('canvas'); cv.width = cv.height = c; cv.getContext('2d').drawImage(im, loc.col * c, loc.row * c, c, c, 0, 0, c, c); return cv; });
+  return imgURL('p' + h.name, () => SPR.portrait(h.name, h.owner)); };
+const drawHeroPortrait = (g, name, x, y, size, owner = 'player') => {
+  const loc = window.HERO_MAN && HERO_MAN.byName[name], c = (window.HERO_MAN && HERO_MAN.cell) || 192, im = loc && HERO_MAN.imgs && HERO_MAN.imgs[loc.src];
+  const sm = g.imageSmoothingEnabled, sq = g.imageSmoothingQuality;
+  if (im && im.complete && im.naturalWidth) { g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high'; g.drawImage(im, loc.col * c, loc.row * c, c, c, x, y, size, size); }
+  else { g.imageSmoothingEnabled = false; g.drawImage(SPR.portrait(name, owner), x, y, size, size); }
+  g.strokeStyle = '#8a6a35'; g.lineWidth = 1; g.strokeRect(x + 0.5, y + 0.5, size - 1, size - 1);
+  g.imageSmoothingEnabled = sm; if (sq) g.imageSmoothingQuality = sq;
+};
 let resImg = r => imgURL('r' + r, () => SPR.pile(r));
 let hudSig = '';
 function meter(v, m, c) { return `<div class="meter"><i style="width:${Math.max(0, Math.min(100, v / Math.max(1, m) * 100))}%;background:${c}"></i></div>`; }
@@ -1738,8 +1756,8 @@ function updateHud() {
   $('pol').innerHTML = policyIcons('player');
   const R = RS('player'), tb = document.querySelector('[data-a=tech]'); if (tb && R) tb.textContent = 'Tech' + (R.pts ? ' (' + R.pts + ')' : '');
   $('cal').textContent = 'Day ' + ((G.day - 1) % 7 + 1) + '  Week ' + (Math.floor((G.day - 1) / 7) % 4 + 1) + '  Month ' + (Math.floor((G.day - 1) / 28) + 1);
-  $('chip').innerHTML = h ? `<img src="${portraitImg(h)}" alt=""><div class="bars"><b>${h.name} LV${h.lvl}</b>MOVE ${meter(h.mp, maxMp(h), '#5f9e3a')}MANA ${meter(h.mana, maxMana(h), '#3f7fbf')}</div>` : '<b>No Hero</b>';
-  $('sideinfo').innerHTML = h ? `<div class="hcard"><img src="${portraitImg(h)}" alt="" data-a="hero"><div><b>${h.name}</b><br>LEVEL ${h.lvl}<br>XP ${h.xp}/${xpForLevel(h.lvl)}${meter(h.xp, xpForLevel(h.lvl), '#d9a441')}</div></div>
+  $('chip').innerHTML = h ? `${heroPic(h)}<div class="bars"><b>${h.name} LV${h.lvl}</b>MOVE ${meter(h.mp, maxMp(h), '#5f9e3a')}MANA ${meter(h.mana, maxMana(h), '#3f7fbf')}</div>` : '<b>No Hero</b>';
+  $('sideinfo').innerHTML = h ? `<div class="hcard">${heroPic(h)}<div><b>${h.name}</b><br>LEVEL ${h.lvl}<br>XP ${h.xp}/${xpForLevel(h.lvl)}${meter(h.xp, xpForLevel(h.lvl), '#d9a441')}</div></div>
     ${RS('player') && facOf('player') ? `<div class="rpbar">${FACTIONS[facOf('player')].name.toUpperCase()} RESEARCH: <b>${RS('player').pts}</b> pt · ${Math.round(RS('player').prog * 100)}% ${meter(RS('player').prog, 1, FACTIONS[facOf('player')].col)}</div>` : ''}
     <div class="stats"><div>ATK<b>${stat(h, 'att')}</b></div><div>DEF<b>${stat(h, 'def')}</b></div><div>POW<b>${stat(h, 'sp')}</b></div><div>KNO<b>${stat(h, 'kn')}</b></div></div>
     <div>MORALE ${moraleBase(h)}% · LUCK ${heroLuck(h)}</div>
@@ -1834,7 +1852,11 @@ function townScene(t, own) {
     return `<button class="bcard ${st}" ${st === 'can' ? `data-a="build" data-v="${k}"` : 'disabled'} title="${b.name}${built ? ' (built)' : why && why !== 'x' ? ': ' + why : ''}">${icon}<span>${b.name.replace('Dwelling ', 'Dw ').replace('Upgrade ', 'Up ')}</span><i>${built ? '✔' : st === 'can' ? 'BUILD' : '🔒'}</i></button>`; };
   return `<div class="tscene" style="--bg:url('art/town-${t.faction}.webp')"><canvas class="tview" id="tview"></canvas><div class="tbld">${keys.map(card).join('')}</div></div>`;
 }
-const unitPic = u => (window.MHR && MHR.pic && MHR.pic(u)) || `<img src="${unitImg(u)}" alt="">`;
+const unitPic = u => {
+  const man = window.UNIT_MAN, m = man && man.units[u], ui = m && man.ui && man.ui[m.atlas];
+  if (ui) return `<i class="pu" title="${u}" style="background-image:url('${ui.src}');--n:${man.rows[m.atlas]};--x:${m.row}"></i>`;
+  return (window.MHR && MHR.pic && MHR.pic(u)) || `<img src="${unitImg(u)}" alt="">`;
+};
 function openTown(t) {
   if (!t) return;
   showPanel(() => {
@@ -1860,7 +1882,7 @@ function openTown(t) {
     });
     s += `<h3>Army</h3>`;
     const upB = (arr, i, w) => { const a = arr[i], U = UNITS[a.type]; if (!U || U.up || !U.upName || U.fac !== t.faction || !t.built.includes('up' + (U.tier + 1))) return ''; const c = upgradeCost('player', a); return btn('UPG ' + c + 'g', 'upg', w + ':' + i, 'p', G.res.player.gold < c); };
-    if (h) s += `<div class="bar">${btn('⇄ Exchange with Garrison', 'mgar', t.id, 'y')}</div>`;
+    if (h) s += `<div class="hcard">${heroPic(h)}<div class="t">${h.name} LV${h.lvl}</div></div><div class="bar">${btn('⇄ Exchange with Garrison', 'mgar', t.id, 'y')}</div>`;
     if (h) h.army.forEach((a, i) => s += `<div class="it">${unitPic(a.type)}<div class="t">${h.name}: ${a.count} ${a.type}</div>${upB(h.army, i, 'h')}${btn('To Garrison', 'togar', i, 'alt', t.garrison.length >= MAX_STACKS && !t.garrison.some(g => g.type === a.type) || h.army.length < 2)}</div>`);
     t.garrison.forEach((a, i) => s += `<div class="it">${unitPic(a.type)}<div class="t">Garrison: ${a.count} ${a.type}</div>${upB(t.garrison, i, 'g')}${btn('TO HERO', 'tohero', i, 'alt', !h)}</div>`);
     if (!h && !t.garrison.length) s += '<p>No hero or garrison here.</p>';
@@ -1873,7 +1895,7 @@ function openTown(t) {
 }
 function openHero() {
   const h = curHero(); if (!h) { msg('No hero'); return; }
-  showPanel(() => `<div class="hcard"><img src="${portraitImg(h)}" alt=""><h2>${h.name} — Level ${h.lvl}</h2></div><p class="y">${FACTIONS[h.fac] ? FACTIONS[h.fac].name + ' hero · specialty ' + FACTIONS[h.fac].spec.name + ': ' + FACTIONS[h.fac].spec.desc : ''}</p>
+  showPanel(() => `<div class="hcard">${heroPic(h)}<h2>${h.name} — Level ${h.lvl}</h2></div><p class="y">${FACTIONS[h.fac] ? FACTIONS[h.fac].name + ' hero · specialty ' + FACTIONS[h.fac].spec.name + ': ' + FACTIONS[h.fac].spec.desc : ''}</p>
     <p>XP ${h.xp} / ${xpForLevel(h.lvl)}<br>ATTACK ${stat(h, 'att')} · DEFENSE ${stat(h, 'def')}<br>SPELL POWER ${stat(h, 'sp')} · KNOWLEDGE ${stat(h, 'kn')}<br>
     MORALE ${moraleBase(h)}% · LUCK ${heroLuck(h)}<br>
     MOVE ${h.mp}/${maxMp(h)} · MANA ${h.mana}/${maxMana(h)}</p>

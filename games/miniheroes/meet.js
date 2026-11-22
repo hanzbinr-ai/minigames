@@ -30,7 +30,7 @@ function slotHtml(side, key) {
     return `<button class="${sel ? 'sel' : M.sel ? 'tgt' : ''}" data-a="mslot" data-v="${key}:${i}" title="${a ? a.count + ' ' + a.type : 'empty'}">${a ? `${unitPic(a.type)}<s>${a.count}</s>` : ''}</button>`; }).join('')}</div>`;
 }
 function heroCol(side, other, key) {
-  const h = side.hero; let s = `<h3>${side.name}${h ? ' LV' + h.lvl : ''}</h3>${slotHtml(side, key)}`;
+  const h = side.hero; let s = `<h3>${h ? heroPic(h) : ''}${side.name}${h ? ' LV' + h.lvl : ''}</h3>${slotHtml(side, key)}`;
   if (h && other.hero) {
     s += `<h3>Artifacts</h3><div class="mart">${h.arts.map((k, i) => btn(ARTIFACTS[k].name + ' →', 'mart', key + ':' + i, 'alt')).join('') || '<small>none</small>'}</div>`;
     s += `<h3>Spells</h3><small>${h.spells.map(k => SPELLS[k].name).join(', ') || 'none'}</small>`;

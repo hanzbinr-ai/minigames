@@ -1,0 +1,84 @@
+{
+ "cell": 192,
+ "cols": 2,
+ "src": "art/heroes-ui.webp",
+ "heroes": {
+  "Roland": {
+   "row": 0,
+   "col": 0
+  },
+  "Lyra": {
+   "row": 0,
+   "col": 1
+  },
+  "Sandro": {
+   "row": 1,
+   "col": 0
+  },
+  "Vidomina": {
+   "row": 1,
+   "col": 1
+  },
+  "Sylva": {
+   "row": 2,
+   "col": 0
+  },
+  "Alaron": {
+   "row": 2,
+   "col": 1
+  },
+  "Xeron": {
+   "row": 3,
+   "col": 0
+  },
+  "Calid": {
+   "row": 3,
+   "col": 1
+  },
+  "Tarnum": {
+   "row": 4,
+   "col": 0
+  },
+  "Crag": {
+   "row": 4,
+   "col": 1
+  },
+  "Gareth": {
+   "row": 5,
+   "col": 0
+  },
+  "Mira": {
+   "row": 5,
+   "col": 1
+  }
+ },
+ "extras": {
+  "src": "art/heroes-extra-ui.webp",
+  "heroes": {
+   "Thant": {
+    "row": 0,
+    "col": 0
+   },
+   "Moandor": {
+    "row": 0,
+    "col": 1
+   },
+   "Elysia": {
+    "row": 0,
+    "col": 2
+   },
+   "Brann": {
+    "row": 0,
+    "col": 3
+   },
+   "Korg": {
+    "row": 0,
+    "col": 4
+   },
+   "Nyx": {
+    "row": 0,
+    "col": 5
+   }
+  }
+ }
+}
