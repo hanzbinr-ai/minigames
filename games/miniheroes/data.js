@@ -138,6 +138,7 @@ const ARTIFACTS = {
   orb:    {name: 'Orb of Sparks',   stat: 'sp',  val: 2},
   tome:   {name: 'Tome of Lore',    stat: 'kn',  val: 2},
   boots:  {name: 'Boots of Speed',  stat: 'mp',  val: 6},
+  clover: {name: 'Four-Leaf Clover', stat: 'luck', val: 1},
 };
 
 const MINES = {
@@ -177,6 +178,7 @@ const SKILLS = {
   offense:     {name: 'Offense',     v: [0, 10, 20, 30],   desc: v => '+' + v + '% melee damage'},
   armorer:     {name: 'Armorer',     v: [0, 5, 10, 15],    desc: v => '-' + v + '% damage taken'},
   leadership:  {name: 'Leadership',  v: [0, 10, 20, 30],   desc: v => v + '% chance per stack each RESOLVE: MORALE (+1 move, +20% dmg)'},
+  luck:        {name: 'Luck',        v: [0, 1, 2, 3],      desc: v => '+' + v + ' luck (' + v + '/24 chance each attack: LUCKY, damage x2)'},
   ballistics:  {name: 'Ballistics',  v: [0, 10, 20, 30],   desc: v => 'Catapult +' + v + '% hit chance' + (v >= 30 ? ', fires twice' : '')},
 };
 const START_SKILLS = {Roland: {leadership: 1, archery: 1}, Lyra: {wisdom: 1, scouting: 1}, Gareth: {offense: 1, armorer: 1}, Sylva: {logistics: 1, pathfinding: 1},

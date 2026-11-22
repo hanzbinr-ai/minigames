@@ -777,7 +777,11 @@ const meleeOK = (u, t) => { const d = md(u, t); return d === 1 || (d === 2 && en
 const pdir = (a, t) => { const ty = nearY(a.y, t.y), dx = hxp(t.x, ty) - hxp(a.x, a.y), dy = (ty - a.y) * RH, l = Math.hypot(dx, dy) || 1; return [dx / l, dy / l]; };
 const behind = (a, t) => { let best = null; for (const [x, y] of hexN(t.x, t.y)) { const d = hexDist(a.x, a.y, x, y); if (!best || d > best.d) best = {x, y, d}; } return best && best.d === 2 ? uAt(best.x, best.y) : null; };
 const heroOf = side => B.sides[side].hero;
-const moraleChance = side => { const o = B.sides[side].owner; return skl(heroOf(side), 'leadership') + (pol(o, 'crusade') ? 10 : 0) + techSum(o, 'morale') + (techCap(o, 'crusade') ? 50 : 0) + Math.min(20, 10 * B.units.filter(u => u.alive && u.side === side && hasAb(u, 'Holy')).length); };
+const moraleBase = h => h ? skl(h, 'leadership') + (pol(h.owner, 'crusade') ? 10 : 0) + techSum(h.owner, 'morale') + (techCap(h.owner, 'crusade') ? 50 : 0) : 0;
+const moraleChance = side => moraleBase(heroOf(side)) + Math.min(20, 10 * B.units.filter(u => u.alive && u.side === side && hasAb(u, 'Holy')).length);
+const heroLuck = h => h ? Math.max(-3, Math.min(3, skl(h, 'luck') + artBonus(h, 'luck'))) : 0;
+const luckOf = side => heroLuck(heroOf(side));
+const stackLuck = u => (hasAb(u, 'Undead') || hasAb(u, 'Machine')) ? 0 : luckOf(u.side);
 const fearImm = u => hasAb(u, 'Undead') || hasAb(u, 'Machine') || techCap(B.sides[u.side].owner, 'crusade');
 const ownerOfU = u => B.sides[u.side].owner;
 const HEXK = 2; // the 22-wide hex field is ~2.2x the old 10-wide square one: move and range count 2 hexes per stat point
@@ -839,6 +843,11 @@ function calcDmg(a, t, ranged) {
   d *= 1 + skl(ha, ranged ? 'archery' : 'offense') / 100;
   d *= 1 - skl(ht, 'armorer') / 100;
   if (a.morale) { d *= 1.2; tags.push('MORALE'); }
+  if (!hasAb(a, 'Undead') && !hasAb(a, 'Machine')) {
+    const L = luckOf(a.side);
+    if (L > 0 && Math.random() * 24 < L) { d *= 2; tags.push('LUCKY'); }
+    else if (L < 0 && Math.random() * 24 < -L) { d *= 0.5; tags.push('UNLUCKY'); }
+  }
   if (tac(a.side, 'blitz')) d *= hasTal(ha, 'grandblitz') ? 1.25 : hasTal(ha, 'momentum') ? 1.2 : 1.1;
   if (tac(a.side, 'bloodlust') && !ranged) d *= 1.25;
   if (tac(a.side, 'volley') && ranged) d *= 1.3;
@@ -955,6 +964,8 @@ function resolveRound() {
     } else { B.siege.shots.push({at, y: h.tower}); B.proj.push({at, dur: 0.35, fx: B.siege.x, fy: h.tower, tx: h.t.x, ty: h.t.y, kind: 'arrow'}); }
     h.t.hit.push(imp); const ret = h.tags.includes('RETAL');
     fx(h.t, '-' + h.d + (h.tags.length ? ' ' + h.tags[0] : ''), ret ? '#f8b800' : h.tags.includes('FIRE') ? '#fc7430' : '#fcfcfc', imp);
+    if (h.a && h.tags.includes('LUCKY')) { fx(h.a, 'LUCKY!', '#e8f050', imp); out.push(h.a.type + ' lucky strike'); }
+    else if (h.a && h.tags.includes('UNLUCKY')) { fx(h.a, 'Unlucky', '#a0a0a0', imp); out.push(h.a.type + ' unlucky'); }
     later(imp, SFX.hit);
     if (h.d >= tmax * 0.25 || h.t.tot <= 0) B.shake.push({at: imp, mag: h.t.tot <= 0 ? 3 : 2});
     if (h.a && h.d > 0) {
@@ -1046,7 +1057,7 @@ function resolveRound() {
     const noRet = hasAb(u, 'NoRetal') || techCap(ownerOfU(u), 'wildhunt') || (u.hidden && tac(u.side, 'ambush'));
     if (up(t) && up(u) && !t.retal && !noRet && md(u, t) === 1 && !(tried && !landed)) { // fully dodged attack = no retaliation // retaliation uses the defender's surviving count
       t.retal = true; const rr = calcDmg(t, u, false), d = tac(t.side, 'riposte') ? rr.dmg : Math.ceil(rr.dmg / 2);
-      u.tot -= d; const ri = land({a: t, t: u, d, tags: ['RETAL'], n: 0, ret: 1}, T, false);
+      u.tot -= d; const ri = land({a: t, t: u, d, tags: ['RETAL'].concat(rr.tags), n: 0, ret: 1}, T, false);
       settle(u); show(u, ri); show(t, ri); T = ri + 0.2;
     }
     T += 0.25;
@@ -1219,7 +1230,7 @@ function preTap(gx, gy) {
   const u = uAt(gx, gy), s = UI.preSel && uById(UI.preSel);
   if (u && u.side === 'L') { if (s && s !== u) { const [x, y] = [s.x, s.y]; moveUnitTo(s, u.x, u.y); moveUnitTo(u, x, y); UI.preSel = null; SFX.click(); } else { UI.preSel = s === u ? null : u.id; SFX.click(); } return; }
   if (s && !u && inDeploy('L', gx, gy)) { moveUnitTo(s, gx, gy); UI.preSel = null; SFX.click(); return; }
-  if (u) { msg(countText(u.count, B.tac.L.intel || intelOf('L')) + ' ' + u.type + ' · ' + abText(US(u))); return; }
+  if (u) { msg(countText(u.count, B.tac.L.intel || intelOf('L')) + ' ' + u.type + ' · MORALE ' + moraleChance(u.side) + '% · LUCK ' + stackLuck(u) + ' · ' + abText(US(u))); return; }
   if (s) { msg('Place stacks inside the blue zone'); SFX.bad(); }
 }
 function preDrag(ax, ay, bx, by) { const u = uAt(ax, ay); if (!u || u.side !== 'L') return; UI.preSel = u.id; preTap(bx, by); }
@@ -1731,6 +1742,7 @@ function updateHud() {
   $('sideinfo').innerHTML = h ? `<div class="hcard"><img src="${portraitImg(h)}" alt="" data-a="hero"><div><b>${h.name}</b><br>LEVEL ${h.lvl}<br>XP ${h.xp}/${xpForLevel(h.lvl)}${meter(h.xp, xpForLevel(h.lvl), '#f8b800')}</div></div>
     ${RS('player') && facOf('player') ? `<div class="rpbar">${FACTIONS[facOf('player')].name.toUpperCase()} RESEARCH: <b>${RS('player').pts}</b> pt · ${Math.round(RS('player').prog * 100)}% ${meter(RS('player').prog, 1, FACTIONS[facOf('player')].col)}</div>` : ''}
     <div class="stats"><div>ATK<b>${stat(h, 'att')}</b></div><div>DEF<b>${stat(h, 'def')}</b></div><div>POW<b>${stat(h, 'sp')}</b></div><div>KNO<b>${stat(h, 'kn')}</b></div></div>
+    <div>MORALE ${moraleBase(h)}% · LUCK ${heroLuck(h)}</div>
     <div>MOVE ${h.mp}/${maxMp(h)} ${meter(h.mp, maxMp(h), '#58d854')}MANA ${h.mana}/${maxMana(h)} ${meter(h.mana, maxMana(h), '#3cbcfc')}</div>
     <div class="slots">${Array.from({length: MAX_STACKS}, (_, i) => { const a = h.army[i]; return `<div class="slot" title="${a ? a.count + ' ' + a.type : ''}">${a ? `${unitPic(a.type)}<s>${a.count}</s>` : ''}</div>`; }).join('')}</div>
     <div class="skl">${Array.from({length: MAX_SKILLS}, (_, i) => { const k = Object.keys(h.sk)[i]; return k ? `<span title="${SKILL_LVL[h.sk[k]]} ${SKILLS[k].name}: ${SKILLS[k].desc(skl(h, k))}">${SKILLS[k].name.slice(0, 5).toUpperCase()}<i>${'I'.repeat(h.sk[k])}</i></span>` : '<span class="e">-</span>'; }).join('')}</div>
@@ -1863,6 +1875,7 @@ function openHero() {
   const h = curHero(); if (!h) { msg('No hero'); return; }
   showPanel(() => `<div class="hcard"><img src="${portraitImg(h)}" alt=""><h2>${h.name.toUpperCase()} - LEVEL ${h.lvl}</h2></div><p class="y">${FACTIONS[h.fac] ? FACTIONS[h.fac].name + ' hero · specialty ' + FACTIONS[h.fac].spec.name + ': ' + FACTIONS[h.fac].spec.desc : ''}</p>
     <p>XP ${h.xp} / ${xpForLevel(h.lvl)}<br>ATTACK ${stat(h, 'att')} · DEFENSE ${stat(h, 'def')}<br>SPELL POWER ${stat(h, 'sp')} · KNOWLEDGE ${stat(h, 'kn')}<br>
+    MORALE ${moraleBase(h)}% · LUCK ${heroLuck(h)}<br>
     MOVE ${h.mp}/${maxMp(h)} · MANA ${h.mana}/${maxMana(h)}</p>
     <h3>SECONDARY SKILLS (${Object.keys(h.sk).length}/${MAX_SKILLS})</h3>${Object.keys(h.sk).map(k => `<div class="it"><div class="t">${SKILL_LVL[h.sk[k]]} ${SKILLS[k].name}<small>${SKILLS[k].desc(skl(h, k))}</small></div></div>`).join('') || '<p>None yet. Gain levels to learn skills.</p>'}
     <h3>TACTICS TALENTS (${h.tp || 0} point${h.tp === 1 ? '' : 's'})</h3><div class="tal">${Object.keys(TALENTS).map(br => `<div><b style="color:${DOCTRINES[br].col}">${DOCTRINES[br].name.toUpperCase()}</b>${TALENTS[br].map((t, i) => { const st = talentState(h, br, i); return `<button class="btn sb ${st === 'have' ? 'g' : st === 'open' ? 'y' : 'alt'}${t.ult ? ' ult' : ''}" data-a="tal" data-v="${t.k}" ${st !== 'open' ? 'disabled' : ''} title="${t.desc}">${t.name}<small>${t.desc}</small></button>`; }).join('')}</div>`).join('')}</div>
@@ -1913,7 +1926,7 @@ function openMenu() {
     Capture the enemy town to win. Lose all towns and heroes and you lose.</p>
     <h3>BATTLE</h3><p>PLAN: tap your stack, then tap an empty tile (move), an enemy (attack) or the stack again (defend). Cast one spell per round with SPELL.
     PRE-BATTLE (before round 1): scout (Intel 0-2), set your formation, pick one tactic and cast terrain spells. All of these last the whole battle.
-    RESOLVE: spells, then all shooters fire together (a shooter with an enemy next to it is pinned and fights in melee at half damage), then moves (fastest first), then melee: the striker hits first and the survivor strikes back once per round at half damage. Use the BOOK button for spells, retreat and tactics. Attacking from the opposite side of an ally = FLANK x1.5.</p>`, {sticky: !G});
+    RESOLVE: spells, then all shooters fire together (a shooter with an enemy next to it is pinned and fights in melee at half damage), then moves (fastest first), then melee: the striker hits first and the survivor strikes back once per round at half damage. Use the BOOK button for spells, retreat and tactics. Attacking from the opposite side of an ally = FLANK x1.5. Luck (Luck skill or a Four-Leaf Clover, cap +3): each attack has luck/24 chance of LUCKY (damage x2); negative luck has the same chance of Unlucky (damage x0.5).</p>`, {sticky: !G});
 }
 function openSpells() {
   const h = heroOf('L');
@@ -2115,7 +2128,7 @@ function battleTap(mx, my) {
   const s = B.sel && uById(B.sel);
   if (!s) {
     if (u && u.side === 'L') { B.sel = u.id; B.selPick = true; SFX.click(); }
-    else if (u) { const U = US(u); msg(`${countText(u.count, u.side === 'L' || B.tac.L.intel >= 1)} ${u.type}: ATK ${U.att} DEF ${U.def} HP ${U.hp} MOVE ${U.move}${U.range ? ' RANGE ' + U.range : ''} · ${U.ab.map(k => k + ': ' + ABIL[k]).join('; ') || 'no abilities'}`); }
+    else if (u) { const U = US(u); msg(`${countText(u.count, u.side === 'L' || B.tac.L.intel >= 1)} ${u.type}: ATK ${U.att} DEF ${U.def} HP ${U.hp} MOVE ${U.move}${U.range ? ' RANGE ' + U.range : ''} · MORALE ${moraleChance(u.side)}% · LUCK ${stackLuck(u)} · ${U.ab.map(k => k + ': ' + ABIL[k]).join('; ') || 'no abilities'}`); }
     return;
   }
   if (!u && !B.selPick) { msg('Tap your highlighted ' + s.type + ' first to move it, or tap an enemy to attack'); SFX.bad(); return; } // never plan a move from a stray tap
@@ -2193,6 +2206,6 @@ document.addEventListener('keydown', e => {
 });
 $('mute').onclick = e => { e.stopPropagation(); muted = !muted; localStorage.setItem('mh-mute', muted ? '1' : '0'); $('mute').textContent = muted ? 'MUTE' : 'SND'; };
 $('mute').textContent = muted ? 'MUTE' : 'SND';
-window.MHX = {dijkstra, aiChoosePath, get layers() { return layers; }, addRP, pickTech, effStats, techList, techState, countWord, countText, recruit, build, sacrifice, sacValue, upgradeStack, newGame, openTech, openTown, RS, facOf, savings, dailyResearch, bCost, startBattle, get UNITS() { return UNITS; }, take, tipFor, threatOf, surrenderPrice, payPlans, doRetreat, doSurrender, openFlee, tradeBulk, mktState, mktMax, celebrate, objAt, moraleChance, get G() { return G; }, get B() { return B; }, setPolicy, slotCount, income, learnKT, growthOf, unitCost, newDay, hire, finishFight, KG, pol, maxMana, fight, startFight, tac, blunted, moveOf, calcDmg, intelOf, knownTactics, learnTalent, reach, uById, loadGame, applyFormation, placeTerrain, curHero, gainXp, flood, get PT() { return PT; }, get ET() { return ET; }, battleToClient: (lx, ly) => { const r = cv.getBoundingClientRect(), mid = (BV.top + BV.ah) / 2; while (BV.oy + ly * BV.s < mid - PER * BV.s / 2) ly += PER; while (BV.oy + ly * BV.s > mid + PER * BV.s / 2) ly -= PER; return [r.left + (BV.ox + lx * BV.s) / CAM.dpr, r.top + (BV.oy + ly * BV.s) / CAM.dpr]; }, UI, CAM, ACTIONS, tapMap, battleTap, endDay, resolveRound, cell: (x, y) => cellC(x, y), battleView: () => battleView(), battlePan: (x, y) => battlePan(x, y), battleZoom: z => battleZoom(z), hexDist, hexN, meleeOK: (a, b) => meleeOK(a, b), tileToClient: (x, y) => { const r = cv.getBoundingClientRect(); return [r.left + ((x * TS + TS / 2 - CAM.x) * CAM.z) / CAM.dpr, r.top + ((y * TS + TS / 2 - CAM.y) * CAM.z) / CAM.dpr]; }}; // test hook
+window.MHX = {dijkstra, aiChoosePath, get layers() { return layers; }, addRP, pickTech, effStats, techList, techState, countWord, countText, recruit, build, sacrifice, sacValue, upgradeStack, newGame, openTech, openTown, RS, facOf, savings, dailyResearch, bCost, startBattle, get UNITS() { return UNITS; }, take, tipFor, threatOf, surrenderPrice, payPlans, doRetreat, doSurrender, openFlee, tradeBulk, mktState, mktMax, celebrate, objAt, moraleChance, moraleBase, heroLuck, luckOf, stackLuck, get G() { return G; }, get B() { return B; }, setPolicy, slotCount, income, learnKT, growthOf, unitCost, newDay, hire, finishFight, KG, pol, maxMana, fight, startFight, tac, blunted, moveOf, calcDmg, intelOf, knownTactics, learnTalent, reach, uById, loadGame, applyFormation, placeTerrain, curHero, gainXp, flood, get PT() { return PT; }, get ET() { return ET; }, battleToClient: (lx, ly) => { const r = cv.getBoundingClientRect(), mid = (BV.top + BV.ah) / 2; while (BV.oy + ly * BV.s < mid - PER * BV.s / 2) ly += PER; while (BV.oy + ly * BV.s > mid + PER * BV.s / 2) ly -= PER; return [r.left + (BV.ox + lx * BV.s) / CAM.dpr, r.top + (BV.oy + ly * BV.s) / CAM.dpr]; }, UI, CAM, ACTIONS, tapMap, battleTap, endDay, resolveRound, cell: (x, y) => cellC(x, y), battleView: () => battleView(), battlePan: (x, y) => battlePan(x, y), battleZoom: z => battleZoom(z), hexDist, hexN, meleeOK: (a, b) => meleeOK(a, b), tileToClient: (x, y) => { const r = cv.getBoundingClientRect(); return [r.left + ((x * TS + TS / 2 - CAM.x) * CAM.z) / CAM.dpr, r.top + ((y * TS + TS / 2 - CAM.y) * CAM.z) / CAM.dpr]; }}; // test hook
 openMenu();
 requestAnimationFrame(loop);
