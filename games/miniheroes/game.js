@@ -1451,14 +1451,44 @@ function fitCanvas() {
 }
 const zoomRange = () => [Math.max(1, Math.floor(Math.min(CAM.w / WW, CAM.h / WH))), Math.max(2, Math.round(96 * CAM.dpr / TS))];
 function clampZoom(z) { const [a, b] = zoomRange(); return Math.max(a, Math.min(b, Math.round(z))); }
+// HUD overlays on the map (hero chip top-left, zoom buttons top-right, minimap bottom-right) in CSS px from the #view edges.
+// The camera may scroll past the map edge by these insets and centers on the free area between them, so a hero or town
+// in a map corner can always be brought out from under the HUD (start position is (2,2), right under the chip).
+let hudC = {t: -1};
+function hudIns() {
+  const now = performance.now(); if (now - hudC.t < 200) return hudC.i;
+  const i = {l: 0, t: 0, r: 0, b: 0}, v = $('view').getBoundingClientRect(), vis = e => e && e.offsetParent && getComputedStyle(e).visibility !== 'hidden';
+  if (UI.mode !== 'battle' && UI.mode !== 'title') {
+    const c = $('chip'), z = $('zoom'), m = $('mmap');
+    if (vis(c)) i.t = Math.max(0, c.getBoundingClientRect().bottom - v.top + 4);
+    if (vis(z)) i.r = Math.max(0, v.right - z.getBoundingClientRect().left + 4);
+    if (vis(m) && !$('mmapw').classList.contains('hide')) i.b = Math.max(0, v.bottom - m.getBoundingClientRect().top + 4);
+    if (i.t + i.b > v.height * 0.6) i.t = i.b = 0; // tiny/landscape view: don't let the HUD eat the map
+  }
+  hudC = {t: now, i}; return i;
+}
+function camFree() { // free area in world px: left/top overscroll and its size
+  const I = hudIns(), k = CAM.dpr / CAM.z;
+  return {l: I.l * k, t: I.t * k, w: CAM.w / CAM.z - (I.l + I.r) * k, h: CAM.h / CAM.z - (I.t + I.b) * k};
+}
 function clampCam() {
-  const vw = CAM.w / CAM.z, vh = CAM.h / CAM.z;
-  CAM.x = vw >= WW ? (WW - vw) / 2 : Math.max(0, Math.min(WW - vw, CAM.x));
-  CAM.y = vh >= WH ? (WH - vh) / 2 : Math.max(0, Math.min(WH - vh, CAM.y));
+  const F = camFree(), vw = CAM.w / CAM.z, vh = CAM.h / CAM.z;
+  CAM.x = F.w >= WW ? (WW - F.w) / 2 - F.l : Math.max(-F.l, Math.min(WW - vw + (vw - F.l - F.w), CAM.x));
+  CAM.y = F.h >= WH ? (WH - F.h) / 2 - F.t : Math.max(-F.t, Math.min(WH - vh + (vh - F.t - F.h), CAM.y));
 }
 function centerOn(x, y, snap) {
-  const t = {x: x * TS + TS / 2 - CAM.w / CAM.z / 2, y: y * TS + TS / 2 - CAM.h / CAM.z / 2};
+  const F = camFree(), t = {x: x * TS + TS / 2 - F.l - F.w / 2, y: y * TS + TS / 2 - F.t - F.h / 2};
   if (snap) { CAM.x = t.x; CAM.y = t.y; CAM.target = null; clampCam(); } else CAM.target = t;
+}
+function chipFade() { // the chip goes see-through (and lets taps through) while the selected hero is drawn under it
+  const c = $('chip'), h = G && curHero(); if (!c || !c.offsetParent) return;
+  let under = false;
+  if (h && UI.mode !== 'battle') {
+    const p = rp(h), r = c.getBoundingClientRect(), v = $('view').getBoundingClientRect(), k = CAM.z / CAM.dpr;
+    const x0 = v.left + (p.x * TS - CAM.x) * k, y0 = v.top + ((p.y - 1) * TS - CAM.y) * k, x1 = x0 + TS * k, y1 = y0 + 2 * TS * k; // tile + sprite above
+    under = x1 > r.left && x0 < r.right && y1 > r.top && y0 < r.bottom;
+  }
+  c.classList.toggle('under', under);
 }
 function setZoom(z, sx = CAM.w / 2, sy = CAM.h / 2) {
   const nz = clampZoom(z); if (nz === CAM.z) return;
@@ -1536,6 +1566,7 @@ function viewRect() {
   return {x, y, w: Math.max(1, Math.min(WW - x, Math.ceil(CAM.w / CAM.z + 2 * m))), h: Math.max(1, Math.min(WH - y, Math.ceil(CAM.h / CAM.z + 2 * m)))};
 }
 function renderMapScreen() {
+  chipFade();
   if (window.MHR && MHR.map()) return; // Pixi render layer (falls back to this canvas renderer)
   renderWorld(); clampCam();
   ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high'; ctx.fillStyle = '#0e1424'; ctx.fillRect(0, 0, CAM.w, CAM.h);
@@ -1771,7 +1802,8 @@ function updateHud() {
   $('pol').innerHTML = policyIcons('player');
   const R = RS('player'), tb = document.querySelector('[data-a=tech]'); if (tb && R) tb.textContent = 'Tech' + (R.pts ? ' (' + R.pts + ')' : '');
   $('cal').textContent = 'Day ' + ((G.day - 1) % 7 + 1) + '  Week ' + (Math.floor((G.day - 1) / 7) % 4 + 1) + '  Month ' + (Math.floor((G.day - 1) / 28) + 1);
-  $('chip').innerHTML = h ? `${heroPic(h)}<div class="bars"><b>${h.name} LV${h.lvl}</b>MOVE ${meter(h.mp, maxMp(h), '#5f9e3a')}MANA ${meter(h.mana, maxMana(h), '#3f7fbf')}</div>` : '<b>No Hero</b>';
+  $('chip').innerHTML = h ? `${heroPic(h)}<div class="bars"><b>${h.name} LV${h.lvl}</b><span>MOVE</span>${meter(h.mp, maxMp(h), '#5f9e3a')}<span>MANA</span>${meter(h.mana, maxMana(h), '#3f7fbf')}</div>` : '<b>No Hero</b>';
+  $('chip').classList.toggle('min', localStorage.getItem('mh-chip-min') === '1');
   $('sideinfo').innerHTML = h ? `<div class="hcard">${heroPic(h)}<div><b>${h.name}</b><br>LEVEL ${h.lvl}<br>XP ${h.xp}/${xpForLevel(h.lvl)}${meter(h.xp, xpForLevel(h.lvl), '#d9a441')}</div></div>
     ${RS('player') && facOf('player') ? `<div class="rpbar">${FACTIONS[facOf('player')].name.toUpperCase()} RESEARCH: <b>${RS('player').pts}</b> pt · ${Math.round(RS('player').prog * 100)}% ${meter(RS('player').prog, 1, FACTIONS[facOf('player')].col)}</div>` : ''}
     <div class="stats"><div>ATK<b>${stat(h, 'att')}</b></div><div>DEF<b>${stat(h, 'def')}</b></div><div>POW<b>${stat(h, 'sp')}</b></div><div>KNO<b>${stat(h, 'kn')}</b></div></div>
@@ -1792,6 +1824,7 @@ function syncBars() {
   $('zoom').style.display = b || UI.mode === 'title' ? 'none' : 'flex';
   $('mmapw').style.display = b || UI.mode === 'title' || !G ? 'none' : '';
   $('chip').style.visibility = b || UI.mode === 'title' ? 'hidden' : 'visible';
+  if (UI.camInit && UI.mode === 'map' && G && CAM.z) { UI.camInit = false; hudC.t = -1; const h = curHero(); if (h) centerOn(h.x, h.y, true); } // first frame with the HUD up: re-center with its insets
   document.querySelectorAll('#mapbar .btn').forEach(e => e.disabled = UI.mode !== 'map');
 }
 
@@ -2037,6 +2070,7 @@ const ACTIONS = {
   quality: () => { localStorage.setItem('mh-quality', localStorage.getItem('mh-quality') === 'low' ? 'high' : 'low'); refreshPanel(); },
   debug: () => { DBG.on = !DBG.on; localStorage.setItem('mh-debug', DBG.on ? '1' : '0'); refreshPanel(); },
   enddayok: () => { closePanel(); endDay(); }, town: () => { const h = curHero(), t = (h && townAt(h.x, h.y) && townAt(h.x, h.y).owner === 'player') ? townAt(h.x, h.y) : G.towns.find(t => t.owner === 'player'); t ? openTown(t) : msg('You have no town!'); },
+  chiptog: () => { const m = localStorage.getItem('mh-chip-min') === '1' ? '0' : '1'; localStorage.setItem('mh-chip-min', m); $('chip').classList.toggle('min', m === '1'); hudC.t = -1; },
   hero: () => openHero(), menu: () => openMenu(),
   next: () => { const hs = myHeroes(); if (!hs.length) return; const i = hs.indexOf(curHero()); G.sel = hs[(i + 1) % hs.length].id; UI.preview = null; msg(curHero().name + ' selected'); centerOn(curHero().x, curHero().y); },
   resolve: () => { closeBook(); resolveRound(); }, spell: () => B && B.phase === 'plan' && openSpells(),
@@ -2093,7 +2127,7 @@ function migrate(g) {
 }
 function startGame(fn, note) {
   UI.panel = null; $('panel').classList.remove('show'); B = null; UI.ai = null; UI.walk = null; UI.preview = null; UI.rpos = {}; UI.levelQ = []; UI.fx = [];
-  fn(); if (!G.rs) G.rs = {player: mkRS(), ai: mkRS()}; if (!G.kg) { G.kg = {player: mkKingdom('player'), ai: mkKingdom('ai')}; if (!G.cfg.tutorial) aiKingdom(); } layers = null; CAM.z = 0; UI.kslot = null; hudSig = ''; UI.mode = 'map'; msg(note || '');
+  fn(); if (!G.rs) G.rs = {player: mkRS(), ai: mkRS()}; if (!G.kg) { G.kg = {player: mkKingdom('player'), ai: mkKingdom('ai')}; if (!G.cfg.tutorial) aiKingdom(); } layers = null; CAM.z = 0; UI.camInit = true; UI.kslot = null; hudSig = ''; UI.mode = 'map'; msg(note || '');
 }
 function openSetup() {
   UI.setup = UI.setup || {size: 'M', diff: 'normal', seed: Math.floor(Math.random() * 1e6), pf: 'castle', af: 'random'};

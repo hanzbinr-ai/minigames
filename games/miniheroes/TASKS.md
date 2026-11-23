@@ -6,6 +6,8 @@ Format: - [ ] [Owner] task  (Owner = Code or Broz)
 - [ ] [Hanz] Test 1.6.0 Mage on a phone after push (new game as Mage, Starhold, Library, battle)
 - [x] [Broz] Painted Mage talent icon row (tal_mage_0..5) — wired in 1.6.0
 - [x] [Code] Portrait battle showed ~3 stacked copies of the wrapped field — min zoom now fills the height with one copy
+- [x] [Code] 1.6.1: hero chip / zoom / minimap no longer cover castle or heroes (compact chip, tap-collapse, HUD-aware camera) — local, needs Hanz "push"
+- [ ] [Hanz] Check 1.6.1 on the Redmi: castle visible at start, tap the hero chip to shrink it
 - [ ] [Code] Balance retune later should include Mage mid (65.6% in mage160-summary.txt)
 - [ ] [Broz] Small: space Thunderbird wing from Ogre Magi on Stronghold upgrade sheet
 - [ ] [Code] Retune balance later (Necro too strong, Sylvan too weak; see balance/runs/luck152-summary.txt)

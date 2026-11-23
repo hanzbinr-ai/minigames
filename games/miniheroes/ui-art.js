@@ -133,7 +133,7 @@
   const home = document.createElement('div'); home.id = 'home';
   const HB = [['Continue', 'h_cont', 0], ['New Game', 'new', 1], ['Campaign', 'campaign', 2], ['Duel', 'h_duel', 3], ['Settings', 'h_set', 4]];
   const homeHtml = () => { const can = !!(localStorage.getItem(SAVE_KEY + '-auto') || localStorage.getItem(SAVE_KEY));
-    return `<div class="hbg"><div class="hcastle"></div><h1 class="htitle"><img src="art/home-logo.webp" alt="Mini Heroes" draggable="false"></h1></div><div class="hheroes"></div><nav>${HB.map(([l, a, i]) => `<button class="hbtn${a === 'campaign' ? ' hot' : ''}" data-a="${a}" ${a === 'h_cont' && !can ? 'disabled' : ''}><img src="${A}home-i${i}.webp" alt="">${l}</button>`).join('')}</nav><small class="hver">v${'1.6.0'}</small>`; };
+    return `<div class="hbg"><div class="hcastle"></div><h1 class="htitle"><img src="art/home-logo.webp" alt="Mini Heroes" draggable="false"></h1></div><div class="hheroes"></div><nav>${HB.map(([l, a, i]) => `<button class="hbtn${a === 'campaign' ? ' hot' : ''}" data-a="${a}" ${a === 'h_cont' && !can ? 'disabled' : ''}><img src="${A}home-i${i}.webp" alt="">${l}</button>`).join('')}</nav><small class="hver">v${'1.6.1'}</small>`; };
   window.showHome = () => { home.innerHTML = homeHtml(); home.style.display = 'flex'; UI.panel = null; $('panel').classList.remove('show'); UI.mode = G ? UI.mode : 'title'; };
   const hideHome = () => { home.style.display = 'none'; };
   document.body.appendChild(home);

@@ -2,7 +2,7 @@
 <title>Mini Heroes · Mini Game</title><meta name="theme-color" content="#0e1424"><link rel="manifest" href="../../manifest.webmanifest"><link rel="icon" href="../../icons/icon-192.png"><link rel="stylesheet" href="../../style.css">
 <style>
 
-/* Mini Heroes 1.6.0 — painted fantasy theme (overrides portal style.css on this page only) */
+/* Mini Heroes 1.6.1 — painted fantasy theme (overrides portal style.css on this page only) */
 @font-face{font-family:'Cinzel';src:url(fonts/Cinzel-700.woff2) format('woff2');font-weight:700;font-style:normal;font-display:swap}
 @font-face{font-family:'Cinzel Decorative';src:url(fonts/CinzelDecorative-700.woff2) format('woff2');font-weight:700;font-style:normal;font-display:swap}
 @font-face{font-family:'Nunito';src:url(fonts/Nunito-600.woff2) format('woff2');font-weight:600;font-style:normal;font-display:swap}
@@ -247,6 +247,17 @@ body.mh .btn.fcard,body.mh .fcard,body.mh .fgrid .fcard{font-family:Nunito,syste
 #book{z-index:45}
 body:has(#panel.show) #home{display:none!important}
 
+/* 1.6.1 compact map HUD: the camera keeps the focused hero/town out from under these (game.js hudIns) */
+#chip{left:4px;top:4px;gap:5px;padding:2px 6px 2px 2px;background:#18223a99;border-width:1px;box-shadow:0 2px 6px #0006;transition:opacity .2s}
+#chip .hp,#chip img{width:32px;height:32px;border-width:1px}
+#chip .bars{gap:1px;font-size:9px;line-height:1.1}#chip .bars b{font-size:11px}
+#chip .meter{width:64px;height:4px}
+#chip.min{flex-direction:column;gap:2px;padding:2px}
+#chip.min .bars b,#chip.min .bars span{display:none}
+#chip.min .meter{width:32px;height:3px}
+#chip.under{opacity:.3;pointer-events:none}
+#zoom{right:4px;top:4px;gap:4px}#zoom .btn{width:32px;height:32px;font-size:14px;opacity:.85}
+
 </style></head><body class="mh">
 <div id="app">
  <header id="top">
@@ -255,7 +266,7 @@ body:has(#panel.show) #home{display:none!important}
   <button class="btn alt tb" id="fs" title="Fullscreen">Full</button><button class="btn tb" id="mute">Sound</button>
  </header>
  <main id="view"><canvas id="c"></canvas>
-  <div id="chip" data-a="hero"></div>
+  <div id="chip" data-a="chiptog" title="Tap to shrink / expand (Hero button opens the hero)"></div>
   <div id="zoom"><button class="btn alt" data-a="zin">+</button><button class="btn alt" data-a="zout">-</button><button class="btn y" data-a="center">◎</button></div>
   <div id="mmapw"><canvas id="mmap"></canvas><button class="btn alt" data-a="mmtoggle" title="Minimap">Map</button></div>
   <div id="obj" style="display:none"></div>

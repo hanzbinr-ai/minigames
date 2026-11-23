@@ -9,8 +9,12 @@ Read this first every session. Update it before ending a task.
 - One chat per feature/task. One clear combined instruction. Short reports to Hanz.
 - Images/videos: convert to text in NOTES/ unless the visual itself matters.
 
-## Status (2026-11-22)
-- Live (GitHub Pages): up to 22a0404 (1.5.5, sw mg-v35-miniheroes-155). Local, NOT pushed: 1.6.0 Mage (sw mg-v36-miniheroes-160) — waiting for Hanz to say "push".
+## Status (2026-11-23)
+- Live (GitHub Pages): 81c0c70 (1.6.0, sw mg-v36-miniheroes-160). Local, NOT pushed: 1.6.1 map HUD (sw mg-v37-miniheroes-161) — waiting for Hanz to say "push".
+- Done: 1.6.1 map HUD doesn't hide the map (Hanz: castle/heroes covered by the hero name panel on Redmi Note 14). Start is always (2,2), so the camera clamp (x,y >= 0) parked the castle under the chip.
+  - Hero chip compact (32px portrait, small bars, 60% bg, ~111x50 vs 149x82). Tap = collapse to portrait + thin bars (localStorage mh-chip-min); Hero button opens the hero. Chip goes 30% + click-through while the selected hero is drawn under it (chipFade).
+  - Camera: hudIns() measures chip (top), zoom buttons (right), minimap (bottom); clampCam lets the map edge scroll to the free-area edge, centerOn targets the free area's centre (select/next/center/walk/AI/start; first HUD frame re-centres). Zoom buttons 32px.
+  - Shots: shots/before-map-{461x1024,390x844,360x800,1280x800}{,-br}.png vs shots/after-map-*.png, shots/after-chip-{min,fade}-461x1024.png. Hero/town under HUD after: 0 in all (before: castle sprite under the chip at start, hero at bottom-right fully under the minimap).
 - Done: 1.6.0 Mage faction (7th faction, Hanz approved "Ok neh gas"). Spec: NOTES/mage-faction-draft.md, art notes: NOTES/mage-style.md.
   - data.js: 7 UNIT_DEFS (Gremlin→Master Gremlin … Giant→Storm Giant) + `upRange` mod (only the upgrade shoots: Master Gremlin range 5). FACTIONS.mage (town Starhold, heroes Solmyr/Josephine, spec Leyline +2 SP), Library building (1000g + 2 gems), policies codex/constructs, AI_POLICY_PREF, TECH.mage (m1a..m6c, capstone ARCANUM), START_SKILLS, tavern extras Astral/Iona/Cyra.
   - game.js: Leyline in stat(h,'sp'); Library `study()` = 2 gems → 0.5 RP (town + tech panel, AI studies when gems > 4); spells cast in battle +0.2 RP each (battle cap); ARCANUM +15% Mage dmg after a spell that battle; Codex = Guild 1 also teaches Lightning Bolt; Living Constructs = Machines +2 def.
