@@ -1629,7 +1629,7 @@ function drawBattle(g, pass = 'all') {
     if (UI.preTerr) { g.fillStyle = '#d858f820'; g.fillRect(BOX, BOY, BW * CW + CW / 2, PER); }
     const su = UI.preSel && uById(UI.preSel); if (su) { g.strokeStyle = '#f8b800'; g.lineWidth = 1; hexPath(g, su.x, su.y, 1); g.stroke(); }
   }
-  for (const k of B.obst) { const [x, y] = k.split(',').map(Number), ow = CW * 2.7; if (!(window.PROPS && PROPS.draw(g, PROPS.obst(k), x, y, ow))) { const [cx, cy] = cellC(x, y); g.drawImage(SPR.boulder(), cx - ow / 2, cy + RH * 0.45 - ow, ow, ow); } }
+  for (const k of B.obst) { const [x, y] = k.split(',').map(Number), ow = CW * 2.7; if (g._pixObst && PROPS.cv(PROPS.obst(k))) continue; /* Pixi draws these as smooth sprites */ if (!(window.PROPS && PROPS.draw(g, PROPS.obst(k), x, y, ow))) { const [cx, cy] = cellC(x, y); g.drawImage(SPR.boulder(), cx - ow / 2, cy + RH * 0.45 - ow, ow, ow); } }
   if (B.siege) {
     const S = B.siege, necro = ['necro', 'inferno', 'dwarf'].includes(B.ctx.def.town.faction);
     for (let y = 0; y < BH; y++) {

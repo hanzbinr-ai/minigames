@@ -29,7 +29,8 @@
   window.PROPS = {
     ok: () => props.complete && props.naturalWidth > 0,
     // draw prop k centred on hex (x,y), w = width in field px; returns false when the atlas is not ready (caller falls back)
-    draw(g, k, x, y, w, a = 1) { const c = prop(k); if (!c) return false; const [cx, cy] = cellC(x, y); const pa = g.globalAlpha; g.globalAlpha = pa * a; g.drawImage(c, cx - w / 2, cy + RH * 0.45 - w, w, w); g.globalAlpha = pa; return true; },
+    cv: k => prop(k),
+    draw(g, k, x, y, w, a = 1) { const c = prop(k); if (!c) return false; const [cx, cy] = cellC(x, y); const pa = g.globalAlpha, sm = g.imageSmoothingEnabled; g.globalAlpha = pa * a; g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high'; g.drawImage(c, cx - w / 2, cy + RH * 0.45 - w, w, w); g.globalAlpha = pa; g.imageSmoothingEnabled = sm; return true; },
     obst: key => ['boulder', 'rocks', 'stump', 'bush', 'crystal', 'bones', 'lava', 'boulder'][[...key].reduce((s, ch) => s * 31 + ch.charCodeAt(0) & 1023, 7) % 8],
     wall: (kind, st) => kind === 'gate' ? (st === 2 ? 'gate_broken' : 'gate') : ['wall', 'wall_dmg', 'wall_rubble'][st]
   };

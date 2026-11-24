@@ -56,3 +56,4 @@ Read this first every session. Update it before ending a task.
 - Neutral Wolf + Troll painted (Broz src/neutral-*.jpg); build_atlas.py bakes a "neutral" atlas (ONLY=neutral), atlas code moved into bake(). Map + battle verified (shots/neutral-*).
 - Map monster icons ~half size (13/96, was 24/96), threat flag moved down; route preview is a solid line (black outline, green in reach, red past MP) instead of dots.
 - Battle: zoom out down to z=1 (whole field); while the field is shorter than the view only one copy is drawn, centred, no vertical scroll. Portrait opens on the whole field. Shots: shots/v162-*.
+- Battle obstacles drawn as linear Pixi sprites from battle-props.webp (were baked into the 1x bg canvas and upscaled nearest -> looked pixel on phones). Art was already painted.

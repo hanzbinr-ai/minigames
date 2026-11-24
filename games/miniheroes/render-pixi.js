@@ -73,13 +73,13 @@
   }
 
   // ---- scenes ----
-  let fieldL, bgL, fgL, dimL, BH_, hdrBg, hdrS, hdrT, root, M, W, water, land, things, dynS, fog, BS, bgS, units, fx, fgS, dyn, dctx, dynT, fgc, fgx, bgT, fgT, lastLayers = null, lastFog = -1;
+  let obstL, fieldL, bgL, fgL, dimL, BH_, hdrBg, hdrS, hdrT, root, M, W, water, land, things, dynS, fog, BS, bgS, units, fx, fgS, dyn, dctx, dynT, fgc, fgx, bgT, fgT, lastLayers = null, lastFog = -1;
   function build() {
     root = new PIXI.Container(); M = new PIXI.Container(); W = new PIXI.Container(); M.addChild(W);
     water = sprite(); land = sprite(); dynS = sprite(); things = new PIXI.Container(); things.sortableChildren = true; fog = sprite();
     W.addChild(water, land, dynS, things, fog);
     dyn = document.createElement('canvas'); dyn.width = dyn.height = 64; dctx = dyn.getContext('2d'); dynT = tex(dyn); dynS.texture = dynT;
-    BS = new PIXI.Container(); fieldL = new PIXI.Container(); bgL = new PIXI.Container(); units = new PIXI.Container(); fx = new PIXI.Container(); fgL = new PIXI.Container(); dimL = new PIXI.Container(); BS.addChild(fieldL, bgL, units, fx, fgL, dimL);
+    BS = new PIXI.Container(); fieldL = new PIXI.Container(); bgL = new PIXI.Container(); obstL = new PIXI.Container(); units = new PIXI.Container(); fx = new PIXI.Container(); fgL = new PIXI.Container(); dimL = new PIXI.Container(); BS.addChild(fieldL, bgL, obstL, units, fx, fgL, dimL);
     BH_ = new PIXI.Container(); hdrBg = sprite(); hdrS = sprite(); BH_.addChild(hdrBg, hdrS);
     fgc = document.createElement('canvas'); fgc.width = BLW; fgc.height = BLH; fgx = fgc.getContext('2d');
     bgT = tex(bcv); fgT = tex(fgc); hdrT = tex(hcv);
@@ -97,7 +97,7 @@
 
   // painted map art: terrain is baked once per map into a 2x canvas (soft blended textures + trees/rocks), objects
   // are sprites from one packed sheet baked at 3x their logical size, so nothing is ever upscaled at zoom 1-1.5
-  const P2 = 2, OWN = {player: 0x2c7cf0, ai: 0xe40058};
+  const obstTex = new Map(), P2 = 2, OWN = {player: 0x2c7cf0, ai: 0xe40058};
   function setupMapArt(A) {
     const sp = reg(new PIXI.ImageSource({resource: A.sp, scaleMode: 'linear'})), fr = {};
     for (const [k, [x, y, w, h]] of Object.entries(A.m.frames)) fr[k] = new PIXI.Texture({source: sp, frame: new PIXI.Rectangle(x, y, w, h)});
@@ -219,7 +219,7 @@
   function burst(x, y, n, col, spd, life, up) { if (LOWQ()) n = Math.ceil(n * 0.4); for (let i = 0; i < n; i++) { const a = Math.random() * Math.PI * 2, v = spd * (0.4 + Math.random()); parts.push({x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - (up || 0), t: 0, life: life * (0.6 + Math.random() * 0.6), col, sz: 1 + Math.random() * 1.5}); } }
   function drawFight(sx, sy) {
     const t0 = performance.now(); fit(); const LQ = LOWQ(), ks = bandKs(), nk = ks.length;
-    drawBattle(bctx, 'bg'); bgT.source.update();
+    bctx._pixObst = !!window.PROPS; drawBattle(bctx, 'bg'); bctx._pixObst = false; bgT.source.update();
     drawBattle(fgx, 'fgn'); fgT.source.update(); hdrT.source.update();
     const PF = MAPA && MAPA.field, tw = PF && (PF.width || 1024), th = PF && (PF.height || 800);
     const fsc = PF && tw && th ? Math.max(BLW / tw, PER / th) : 1;
@@ -229,6 +229,9 @@
     // every layer is drawn once per wrapped copy (layer-major, so things crossing the seam overlap the next copy correctly)
     pool(fieldL, FTex ? nk : 0, sprite).forEach((s, i) => { if (i >= nk || !FTex) return; s.texture = FTex; s.position.set(0, BOY + ks[i] * PER); s.width = BLW; s.height = PER; });
     pool(bgL, nk, sprite).forEach((s, i) => { if (i >= nk) return; s.texture = bgT; s.position.set(0, ks[i] * PER); });
+    // obstacles: painted 256px props as linear sprites (in the 1x bg canvas they were upscaled nearest -> blocky on phones)
+    const OB = window.PROPS ? [...B.obst].map(k => { const c = PROPS.cv(PROPS.obst(k)); if (!c) return null; let t = obstTex.get(c); if (!t) { t = PIXI.Texture.from(c); t.source.scaleMode = 'linear'; reg(t.source); obstTex.set(c, t); } const [x, y] = k.split(',').map(Number), [cx, cy] = cellC(x, y), w = CW * 2.7; return {t, x: cx - w / 2, y: cy + RH * 0.45 - w, w}; }).filter(Boolean) : [];
+    pool(obstL, OB.length * nk, sprite).forEach((s, i) => { if (i >= OB.length * nk) return; const o = OB[i % OB.length], k = ks[Math.floor(i / OB.length)]; s.texture = o.t; s.anchor.set(0); s.position.set(o.x, o.y + k * PER); s.width = s.height = o.w; });
     pool(fgL, nk, sprite).forEach((s, i) => { if (i >= nk) return; s.texture = fgT; s.position.set(0, ks[i] * PER); });
     const vis = B.units.filter(u => !u.gone && !(u.hidden && u.side === 'R') && (u.alive || u.deadAt == null || B.clock < u.deadAt + 0.9)).sort((a, b) => a.ry - b.ry), U = [];
     for (const u of vis) {
