@@ -182,8 +182,8 @@
         else if (o.kind === 'art') P(o.y, 'art', X + 8, Y + 15 - Math.round(Math.sin(clock * 3 + o.id) * 1.5));
         else if (o.kind === 'mine') { P(o.y, 'mine:' + o.mine, X + 8, Y + 16); flag(o.y, X + 13, Y - 6, o.owner); }
         else if (o.kind === 'grove') { P(o.y, 'grove', X + 8, Y + 16); flag(o.y, X + 13, Y - 6, o.owner); }
-        else if (o.kind === 'monster' && o.army.length) { const th = threatOf(o.army), ut = uiTex(o.army[0].type); list.push({z: o.y - 0.01, t: threatTex(th.c), x: X, y: Y - 12, ax: 0, ay: 0, s: 1});
-          if (ut) { const b = Math.sin(clock * 2.5 + o.id) * 0.4; list.push({z: o.y, t: ut, x: X + 8, y: Y + 16 + b, ax: 0.5, ay: 93 / 96, s: 24 / 96, fx: true}); }
+        else if (o.kind === 'monster' && o.army.length) { const th = threatOf(o.army), ut = uiTex(o.army[0].type); list.push({z: o.y - 0.01, t: threatTex(th.c), x: X, y: ut ? Y - 4 : Y - 12, ax: 0, ay: 0, s: 1});
+          if (ut) { const b = Math.sin(clock * 2.5 + o.id) * 0.3; list.push({z: o.y, t: ut, x: X + 8, y: Y + 15 + b, ax: 0.5, ay: 93 / 96, s: 13 / 96, fx: true}); } // 1.6.2: ~half size (was 24/96)
           else list.push({z: o.y, t: tex(SPR.unit(o.army[0].type, Math.floor(clock * 2 + o.id * 0.37) % 2, true)), x: X - 4, y: Y - 9, ax: 0, ay: 0, s: 1}); }
         continue;
       }

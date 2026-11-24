@@ -1538,12 +1538,13 @@ function renderWorld(opt) {
   else { g.save(); g.beginPath(); g.rect(V.x, V.y, V.w, V.h); g.clip();
   g.drawImage(layers.water[Math.floor(clock * 3) % 4], V.x, V.y, V.w, V.h, V.x, V.y, V.w, V.h); g.drawImage(layers.land, V.x, V.y, V.w, V.h, V.x, V.y, V.w, V.h); }
   const tx0 = V.x / TS - 3, ty0 = V.y / TS - 3, tx1 = (V.x + V.w) / TS + 3, ty1 = (V.y + V.h) / TS + 3, inV = (x, y) => x >= tx0 && x <= tx1 && y >= ty0 && y <= ty1;
-  if (UI.preview && sel) UI.preview.path.forEach(([x, y], i) => {
-    const ok = UI.preview.cost[i] <= sel.mp, last = i === UI.preview.path.length - 1, X = x * TS, Y = y * TS, c = ok ? '#58d854' : '#e40058';
-    g.fillStyle = '#000';
-    if (last) { for (let k = 0; k < 6; k++) { g.fillRect(X + 4 + k, Y + 4 + k, 3, 3); g.fillRect(X + 9 - k, Y + 4 + k, 3, 3); } g.fillStyle = c; for (let k = 0; k < 6; k++) { g.fillRect(X + 5 + k, Y + 5 + k, 1, 1); g.fillRect(X + 10 - k, Y + 5 + k, 1, 1); } }
-    else { const pulse = (Math.floor(clock * 10) - i) % 6 === 0 ? 1 : 0; g.fillRect(X + 6 - pulse, Y + 6 - pulse, 4 + pulse * 2, 4 + pulse * 2); g.fillStyle = c; g.fillRect(X + 7 - pulse, Y + 7 - pulse, 2 + pulse * 2, 2 + pulse * 2); }
-  });
+  if (UI.preview && sel) { // solid route line (black outline, green while in reach, red past today's MP) + X on the target
+    const P = [[sel.x, sel.y], ...UI.preview.path], c = i => UI.preview.cost[i] <= sel.mp ? '#58d854' : '#e40058', C = ([x, y]) => [x * TS + TS / 2, y * TS + TS / 2];
+    g.lineCap = g.lineJoin = 'round';
+    for (const [w, col] of [[5, () => '#000'], [2.5, c]]) for (let i = 1; i < P.length; i++) { g.strokeStyle = col(i - 1); g.lineWidth = w; g.beginPath(); g.moveTo(...C(P[i - 1])); g.lineTo(...C(P[i])); g.stroke(); }
+    const [x, y] = P[P.length - 1], X = x * TS, Y = y * TS; g.fillStyle = '#000';
+    for (let k = 0; k < 6; k++) { g.fillRect(X + 4 + k, Y + 4 + k, 3, 3); g.fillRect(X + 9 - k, Y + 4 + k, 3, 3); } g.fillStyle = c(P.length - 2); for (let k = 0; k < 6; k++) { g.fillRect(X + 5 + k, Y + 5 + k, 1, 1); g.fillRect(X + 10 - k, Y + 5 + k, 1, 1); }
+  }
   if (sel && UI.mode === 'map') {
     const p = rp(sel), X = Math.round(p.x * TS), Y = Math.round(p.y * TS), k = Math.floor(clock * 3) % 2;
     g.fillStyle = '#f8b800';
@@ -1722,21 +1723,23 @@ function battleView() {
   const aw = CAM.w - pw, ah = CAM.h - ph, fit = Math.min(aw / BLW, (ah) / (PER + HDR + 8)), s0 = Math.max(0.5, fit);
   // zMin: never show more than one copy of the wrapped field vertically. The field is landscape (BLW x PER), so on a
   // portrait phone "fit width" (z=1) stacked ~3 dimmed copies on screen; now the smallest zoom fills the height with one.
-  const zMin = Math.max(1, (ah - Math.round(HDR * Math.min(s0, aw / BLW))) / (PER * s0));
-  const C = B.cam || (B.cam = {z: Math.max(zMin, Math.min(2.4, (ah * 0.92) / ((PER + HDR) * s0))), cx: BLW * s0 * zMin > aw ? 0 : BLW / 2, cy: BOY + PER / 2}); // too wide to fit: open on your own army (left)
-  C.z = Math.max(zMin, Math.min(Math.max(4, zMin * 1.6), C.z));
+  // 1.6.2: you can still zoom out below that to see the whole field (z=1 fits the width); while the field is shorter than
+  // the view only one copy is drawn, centred, with no vertical scroll. Portrait opens on the whole field.
+  const zFill = Math.max(1, (ah - Math.round(HDR * Math.min(s0, aw / BLW))) / (PER * s0)), zMin = 1;
+  const C = B.cam || (B.cam = {z: aw < ah ? 1 : Math.max(zFill, Math.min(2.4, (ah * 0.92) / ((PER + HDR) * s0))), cx: BLW / 2, cy: BOY + PER / 2});
+  C.z = Math.max(zMin, Math.min(Math.max(4, zFill * 1.6), C.z));
   const s = s0 * C.z, hs = Math.min(s, aw / BLW), hh = Math.round(HDR * hs), top = hh, vh = ah - hh;
   const half = aw / 2 / s; C.cx = BLW * s <= aw ? BLW / 2 : Math.max(half, Math.min(BLW - half, C.cx));
-  C.cy = BOY + (((C.cy - BOY) % PER) + PER) % PER;
-  BV = {s, s0, zMin, ox: Math.round(aw / 2 - C.cx * s), oy: Math.round(top + vh / 2 - C.cy * s), hs, hh, aw, ah, top};
+  const one = PER * s <= vh + 1; if (one) C.cy = BOY + PER / 2; else C.cy = BOY + (((C.cy - BOY) % PER) + PER) % PER;
+  BV = {s, s0, zMin, one, ox: Math.round(aw / 2 - C.cx * s), oy: Math.round(top + vh / 2 - C.cy * s), hs, hh, aw, ah, top};
   return BV;
 }
 function battleZoom(z, sx = BV.aw / 2, sy = BV.top + (BV.ah - BV.top) / 2) {
-  const C = B.cam, lx = (sx - BV.ox) / BV.s, ly = (sy - BV.oy) / BV.s; C.z = z; battleView(); // battleView clamps to [zMin, max(4, 1.6 zMin)]
+  const C = B.cam, lx = (sx - BV.ox) / BV.s, ly = (sy - BV.oy) / BV.s; C.z = z; battleView(); // battleView clamps to [1, max(4, 1.6 zFill)]
   C.cx += lx - (sx - BV.ox) / BV.s; C.cy += ly - (sy - BV.oy) / BV.s; battleView();
 }
 function battlePan(dx, dy) { if (!B || !B.cam) return; B.cam.cx -= dx / BV.s; B.cam.cy -= dy / BV.s; battleView(); }
-const bandKs = () => { const k0 = Math.floor((BV.top - (BV.oy + BOY * BV.s)) / (PER * BV.s)), k1 = Math.ceil((BV.ah - (BV.oy + BOY * BV.s)) / (PER * BV.s)); const out = []; for (let k = k0; k <= k1; k++) out.push(k); return out; };
+const bandKs = () => { if (BV.one) return [0]; const k0 = Math.floor((BV.top - (BV.oy + BOY * BV.s)) / (PER * BV.s)), k1 = Math.ceil((BV.ah - (BV.oy + BOY * BV.s)) / (PER * BV.s)); const out = []; for (let k = k0; k <= k1; k++) out.push(k); return out; };
 function renderBattleScreen() {
   const pix = window.MHR && MHR.ready(); battleView(); drawBattleHeader(hctx);
   const s = BV.s;
