@@ -28,6 +28,7 @@ FACTIONS = {
   'mage': (['Gremlin', 'Stone Gargoyle', 'Stone Golem', 'Mage', 'Djinn', 'Naga', 'Giant'], ['Master Gremlin', 'Obsidian Gargoyle', 'Marble Golem', 'Arch Mage', 'Elder Djinn', 'Naga Queen', 'Storm Giant'], 'Archon'),
   'dwarf': (['Miner', 'Shieldbearer', 'Crossbow Engineer', 'Runesmith', 'Bear Rider', 'Steam Golem', 'Iron Dreadnought'], ['Foreman', 'Shieldguard', 'Siege Engineer', 'Runelord', 'Bear Lord', 'Iron Golem', 'Thunder Dreadnought'], 'Mountain King'),
 }
+NEUTRAL = {'Wolf': 95, 'Troll': 165}  # neutral-only units -> visual height (Broz: wolf ~Goblin, troll ~T6 size)
 CC_SPLIT = {'mage'}  # Gremlin's ball and the Gargoyle wing share x columns: split by blobs instead of cut lines
 MYTHIC_ORDER = ['castle', 'necro', 'sylvan', 'inferno', 'stronghold', 'dwarf']
 CUTS = {'castle-base': [172, 352, 481, 700, 875, 1019], 'castle-up': [185, 362, 506, 722, 893, 1030],
@@ -281,6 +282,21 @@ def broz_figs(idx, n=8):
     cuts = [0] + [round((c[i] + c[i + 1]) / 2) for i in range(n - 1)] + [rgba.width]
     return [clean(drop_edge_bits(rgba.crop((cuts[i], 0, cuts[i + 1], rgba.height)))) for i in range(n)]
 
+def bake(fac, rows, man, nfr):  # one atlas row per unit (16 anim frames) + 96px UI portrait strip + lineup preview
+    atlas = Image.new('RGBA', (CELL * nfr, CELL * len(rows)), (0, 0, 0, 0)); ui = Image.new('RGBA', (UI * len(rows), UI), (0, 0, 0, 0))
+    prev = Image.new('RGBA', (CELL * 8, CELL * 2 + 24), (34, 40, 52, 255))
+    for r, (name, fig) in enumerate(rows):
+        for i, fr in enumerate(frames(fig, name in FLY)): atlas.paste(fr, (i * CELL, r * CELL), fr)
+        man['units'][name] = {'atlas': fac, 'row': r, 'w': fig.width, 'h': fig.height}
+        k = (UI - 6) / max(fig.width, fig.height); pf = fig.resize((max(1, round(fig.width * k)), max(1, round(fig.height * k))), Image.LANCZOS)
+        pf = pf.filter(ImageFilter.UnsharpMask(radius=1, percent=60, threshold=2)); ui.paste(pf, (r * UI + (UI - pf.width) // 2, UI - 3 - pf.height), pf)
+        pi = r if r < 7 else r - 7 if r < 14 else 7
+        idle = frames(fig, False)[0]; prev.alpha_composite(idle, (pi * CELL, (0 if r < 7 else CELL) + (CELL if r == 14 else 0) * 0 + 12))
+    fn = 'units-' + fac + '.webp'; atlas.save(os.path.join(OUT, fn), 'WEBP', quality=74, method=6, alpha_quality=85)
+    man['atlases'][fac] = 'art/' + fn; man['cells'][fac] = CELL
+    un = 'units-' + fac + '-ui.webp'; ui.save(os.path.join(OUT, un), 'WEBP', quality=86, method=6, alpha_quality=95); man['ui'][fac] = {'src': 'art/' + un, 'cell': UI}
+    prev.convert('RGB').save(os.path.join(PREV, fac + '.png'))
+
 def main():
     os.makedirs(OUT, exist_ok=True); os.makedirs(PREV, exist_ok=True)
     man = {'cell': CELL, 'base': BASE, 'anims': {}, 'atlases': {}, 'cells': {}, 'ui': {}, 'units': {}}
@@ -331,21 +347,15 @@ def main():
                 uf[2] = clean(cut_background(im.crop((0, 0, im.width, int(im.height * 0.84))))); figs = match_h(uf, [f for _, f in rows[:7]])
             rows += list(zip(names, figs)); raws = None
         rows.append((mname, myth[fac]))
-        atlas = Image.new('RGBA', (CELL * nfr, CELL * len(rows)), (0, 0, 0, 0)); ui = Image.new('RGBA', (UI * len(rows), UI), (0, 0, 0, 0))
-        prev = Image.new('RGBA', (CELL * 8, CELL * 2 + 24), (34, 40, 52, 255))
-        for r, (name, fig) in enumerate(rows):
-            for i, fr in enumerate(frames(fig, name in FLY)): atlas.paste(fr, (i * CELL, r * CELL), fr)
-            man['units'][name] = {'atlas': fac, 'row': r, 'w': fig.width, 'h': fig.height}
-            k = (UI - 6) / max(fig.width, fig.height); pf = fig.resize((max(1, round(fig.width * k)), max(1, round(fig.height * k))), Image.LANCZOS)
-            pf = pf.filter(ImageFilter.UnsharpMask(radius=1, percent=60, threshold=2)); ui.paste(pf, (r * UI + (UI - pf.width) // 2, UI - 3 - pf.height), pf)
-            pi = r if r < 7 else r - 7 if r < 14 else 7
-            idle = frames(fig, False)[0]; prev.alpha_composite(idle, (pi * CELL, (0 if r < 7 else CELL) + (CELL if r == 14 else 0) * 0 + 12))
-        fn = 'units-' + fac + '.webp'; atlas.save(os.path.join(OUT, fn), 'WEBP', quality=74, method=6, alpha_quality=85)
-        man['atlases'][fac] = 'art/' + fn; man['cells'][fac] = CELL
-        un = 'units-' + fac + '-ui.webp'; ui.save(os.path.join(OUT, un), 'WEBP', quality=86, method=6, alpha_quality=95); man['ui'][fac] = {'src': 'art/' + un, 'cell': UI}
-        prev.convert('RGB').save(os.path.join(PREV, fac + '.png'))
+        bake(fac, rows, man, nfr)
         setcell(128)
         print(fac, len(rows), 'units', os.path.getsize(os.path.join(OUT, fn)) // 1024, 'KB')
+    if not only or 'neutral' in only:  # neutral map monsters (Broz singles on white, src/neutral-<name>.jpg), sized against Goblin h102
+        setcell(192); rows = []
+        for name, h in NEUTRAL.items():
+            f = clean(cut_background(Image.open(os.path.join(HERE, 'src', 'neutral-' + name.lower() + '.jpg'))))
+            rows.append((name, f.resize((max(1, round(f.width * h / f.height)), h), Image.LANCZOS)))
+        bake('neutral', rows, man, nfr); setcell(128); print('neutral', len(rows), 'units')
     with open(os.path.join(OUT, 'units.json'), 'w') as f: json.dump(man, f, separators=(',', ':'))
     for fac in ([] if only else FACTIONS):  # town backdrops: 960 wide WebP (ONLY= runs leave the baked towns alone)
         src = os.path.join(HERE, 'src', 'town', fac + '.jpg')

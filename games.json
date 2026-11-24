@@ -3,7 +3,7 @@
     "id": "miniheroes",
     "title": "Mini Heroes",
     "desc": "Heroes-style strategy: 7 factions with 7 upgradeable tiers, faction research and tech trees, plan-then-resolve battles.",
-    "version": "1.6.1",
+    "version": "1.6.2",
     "added": "2026-10-31",
     "updated": "2026-11-22",
     "path": "games/miniheroes/",

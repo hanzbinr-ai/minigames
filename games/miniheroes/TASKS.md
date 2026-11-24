@@ -17,3 +17,5 @@ Format: - [ ] [Owner] task  (Owner = Code or Broz)
 - [x] [Broz] Paint hero portraits per NOTES/hero-portraits-needed.md — delivered 2026-11-22, wired in 1.5.5 (sheet + json)
 - [ ] [Code] Remaining theme-pass-154.md medium/low (setup backdrop, minimap, duplicate back, disabled contrast, empty spellbook, leftover caps, date color, Random "?" card, town list UX)
 - [x] [Broz] Paint portrait home castle + transparent title per NOTES/home-castle-needed.md — wired in 1.6.0
+- [x] [Broz] Paint neutral Wolf + Troll (Hanz: map monsters still pixel). Same style as mythic-<name>.jpg: one figure each, white card, facing right, full body. Save as tools/miniheroes-art/src/neutral-wolf.jpg and neutral-troll.jpg (or post in room)
+- [x] [Code] 1.6.2: neutral atlas (units-neutral.webp + -ui.webp) for Wolf/Troll on map + battle — local, needs Hanz "push"

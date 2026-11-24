@@ -51,3 +51,6 @@ Read this first every session. Update it before ending a task.
 
 ## To-do
 - see TASKS.md
+
+## 1.6.2 (24 Nov 2026, local, not pushed)
+- Neutral Wolf + Troll painted (Broz src/neutral-*.jpg); build_atlas.py bakes a "neutral" atlas (ONLY=neutral), atlas code moved into bake(). Map + battle verified (shots/neutral-*).
