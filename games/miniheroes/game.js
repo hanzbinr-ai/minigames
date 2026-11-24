@@ -2271,6 +2271,14 @@ function tapAt(cx, cy) {
 }
 for (const id of ['mini', 'mmap']) $(id).addEventListener('click', e => { e.stopPropagation(); const r = e.target.getBoundingClientRect(); centerOn(Math.floor((e.clientX - r.left) / r.width * MW), Math.floor((e.clientY - r.top) / r.height * MH)); });
 for (const ev of ['pointerdown', 'pointerup']) $('mmap').addEventListener(ev, e => e.stopPropagation());
+$('rot').onclick = async e => { // phone: fullscreen + lock landscape; tap again to unlock (the layout itself follows orientation via CSS)
+  e.stopPropagation(); const d = document, o = screen.orientation, el = d.documentElement;
+  try {
+    if (d.fullscreenElement && o && o.type.startsWith('landscape')) { o.unlock && o.unlock(); await d.exitFullscreen(); return; }
+    if (!d.fullscreenElement) await (el.requestFullscreen || el.webkitRequestFullscreen).call(el);
+    await o.lock('landscape');
+  } catch (_) { msg('Turn your phone sideways (auto-rotate on) for landscape'); }
+};
 $('fs').onclick = e => { e.stopPropagation(); const d = document; if (d.fullscreenElement) d.exitFullscreen && d.exitFullscreen(); else { const el = d.documentElement; (el.requestFullscreen || el.webkitRequestFullscreen || (() => msg('Fullscreen not supported'))).call(el); } };
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') { closePanel(); return; }

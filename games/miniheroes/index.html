@@ -258,12 +258,26 @@ body:has(#panel.show) #home{display:none!important}
 #chip.under{opacity:.3;pointer-events:none}
 #zoom{right:4px;top:4px;gap:4px}#zoom .btn{width:32px;height:32px;font-size:14px;opacity:.85}
 
+/* 1.6.2 phone landscape: one slim top row, action buttons in a column on the right, the map/battle get the full height */
+@media (hover:hover) and (pointer:fine){#rot{display:none}}
+@media (orientation:landscape) and (max-height:499px){
+ body.mh #app{grid-template-columns:1fr auto;grid-template-rows:auto 1fr;grid-template-areas:"top bar" "view bar"}
+ body.mh #top{flex-wrap:nowrap;padding:2px 6px;gap:6px}
+ body.mh #res{order:0;flex:1 1 auto;flex-basis:auto;flex-wrap:nowrap;justify-content:space-around;font-size:12px}body.mh #res img{width:18px;height:18px}
+ body.mh #cal{flex:none;font-size:10px}body.mh #top .tb{padding:3px 6px;font-size:10px}
+ body.mh #bar{flex-direction:column;flex-wrap:nowrap;justify-content:flex-start;gap:4px;padding:4px;padding-right:max(4px,env(safe-area-inset-right));border-top:0;border-left:2px solid var(--gold-dark);overflow-y:auto;width:96px}
+ body.mh #bar .btn{flex:none;width:100%;padding:6px 2px;font-size:11px}
+ body.mh #msg{left:6px;right:auto;max-width:min(60%,520px);bottom:4px;font-size:11px;text-align:left}
+ body.mh.battle #app{grid-template-columns:1fr auto;grid-template-rows:1fr;grid-template-areas:"view bar"}
+ body.mh.battle #bar{border-top:0;padding:4px;gap:4px;flex-wrap:nowrap}
+ body.mh.battle #bar .btn{flex:none;max-width:none;width:100%;padding:8px 2px}
+}
 </style></head><body class="mh">
 <div id="app">
  <header id="top">
   <a class="btn alt tb" href="../../">◀</a><span id="ttl">Mini Heroes</span>
   <div id="res"></div><span id="pol"></span><span id="cal"></span>
-  <button class="btn alt tb" id="fs" title="Fullscreen">Full</button><button class="btn tb" id="mute">Sound</button>
+  <button class="btn alt tb" id="rot" title="Lock landscape (fullscreen)">Rotate</button><button class="btn alt tb" id="fs" title="Fullscreen">Full</button><button class="btn tb" id="mute">Sound</button>
  </header>
  <main id="view"><canvas id="c"></canvas>
   <div id="chip" data-a="chiptog" title="Tap to shrink / expand (Hero button opens the hero)"></div>
