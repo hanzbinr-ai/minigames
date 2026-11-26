@@ -25,13 +25,13 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && G.s
 let last = performance.now(), acc = 0, hudT = 0, saveT = 0;
 function frame(now) {
   const dt = Math.min(.25, (now - last) / 1000); last = now;
-  if (G.running) {
+  try { if (G.running) {
     acc += dt * G.speed; let n = 0;
     while (acc >= S.DT && n++ < 64) { S.step(G.st); acc -= S.DT; }
     if ((hudT += dt) > .25) { hudT = 0; U.refresh(); }
     if ((saveT += dt) > 10) { saveT = 0; G.save(); }
     R.draw(G.st, U.ui, now / 1000, Math.min(1, acc / S.DT));
-  }
+  } } catch (e) { console.error(e); acc = 0; } // one bad frame must never kill the loop
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
