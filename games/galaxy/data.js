@@ -68,11 +68,23 @@ const BUILD = {
   hq: { name: 'HQ', desc: 'Raises colony cap, fleet command cap and other building limits.', cost: { metal: 200, crystal: 150, gas: 50 } },
   metal: { name: 'Metal Mine', res: 'metal', desc: 'Produces Metal.', cost: { metal: 60, crystal: 30 } },
   crystal: { name: 'Crystal Refinery', res: 'crystal', desc: 'Produces Crystal.', cost: { metal: 70, crystal: 20 } },
-  gas: { name: 'Gas Extractor', res: 'gas', desc: 'Produces Gas.', cost: { metal: 70, crystal: 40 } },
-  energy: { name: 'Fusion Plant', res: 'energy', desc: 'Produces Energy.', cost: { metal: 80, gas: 30 } },
-  shipyard: { name: 'Shipyard', desc: 'Builds ships faster (-8% time per level).', cost: { metal: 150, crystal: 60, gas: 40 } },
-  lab: { name: 'Research Lab', desc: 'Researches faster (-8% time per level).', cost: { metal: 100, crystal: 120 } },
-  defense: { name: 'Orbital Defense', desc: 'One defense platform per level guards the home planet.', cost: { metal: 160, crystal: 60, energy: 40 } },
+  gas: { name: 'Gas Extractor', res: 'gas', unlock: 2, desc: 'Produces Gas.', cost: { metal: 70, crystal: 40 } },
+  energy: { name: 'Fusion Plant', res: 'energy', unlock: 3, desc: 'Produces Energy.', cost: { metal: 80, gas: 30 } },
+  shipyard: { name: 'Shipyard', unlock: 4, desc: 'Builds ships faster (-8% time per level).', cost: { metal: 150, crystal: 60, gas: 40 } },
+  lab: { name: 'Research Lab', unlock: 5, desc: 'Researches faster (-8% time per level).', cost: { metal: 100, crystal: 120 } },
+  defense: { name: 'Orbital Defense', unlock: 6, desc: 'One defense platform per level guards the home planet.', cost: { metal: 160, crystal: 60, energy: 40 } },
+};
+// RoK-style progression. A new empire starts with HQ, Metal Mine and Crystal Refinery at Lv 1; the rest unlock at
+// BUILD[b].unlock (HQ level) and are built from Lv 0. No building may exceed the HQ level; HQ maxes at BMAX.
+// BREQ[b][L] = buildings needed before b can reach level L (one table; every HQ requirement is <= HQ L-1, so no deadlock).
+const BMAX = 15, START_BLD = { hq: 1, metal: 1, crystal: 1, gas: 0, energy: 0, shipyard: 0, lab: 0, defense: 0 };
+const BREQ = {
+  hq: { 2: { metal: 1 }, 3: { crystal: 2 }, 4: { metal: 3, gas: 2 }, 5: { metal: 4, energy: 3 }, 6: { shipyard: 4, crystal: 5 },
+    7: { metal: 6, lab: 5 }, 8: { crystal: 7, defense: 5 }, 9: { shipyard: 8, gas: 7 }, 10: { lab: 9, energy: 8 }, 11: { metal: 10, defense: 9 },
+    12: { crystal: 11, shipyard: 10 }, 13: { lab: 12, gas: 11 }, 14: { energy: 13, defense: 12 }, 15: { shipyard: 14, metal: 14 } },
+  shipyard: { 10: { lab: 8 } },
+  lab: { 10: { energy: 9 } },
+  defense: { 8: { shipyard: 7 } },
 };
 const RESEARCH = {
   cruiser: { name: 'Cruiser Hulls', cost: { metal: 300, crystal: 200 }, time: 10 },
@@ -100,5 +112,5 @@ const CFG = {
   warpLoss: .2, warpThreshold: .3, warpCooldown: 60, warpDamaged: 60, jamRange: 25,
   repairRate: .05, contact: 2.5, maxFleets: 4, starbaseCap: 2, raidFrac: .15, sbDrop: .5,
 };
-return { TITLE, RES, PLANET, HULLS, MODS, SIZE_MULT, TEMPLATES, NPC, BUILD, RESEARCH, FACTIONS, CFG };
+return { TITLE, RES, PLANET, HULLS, MODS, SIZE_MULT, TEMPLATES, NPC, BUILD, BMAX, START_BLD, BREQ, RESEARCH, FACTIONS, CFG };
 });

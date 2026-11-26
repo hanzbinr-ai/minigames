@@ -112,9 +112,7 @@ const SHEETS = {
     const G = st(), e = owner(ME), home = S.byId(G, e.home);
     let h = `<div id="surf-slot" class="surf-slot"></div>${bldCard(e)}<div class="muted">HQ ${e.bld.hq} · colonies ${S.colonies(G, ME)}/${S.colonyCap(G, ME)} · fleet command cap ${S.cmdCap(G, ME)} · Star Bases ${G.starbases.filter(s => s.owner === ME).length}/${D.CFG.starbaseCap}</div><h4>Buildings</h4>`;
     for (const b in D.BUILD) {
-      const B = D.BUILD[b], busy = e.bq && e.bq.b === b, c = S.buildCost(e, b);
-      h += `<div class="it${ui.bsel === b ? ' on' : ''}"><div class="t">${B.name} <span class="muted">Lv ${e.bld[b]}</span><span class="sp"></span>${busy ? secs(e.bq.end - G.tick) : `<button class="b sm" ${e.bq ? 'disabled' : ''} data-a='${JSON.stringify({ type: 'upgrade', b })}'>Upgrade · ${S.buildTime(e, b)}s</button>`}</div>
-        <div class="muted">${B.desc}${B.res ? ` Now +${2 + 2 * e.bld[b]}/s.` : ''}</div>${busy ? prog(e.bq.end, e.bq.len) : `<div class="cost">${costHtml(c, e.res)}</div>`}</div>`;
+      h += bldItem(e, b, false);
     }
     h += shipyard(home);
     return ['🪐 Home planet', h];
@@ -176,17 +174,26 @@ const SHEETS = {
 };
 // planet surface (city view): the canvas lives in surface.js; taps select a building, the card reuses the same upgrade action
 const SF = self.NTSurf;
+// one building row (list) or the selected-building card (city view); requirements come from S.bldCheck, same as act()
+function bldItem(e, b, isCard) {
+  const G = st(), B = D.BUILD[b], lv = e.bld[b] || 0, busy = e.bq && e.bq.b === b, c = S.buildCost(e, b), chk = S.bldCheck(e, b);
+  const lvTxt = chk.locked ? '🔒 Locked' : lv ? 'Lv ' + lv : 'Not built';
+  const btn = busy ? secs(e.bq.end - G.tick) : chk.max ? '<span class="muted">Max</span>'
+    : `<button class="b sm" ${e.bq || !chk.ok ? 'disabled' : ''} data-a='${JSON.stringify({ type: 'upgrade', b })}'>${lv ? 'Upgrade' : 'Build'} · ${S.buildTime(e, b)}s</button>`;
+  const out = B.res ? (lv ? ` Now +${S.bldOut(lv)}/s.` : ' Not producing yet.') : '';
+  const why = !busy && chk.why.length && !chk.max ? `<div class="req">${chk.why.map(esc).join(' · ')}</div>` : '';
+  return `<div class="it${isCard ? ' bsel' : ui.bsel === b ? ' on' : ''}${chk.locked ? ' locked' : ''}"><div class="t">${B.name} <span class="muted">${lvTxt}</span><span class="sp"></span>${btn}${isCard ? '<button class="ib x sm" data-bsel="">✕</button>' : ''}</div>
+    <div class="muted">${B.desc}${out}${isCard && e.bq && !busy ? ' Builders busy: ' + D.BUILD[e.bq.b].name + ' ' + secs(e.bq.end - G.tick) : ''}</div>${why}${busy ? prog(e.bq.end, e.bq.len) : chk.locked || chk.max ? '' : `<div class="cost">${costHtml(c, e.res)}</div>`}</div>`;
+}
 function bldCard(e) {
   const b = ui.bsel, G = st();
   if (!b) return '<div class="muted surf-hint">Tap a building to upgrade it.</div>';
-  const B = D.BUILD[b], busy = e.bq && e.bq.b === b, c = S.buildCost(e, b);
-  return `<div class="it bsel"><div class="t">${B.name} <span class="muted">Lv ${e.bld[b]}</span><span class="sp"></span>${busy ? secs(e.bq.end - G.tick) : `<button class="b sm" ${e.bq ? 'disabled' : ''} data-a='${JSON.stringify({ type: 'upgrade', b })}'>Upgrade · ${S.buildTime(e, b)}s</button>`}<button class="ib x sm" data-bsel="">✕</button></div>
-    <div class="muted">${B.desc}${B.res ? ` Now +${2 + 2 * e.bld[b]}/s.` : ''}${e.bq && !busy ? ' Builders busy: ' + D.BUILD[e.bq.b].name + ' ' + secs(e.bq.end - G.tick) : ''}</div>${busy ? prog(e.bq.end, e.bq.len) : `<div class="cost">${costHtml(c, e.res)}</div>`}</div>`;
+  return bldItem(e, b, true);
 }
 function surf() {
   if (ui.sheet !== 'home' && ui.sheet !== 'colony') return;
   const G = st(), e = owner(ME);
-  if (ui.sheet === 'home') SF.update({ key: 'home', blds: e.bld, bq: e.bq, tick: G.tick, tps: S.TPS, sel: ui.bsel });
+  if (ui.sheet === 'home') SF.update({ key: 'home', blds: e.bld, hq: e.bld.hq, unlock: b => D.BUILD[b].unlock || 0, bq: e.bq, tick: G.tick, tps: S.TPS, sel: ui.bsel });
   else { const p = S.byId(G, ui.col); if (p) SF.update({ key: SF.surfKey(p.kind, p.type), blds: null, bq: null, tick: G.tick, tps: S.TPS, sel: null }); }
 }
 SF.view.onTap = b => { ui.bsel = b; ui.touchT = 0; ui.lastHtml = null; renderSheet(); };

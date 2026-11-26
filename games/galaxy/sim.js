@@ -29,7 +29,7 @@ function newGame(seed) {
   const homes = { player: [35, 165], ai1: [165, 165], ai2: [165, 35], ai3: [35, 35] };
   for (const fa of D.FACTIONS) {
     const e = st.emp[fa.id] = { id: fa.id, name: fa.name, color: fa.color, kind: fa.kind, res: { metal: 1500, crystal: 1200, gas: 800, energy: 800 },
-      bld: { hq: 1, metal: 1, crystal: 1, gas: 1, energy: 1, shipyard: 1, lab: 1, defense: 1 }, research: {}, bq: null, rq: null, sq: [], designs: {}, home: null, ai: { next: 0, mood: 0 } };
+      bld: Object.assign({}, D.START_BLD), research: {}, bq: null, rq: null, sq: [], designs: {}, home: null, ai: { next: 0, mood: 0 } };
     for (const t of D.TEMPLATES) e.designs[t.id] = { id: t.id, name: t.name, hull: t.hull, mods: t.mods.slice(), tpl: true, s: BT.compile(t, null, true).s };
     for (const t of D.NPC) e.designs[t.id] = { id: t.id, name: t.name, hull: t.hull, mods: t.mods.slice(), npc: true, s: BT.compile(t, null, true).s };
     if (homes[fa.id]) {
@@ -116,11 +116,24 @@ function pendingCivil(st, owner, t) { return st.fleets.filter(f => f.owner === o
 function production(st, owner) {
   const e = st.emp[owner], out = { metal: 0, crystal: 0, gas: 0, energy: 0 };
   if (!e.home) return out;
-  for (const r of D.RES) out[r] = 2 + 2 * e.bld[r];
+  for (const r of D.RES) out[r] = bldOut(e.bld[r]);
   for (const p of st.planets) if (p.owner === owner && p.kind === 'colony') out[D.PLANET[p.type].res] += 5;
   return out;
 }
-function buildCost(e, b) { return scale(D.BUILD[b].cost, Math.pow(1.6, e.bld[b] - 1)); }
+function bldOut(lv) { return lv > 0 ? 2 + 2 * lv : 0; } // resource building output per second (Lv 0 = not built = nothing)
+const bonusLv = lv => Math.max(0, lv - 1); // shipyard/lab speed bonus steps (Lv 0 and 1 = none)
+function buildCost(e, b) { return scale(D.BUILD[b].cost, Math.pow(1.6, bonusLv(e.bld[b]))); } // 0->1 costs the Lv 1 price
+// Can building b go to its next level? -> { ok, locked, why: [human-readable unmet requirements] }. Used by act() and the UI.
+function bldCheck(e, b) {
+  const B = D.BUILD[b], lv = e.bld[b] || 0, hq = e.bld.hq, why = [];
+  if (!B) return { ok: false, locked: true, why: ['Unknown building'] };
+  if (B.unlock && hq < B.unlock) return { ok: false, locked: true, why: ['Unlocks at HQ ' + B.unlock] };
+  if (lv >= D.BMAX) return { ok: false, locked: false, max: true, why: ['Max level'] };
+  if (b !== 'hq' && lv >= hq) why.push('Max = HQ level (upgrade HQ)');
+  const req = D.BREQ[b] && D.BREQ[b][lv + 1];
+  if (req) for (const k in req) if ((e.bld[k] || 0) < req[k]) why.push('Needs ' + D.BUILD[k].name + ' Lv ' + req[k]);
+  return { ok: !why.length, locked: false, why };
+}
 function buildTime(e, b) { return 4 + 3 * e.bld[b]; }
 function canWarp(st, f) {
   const e = st.emp[f.owner];
@@ -147,8 +160,7 @@ function act(st, owner, a) {
     case 'upgrade': {
       const b = a.b; if (!D.BUILD[b]) return err('Unknown building');
       if (e.bq) return err('Builders busy');
-      if (b !== 'hq' && e.bld[b] >= e.bld.hq + 1) return err('Upgrade HQ first');
-      if (e.bld[b] >= 15) return err('Max level');
+      const chk = bldCheck(e, b); if (!chk.ok) return err(chk.why.join(' · '));
       const c = buildCost(e, b); if (!afford(e.res, c)) return err('Not enough resources');
       pay(e.res, c); e.bq = { b, end: st.tick + sec(buildTime(e, b)), len: sec(buildTime(e, b)) }; return ok();
     }
@@ -157,7 +169,7 @@ function act(st, owner, a) {
       if (e.rq) return err('Lab busy'); if (e.research[a.id]) return err('Done already');
       if (r.req && !e.research[r.req]) return err('Requires ' + D.RESEARCH[r.req].name);
       if (!afford(e.res, r.cost)) return err('Not enough resources');
-      pay(e.res, r.cost); const t = sec(r.time * Math.pow(.92, e.bld.lab - 1)); e.rq = { id: a.id, end: st.tick + t, len: t }; return ok();
+      pay(e.res, r.cost); const t = sec(r.time * Math.pow(.92, bonusLv(e.bld.lab))); e.rq = { id: a.id, end: st.tick + t, len: t }; return ok();
     }
     case 'saveDesign': {
       const c = BT.compile(a.design, e.research); if (!c.ok) return err(c.err);
@@ -245,13 +257,13 @@ function step(st) {
   for (const id in st.emp) {
     const e = st.emp[id];
     if (e.home) { const pr = production(st, id); for (const r of D.RES) e.res[r] += pr[r] * DT; }
-    if (e.bq && t >= e.bq.end) { e.bld[e.bq.b]++; if (id === 'player') log(st, id, D.BUILD[e.bq.b].name + ' reached level ' + e.bld[e.bq.b]); e.bq = null; }
+    if (e.bq && t >= e.bq.end) { e.bld[e.bq.b]++; if (id === 'player') log(st, id, D.BUILD[e.bq.b].name + (e.bld[e.bq.b] === 1 ? ' built' : ' reached level ' + e.bld[e.bq.b])); e.bq = null; }
     if (e.rq && t >= e.rq.end) { e.research[e.rq.id] = true; if (id === 'player') log(st, id, 'Research complete: ' + D.RESEARCH[e.rq.id].name); e.rq = null; }
     const q = e.sq[0];
     if (q) {
       const base = byId(st, q.base);
       if (!base || base.owner !== id) e.sq.shift();
-      else if (!q.end) q.end = t + sec(e.designs[q.d].s.time * Math.pow(.92, e.bld.shipyard - 1));
+      else if (!q.end) q.end = t + sec(e.designs[q.d].s.time * Math.pow(.92, bonusLv(e.bld.shipyard)));
       else if (t >= q.end) { base.garrison.push(mkShip(e, q.d)); q.n--; q.end = 0; if (q.n <= 0) { e.sq.shift(); if (id === 'player') log(st, id, e.designs[q.d].name + ' ready at ' + baseName(st, base)); } }
     }
   }
@@ -457,7 +469,7 @@ function npcTick(st) {
   if (t % sec(40) === 0 && st.fleets.filter(f => f.owner === 'pirates').length < 4) spawnPirates(st);
 }
 
-const API = { act, pos, byId, bases, colonies, colonyCap, cmdCap, cmdOf, power, nearestBase, stat, buildCost, afford, rand, civil, dist, pendingCivil, production };
+const API = { act, pos, byId, bases, colonies, colonyCap, cmdCap, cmdOf, power, nearestBase, stat, buildCost, afford, rand, civil, dist, pendingCivil, production, bldCheck, bldOut };
 function save(st) { return JSON.stringify(st); }
 function load(s) { const st = JSON.parse(s); if (!st || st.v !== 1) throw new Error('bad save'); return st; }
 return Object.assign({ D, BT, DT, TPS, sec, newGame, step, save, load, fleetSpeed, fleetSensor, inSupply, supplyRange, canWarp, warp, fleetBattle, baseBattle, newFleet, mkShip, buildTime, isEmpire, objPos, counts }, API);

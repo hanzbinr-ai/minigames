@@ -7,7 +7,11 @@ function think(st, e, X) {
   if (!home || home.owner !== id) return;
   const r = () => X.rand(st);
   // economy: cheapest useful upgrade
-  if (!e.bq) for (const b of BLD_ORDER.slice().sort((a, c) => e.bld[a] - e.bld[c])) if (X.act(st, id, { type: 'upgrade', b }).ok) break;
+  // HQ first whenever its requirements are met and it is affordable (it gates every other building), else the lowest-level one
+  // when HQ is only blocked by cost, save for it (skip other upgrades, and warships unless the home guard is thin)
+  const hqWait = !e.bq && X.bldCheck(e, 'hq').ok && !X.afford(e.res, X.buildCost(e, 'hq'));
+  const guard = X.cmdOf(st, id, home.garrison.filter(u => !X.stat(st, id, u.d).civ));
+  if (!e.bq && !hqWait && !X.act(st, id, { type: 'upgrade', b: 'hq' }).ok) for (const b of BLD_ORDER.slice().sort((a, c) => e.bld[a] - e.bld[c])) if (b !== 'hq' && X.act(st, id, { type: 'upgrade', b }).ok) break;
   if (!e.rq) for (const k of RES_ORDER) if (!e.research[k] && X.act(st, id, { type: 'research', id: k }).ok) break;
   // colonies
   const freeCap = X.colonyCap(st, id) - X.colonies(st, id) - X.pendingCivil(st, id, 'colonize');
@@ -18,7 +22,7 @@ function think(st, e, X) {
     if (free[0]) X.act(st, id, { type: 'colonize', planet: free[0].id });
   }
   // warships: keep the queue short, pick a mixed composition
-  if (e.sq.length < 2) {
+  if (e.sq.length < 2 && (!hqWait || guard < 10)) {
     const pool = ['raider', 'escort', 'hunter', 'warden', 'picket'];
     if (e.research.cruiser) pool.push('linecruiser', 'linecruiser');
     if (e.research.battleship) pool.push('dread');

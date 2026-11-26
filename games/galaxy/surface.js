@@ -12,6 +12,7 @@ const BW = .24; // building sprite width as a fraction of background width (time
 for (const k of SURF) SPR.define('surf-' + k, ['surface/surface-' + k].concat(k === 'home' ? ['surface/surface', 'surface/surface-bg', 'surface/planet-surface'] : []));
 for (const b of BIDS) for (let s = 1; s <= 3; s++) SPR.define(`bld-${b}-${s}`, [`surface/bld-${b}-${s}`, `surface/${b}-${s}`, `surface/${b}-lv${s}`, `surface/bld-${b}-lv${s}`]);
 SPR.define('bld-scaffold', ['surface/bld-scaffold', 'surface/scaffold']);
+SPR.define('bld-locked', ['surface/bld-locked', 'surface/locked', 'surface/bld-blueprint']); // blueprint hologram for empty plots
 
 // ---------- art discovery: layout json first; only probe building files when some surface art exists ----------
 let layoutRaw = null, artOn = null, ver = 0;
@@ -24,7 +25,7 @@ async function discover() {
   artOn = !!(layoutRaw || home); bump();
   if (!artOn) return;
   for (const k of SURF) SPR.ready('surf-' + k).then(bump);
-  SPR.ready('bld-scaffold').then(bump);
+  SPR.ready('bld-scaffold').then(bump); SPR.ready('bld-locked').then(bump);
   for (const b of BIDS) for (let s = 1; s <= 3; s++) SPR.ready(`bld-${b}-${s}`).then(bump);
 }
 let discovering = null;
@@ -136,10 +137,25 @@ function draw() {
     const order = BIDS.slice().sort((a, b) => slots[a].y - slots[b].y);
     for (const b of order) {
       const sl = slots[b], lv = V.blds[b] || 0, st = stage(Math.max(1, lv)), w = dw * BW * sl.scale, x = ox + sl.x * dw, y = oy + sl.y * dh;
-      const im = img(`bld-${b}-${st}`) || img(`bld-${b}-1`), src = im || bldCanvas(b, st), h = w * src.height / src.width;
+      const busy = V.bq && V.bq.b === b, need = V.unlock ? V.unlock(b) : 0, locked = need > (V.hq || 1);
+      const im = img(`bld-${b}-${st}`) || img(`bld-${b}-1`);
+      let src = im || bldCanvas(b, st), h = w * src.height / src.width;
       if (V.sel === b) { g.save(); g.fillStyle = '#4fc3f733'; g.strokeStyle = '#4fc3f7'; g.lineWidth = 2; g.beginPath(); g.ellipse(x, y - w * .08, w * .5, w * .2, 0, 0, 7); g.fill(); g.stroke(); g.restore(); }
-      g.drawImage(src, x - w / 2, y - h, w, h);
-      const busy = V.bq && V.bq.b === b;
+      if (lv > 0) g.drawImage(src, x - w / 2, y - h, w, h);
+      else { // empty plot: blueprint hologram (Broz) or a faint ghost of stage 1, then a lock + HQ label or a Build marker
+        const bp = img('bld-locked');
+        if (bp) { src = bp; h = w * bp.height / bp.width; g.globalAlpha = locked ? .75 : .4; g.drawImage(bp, x - w / 2, y - h, w, h); }
+        else { g.globalAlpha = locked ? .16 : .3; g.drawImage(src, x - w / 2, y - h, w, h); g.globalAlpha = 1;
+          g.setLineDash([5, 4]); g.strokeStyle = locked ? '#90a4aeaa' : '#a5d6a7cc'; g.lineWidth = 1.5; g.beginPath(); g.ellipse(x, y - w * .1, w * .42, w * .17, 0, 0, 7); g.stroke(); g.setLineDash([]); }
+        g.globalAlpha = 1;
+        if (!busy) {
+          const label = locked ? '🔒 HQ ' + need : '＋ Build', ty = y - h * .5;
+          g.font = '700 11px system-ui,sans-serif'; const tw = g.measureText(label).width + 14;
+          g.fillStyle = locked ? '#05060dd9' : '#1b5e20e6'; rr(g, x - tw / 2, ty - 11, tw, 22, 11); g.fill();
+          g.strokeStyle = locked ? '#90a4ae' : '#81c784'; g.lineWidth = 1.2; g.stroke();
+          g.fillStyle = locked ? '#cfd8dc' : '#e8f5e9'; g.textAlign = 'center'; g.fillText(label, x, ty + 4);
+        }
+      }
       if (busy) {
         const sc = img('bld-scaffold') || scaffoldCanvas(), sh = w * sc.height / sc.width; g.globalAlpha = .9; g.drawImage(sc, x - w / 2, y - sh, w, sh); g.globalAlpha = 1;
         const left = Math.max(0, Math.ceil((V.bq.end - V.tick) / V.tps)), p = 1 - (V.bq.end - V.tick) / V.bq.len, bwid = Math.max(54, w * .7), ty = y - h - 4;
@@ -147,10 +163,11 @@ function draw() {
         g.fillStyle = '#4fc3f7'; g.fillRect(x - bwid / 2 + 3, ty - 5, (bwid - 6) * Math.max(0, Math.min(1, p)), 3);
         g.fillStyle = '#fff'; g.font = '600 11px system-ui,sans-serif'; g.textAlign = 'center'; g.fillText('⏳ ' + left + 's', x, ty - 8);
       }
+      V.hits.push({ b, x0: x - w * .45, x1: x + w * .45, y0: y - h * .95, y1: y + 4 });
+      if (!lv) continue;
       // level badge
       const bx = x + w * .3, by2 = y - w * .12; g.fillStyle = V.sel === b ? '#1b3a5e' : '#0b1322e6'; g.strokeStyle = '#ffd54f'; g.lineWidth = 1.5;
       g.beginPath(); g.arc(bx, by2, 10, 0, 7); g.fill(); g.stroke(); g.fillStyle = '#ffd54f'; g.font = '700 11px system-ui,sans-serif'; g.textAlign = 'center'; g.fillText(lv, bx, by2 + 4);
-      V.hits.push({ b, x0: x - w * .45, x1: x + w * .45, y0: y - h * .95, y1: y + 4 });
     }
   }
 }

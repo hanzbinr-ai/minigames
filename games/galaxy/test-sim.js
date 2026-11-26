@@ -127,5 +127,30 @@ const rng = seed => () => { seed = (seed * 16807) % 2147483647; return seed / 21
   ok(JSON.stringify(S.load(S.save(a))) === S.save(a), 'state round-trips through JSON');
   console.log(`  10 min: ${a.reports.length} battles, colonies ${a.planets.filter(p => p.kind === 'colony').length}, fleets ${a.fleets.length}`);
 }
+// 8. RoK-style building progression: unlocks by HQ level, cap at HQ level, requirement table, AI keeps up
+{
+  const st = S.newGame(21), e = st.emp.player; for (const r of D.RES) e.res[r] = 1e6;
+  const up = b => S.act(st, 'player', { type: 'upgrade', b }), finish = () => { while (e.bq) S.step(st); };
+  ok(e.bld.hq === 1 && e.bld.metal === 1 && e.bld.crystal === 1 && e.bld.gas === 0 && e.bld.shipyard === 0 && e.bld.defense === 0, 'new game: only HQ, Metal Mine, Crystal Refinery at Lv 1');
+  ok(S.production(st, 'player').gas === 0 && S.production(st, 'player').metal === 4, 'unbuilt Gas Extractor produces nothing');
+  let r = up('gas'); ok(!r.ok && /Unlocks at HQ 2/.test(r.err), 'locked building rejected: ' + r.err);
+  r = up('metal'); ok(!r.ok && /Max = HQ level/.test(r.err), 'building capped at HQ level: ' + r.err);
+  ok(up('hq').ok, 'HQ 2 allowed (Metal Mine Lv 1 met)'); finish();
+  const c0 = S.buildCost(e, 'gas'); ok(JSON.stringify(c0) === JSON.stringify(D.BUILD.gas.cost), 'unlocked building builds 0->1 at its Lv 1 cost');
+  ok(up('gas').ok, 'Gas Extractor built after HQ 2'); finish(); ok(e.bld.gas === 1, 'gas Lv 1');
+  r = up('hq'); ok(!r.ok && /Needs Crystal Refinery Lv 2/.test(r.err), 'HQ 3 blocked by requirement: ' + r.err);
+  ok(up('crystal').ok, 'crystal to Lv 2'); finish(); ok(up('hq').ok, 'HQ 3 allowed once Crystal Refinery Lv 2'); finish();
+  e.bld = { hq: 10, metal: 9, crystal: 9, gas: 9, energy: 9, shipyard: 9, lab: 7, defense: 9 };
+  r = up('shipyard'); ok(!r.ok && /Needs Research Lab Lv 8/.test(r.err), 'Shipyard Lv 10 needs Research Lab Lv 8 (' + r.err + ')');
+  // no deadlock: every requirement of HQ L is reachable at HQ L-1
+  let dead = 0; for (const L in D.BREQ.hq) for (const k in D.BREQ.hq[L]) if (D.BREQ.hq[L][k] > L - 1 || (D.BUILD[k].unlock || 1) > L - 1) dead++;
+  ok(!dead, 'HQ requirement table has no deadlock');
+  const old = S.newGame(22); Object.assign(old.emp.player.bld, { gas: 3, shipyard: 2, defense: 2 }); const ld = S.load(S.save(old));
+  ok(ld.emp.player.bld.shipyard === 2 && S.production(ld, 'player').gas === 8, 'old-style save keeps its existing buildings');
+  const a = S.newGame(23); for (let i = 0; i < 20 * 60 * S.TPS; i++) S.step(a);
+  const hqs = ['ai1', 'ai2', 'ai3'].map(k => a.emp[k].bld.hq), lv = ['ai1', 'ai2', 'ai3'].map(k => JSON.stringify(a.emp[k].bld));
+  console.log('  AI after 20 min: HQ ' + hqs.join(', ') + '\n  ' + lv.join('\n  '));
+  ok(Math.min(...hqs) >= 4, 'AI empires reach HQ 4+ within 20 game minutes');
+}
 console.log(fails ? `\n${fails} FAILED` : '\nALL PASSED');
 process.exit(fails ? 1 : 0);

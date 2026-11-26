@@ -52,3 +52,4 @@ table{border-collapse:collapse;width:100%;font-size:12px}td,th{padding:4px 5px;b
 /* planet surface (city view) */
 .surf-slot{margin:0 -4px 8px}.surf{display:block;width:100%;aspect-ratio:3/4;max-height:max(48vh,240px);border-radius:12px;background:#0d1828;cursor:pointer;touch-action:manipulation}
 .surf-hint{text-align:center;margin:-2px 0 8px}.it.on{border-color:#4fc3f7}.it.bsel{border-color:#4fc3f7;background:#10223a}.it .t .ib.sm{min-width:28px;height:28px;padding:0 6px}
+.req{color:#ef9a9a;font-size:12px;margin-top:3px}.it.locked{opacity:.72}

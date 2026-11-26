@@ -19,10 +19,16 @@ Galaxy strategy in the style of Rise of Kingdoms with a Stellaris-lite ship desi
 |---|---|---|---|
 | Where | fixed, never moves | free planet | empty space (not near planets) |
 | Made by | start | Colony Ship | Construction Ship |
-| Resources | buildings (2 + 2×level per second) | +5/s of its planet type | none |
+| Resources | buildings (2 + 2×level per second; Lv 0 = none) | +5/s of its planet type | none |
 | Defeat | raided (15% of resources stolen), never captured | captured by empires (pirates only raid) | destroyed, never captured; drops 50% of stored supplies |
 | Defense | 1 platform per Orbital Defense level | 1 platform | core (artillery/railgun/laser) + 2 platforms |
-- Buildings: HQ, Metal Mine, Crystal Refinery, Gas Extractor, Fusion Plant, Shipyard, Research Lab, Orbital Defense. Upgrades run on short timers. Only one upgrade runs at a time, and no building can go more than 1 level above HQ.
+- Buildings: HQ, Metal Mine, Crystal Refinery, Gas Extractor, Fusion Plant, Shipyard, Research Lab, Orbital Defense. Upgrades run on short timers. Only one upgrade runs at a time.
+- RoK-style progression (`data.js` `START_BLD`, `BUILD[b].unlock`, `BREQ`, `BMAX` 15; enforced in `sim.act` via `bldCheck`, which the UI also uses):
+  - A new game starts with HQ, Metal Mine and Crystal Refinery at Lv 1. The rest unlock by HQ level: Gas Extractor at 2, Fusion Plant at 3, Shipyard at 4, Research Lab at 5, Orbital Defense at 6. An unlocked building is built from Lv 0 to 1 at its Lv 1 cost. At Lv 0 it gives nothing (no output, no speed bonus, no defense platforms).
+  - No building may go above the HQ level.
+  - HQ requirements (to reach level L): 2 metal 1 · 3 crystal 2 · 4 metal 3, gas 2 · 5 metal 4, energy 3 · 6 shipyard 4, crystal 5 · 7 metal 6, lab 5 · 8 crystal 7, defense 5 · 9 shipyard 8, gas 7 · 10 lab 9, energy 8 · 11 metal 10, defense 9 · 12 crystal 11, shipyard 10 · 13 lab 12, gas 11 · 14 energy 13, defense 12 · 15 shipyard 14, metal 14. Every requirement is at most L−1, so there is no deadlock (tested).
+  - Other buildings: Shipyard 10 needs Lab 8, Lab 10 needs Fusion Plant 9, Orbital Defense 8 needs Shipyard 7.
+  - Ships can still be built at Shipyard Lv 0 (base speed). Only the speed bonus needs the building.
 - Colony cap = 1 + floor((HQ−1)/2), +1 each from Colonial Admin I and II.
 - Star Base: up to 2. It works as a supply depot (send resources in, train ships there with depot supplies), repairs its garrison and launches fleets. With the Warp Jammer research it blocks enemy warps within 25 units.
 - Supply range: 30 units around your planets and 35 around Star Bases (+10 with Logistics). Fleets outside it get −20% speed and −20% attack.
@@ -55,4 +61,4 @@ Galaxy strategy in the style of Rise of Kingdoms with a Stellaris-lite ship desi
 Cruiser → Battleship → Carrier hulls, Laser II, Railgun II, Colonial Admin I/II, Fleet Logistics, Warp Retreat → Warp Jammer.
 
 ## AI
-Every 6 s each AI upgrades its cheapest building, researches down a fixed list, builds mixed ships, colonizes the nearest free planet and launches fleets to hunt weaker pirates. After about 4 minutes it also attacks weak colonies (and later Star Bases); otherwise it mines asteroids.
+Every 6 s each AI upgrades HQ when it can (and saves for it when only the cost blocks it, building warships only if its home guard is thin), otherwise its lowest-level allowed building; researches down a fixed list, builds mixed ships, colonizes the nearest free planet and launches fleets to hunt weaker pirates. After about 4 minutes it also attacks weak colonies (and later Star Bases); otherwise it mines asteroids.

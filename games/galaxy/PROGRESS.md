@@ -1,7 +1,7 @@
 # Blackhole Throne: progress
 
 ## Status (2026-11-26, v0.1.0)
-Playable browser prototype, single player against 3 AI empires, pirates and 2 monsters. It is listed in the portal (`games.json` id `galaxy`) and cached by `sw.js` (cache `mg-v42-galaxy-013`).
+Playable browser prototype, single player against 3 AI empires, pirates and 2 monsters. It is listed in the portal (`games.json` id `galaxy`) and cached by `sw.js` (cache `mg-v46-galaxy-017`).
 
 ## Planet city view (2026-11-26, unpushed)
 - `surface.js` (`NTSurf`): RoK-style planet surface at the top of the Home sheet, plus a Colony sheet ("Open planet" on an owned colony's card). One small canvas, redrawn only when its signature changes (levels, queue, selection, countdown second, art arriving, size); it rides `U.refresh` so it pauses with the rAF loop when the tab is hidden.
@@ -11,6 +11,11 @@ Playable browser prototype, single player against 3 AI empires, pirates and 2 mo
 - Bake: `python3 games/galaxy/tools/bake-surface.py` (surfaces 810 px wide, buildings 320 px, layout copied) writes `art/surface/*.webp`. Commit only `art/surface/`.
 - HUD: compact chips (1.5k, +4) on one row with nowrap. Checked at 412 px and wider.
 - Test: `/workspace/tmp/galaxy/surface-shots.js` (412×915@2.75, 915×412, 1280×800): HUD one row, tap building, upgrade, scaffold, stages, colony; screenshots in `/workspace/minigames/shots/galaxy-surface-*.png`.
+
+## Building progression (2026-11-26, unpushed)
+- RoK-style unlocks, HQ cap and one requirement table (`BREQ` in data.js, summarised in DESIGN.md). Enforced in `act()` with errors such as "Unlocks at HQ 4", "Max = HQ level (upgrade HQ)" and "Needs Metal Mine Lv 4".
+- The UI list and the city-view card share one `bldItem()` that shows Locked / Not built / Lv, unmet requirements in red, and a disabled button. The city view draws empty plots with Broz's `bld-locked` blueprint (procedural ghost fallback), a "🔒 HQ N" or "＋ Build" pill, and no level badge.
+- Old saves load unchanged. The AI saves for HQ and reaches HQ 5–6 in 20 minutes (test).
 
 ## Decisions
 - The sim is pure and deterministic (`sim.js`, `battle.js`, `ai.js`, `data.js`; fixed dt 0.25 s; JSON state) so it can move to a Node WebSocket server unchanged.
