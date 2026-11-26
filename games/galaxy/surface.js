@@ -144,7 +144,7 @@ function draw() {
       if (lv > 0) g.drawImage(src, x - w / 2, y - h, w, h);
       else { // empty plot: blueprint hologram (Broz) or a faint ghost of stage 1, then a lock + HQ label or a Build marker
         const bp = img('bld-locked');
-        if (bp) { src = bp; h = w * bp.height / bp.width; g.globalAlpha = locked ? .75 : .4; g.drawImage(bp, x - w / 2, y - h, w, h); }
+        if (bp) { src = bp; h = w * bp.height / bp.width; g.globalAlpha = locked ? .45 : .35; g.drawImage(bp, x - w / 2, y - h, w, h); }
         else { g.globalAlpha = locked ? .16 : .3; g.drawImage(src, x - w / 2, y - h, w, h); g.globalAlpha = 1;
           g.setLineDash([5, 4]); g.strokeStyle = locked ? '#90a4aeaa' : '#a5d6a7cc'; g.lineWidth = 1.5; g.beginPath(); g.ellipse(x, y - w * .1, w * .42, w * .17, 0, 0, 7); g.stroke(); g.setLineDash([]); }
         g.globalAlpha = 1;

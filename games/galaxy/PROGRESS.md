@@ -1,7 +1,7 @@
 # Blackhole Throne: progress
 
 ## Status (2026-11-26, v0.1.0)
-Playable browser prototype, single player against 3 AI empires, pirates and 2 monsters. It is listed in the portal (`games.json` id `galaxy`) and cached by `sw.js` (cache `mg-v46-galaxy-017`).
+Playable browser prototype, single player against 3 AI empires, pirates and 2 monsters. It is listed in the portal (`games.json` id `galaxy`) and cached by `sw.js` (cache `mg-v47-galaxy-018`).
 
 ## Planet city view (2026-11-26, unpushed)
 - `surface.js` (`NTSurf`): RoK-style planet surface at the top of the Home sheet, plus a Colony sheet ("Open planet" on an owned colony's card). One small canvas, redrawn only when its signature changes (levels, queue, selection, countdown second, art arriving, size); it rides `U.refresh` so it pauses with the rAF loop when the tab is hidden.
@@ -11,6 +11,13 @@ Playable browser prototype, single player against 3 AI empires, pirates and 2 mo
 - Bake: `python3 games/galaxy/tools/bake-surface.py` (surfaces 810 px wide, buildings 320 px, layout copied) writes `art/surface/*.webp`. Commit only `art/surface/`.
 - HUD: compact chips (1.5k, +4) on one row with nowrap. Checked at 412 px and wider.
 - Test: `/workspace/tmp/galaxy/surface-shots.js` (412×915@2.75, 915×412, 1280×800): HUD one row, tap building, upgrade, scaffold, stages, colony; screenshots in `/workspace/minigames/shots/galaxy-surface-*.png`.
+
+## Tooltips + resource icons (2026-11-26, unpushed)
+- One tooltip component in ui.js: a `TIPS` table keyed by `data-tip="key[:arg]"`. Desktop shows it on hover (350 ms). On touch, tapping an info target (dotted underline, not a button) shows it, and long-pressing a button (400 ms) shows it and swallows that one click, so normal taps still act at once. It hides on the next tap or after 2.5 s.
+- Covered: HUD resource chips (amount, +/s and its sources, uses), speed, nav tabs, stance chips, Warp/Auto-warp, fleet stats (speed/command/power/supply), building names (what each level gives plus unmet requirements), and cost icons.
+- Resource icons: Broz's `art-src/ui/res-*.png` baked by `tools/bake-ui.py` to `art/ui/res-*.webp` (64 px, from the @2x masters). Fallback is inline coloured SVGs. Costs now read "Metal 200 · Crystal 150".
+- The HUD and speed button only touch the DOM when the text changes. Re-writing them every 0.25 s fired pointer boundary events and killed desktop hover.
+- Test: `/workspace/tmp/galaxy/tips.js` (3 sizes; long-press doesn't act, short tap acts, auto-hide, painted icons used); shots `galaxy-tips-*.png`.
 
 ## Building progression (2026-11-26, unpushed)
 - RoK-style unlocks, HQ cap and one requirement table (`BREQ` in data.js, summarised in DESIGN.md). Enforced in `act()` with errors such as "Unlocks at HQ 4", "Max = HQ level (upgrade HQ)" and "Needs Metal Mine Lv 4".

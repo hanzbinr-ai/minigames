@@ -1,6 +1,6 @@
 // Blackhole Throne: HUD, selection card, modal sheets, designer and map input. Talks to the sim only via act().
 (function () {
-const S = self.NTSim, D = S.D, R = self.NTRender, $ = id => document.getElementById(id);
+const S = self.NTSim, D = S.D, R = self.NTRender, SPR = self.SPR, $ = id => document.getElementById(id);
 const ME = 'player', ICON = { metal: '⬢', crystal: '◆', gas: '●', energy: '⚡' }, RCOL = { metal: '#cfd8dc', crystal: '#80deea', gas: '#ffb74d', energy: '#fff176' };
 const seen = new WeakSet();
 const ui = { toasts: false, sel: null, fleet: null, mark: null, sheet: null, view: null, des: null, picks: {}, lastLog: 0, touchT: 0, G: null };
@@ -10,7 +10,18 @@ const fmt = n => n >= 1e4 ? (n / 1e3).toFixed(1) + 'k' : Math.floor(n) + '';
 const fmtC = n => n >= 1e6 ? (n / 1e6).toFixed(n < 1e7 ? 1 : 0) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(n < 1e4 ? 1 : 0) + 'k' : Math.floor(n) + ''; // HUD chips
 const clock = t => { const s = Math.floor(t / S.TPS); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
 const secs = ticks => Math.max(0, Math.ceil(ticks / S.TPS)) + 's';
-const costHtml = (c, res) => Object.keys(c).filter(r => c[r]).map(r => `<span class="${res && res[r] < c[r] ? 'no' : ''}">${ICON[r]}${fmt(c[r])}</span>`).join(' ');
+// resource icons: Broz's painted icons (art/ui/res-*.webp) when loaded, else small distinct inline SVGs
+const RNAME = { metal: 'Metal', crystal: 'Crystal', gas: 'Gas', energy: 'Energy' };
+const svg = b => 'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">${b}</svg>`);
+const RSVG = {
+  metal: svg('<path d="M2 13l2-4h8l2 4z" fill="#cfd8dc" stroke="#263238"/><path d="M4.5 8.5l1.5-3.5h4l1.5 3.5z" fill="#eceff1" stroke="#263238"/>'),
+  crystal: svg('<path d="M8 1l5 6-5 8-5-8z" fill="#80deea" stroke="#004d56"/><path d="M8 1v14M3 7h10" stroke="#e0f7fa" stroke-width=".7"/>'),
+  gas: svg('<rect x="4" y="3.5" width="8" height="11" rx="3" fill="#ffb74d" stroke="#4e2a00"/><rect x="6" y="1.5" width="4" height="2.5" fill="#8d6e63" stroke="#4e2a00"/>'),
+  energy: svg('<path d="M9.5 1L3 9h4l-1 6 7-9H9z" fill="#fff176" stroke="#6d4c00" stroke-linejoin="round"/>'),
+};
+for (const r of D.RES) { SPR.define('res-' + r, ['ui/res-' + r]); SPR.ready('res-' + r); }
+const ri = r => { const im = SPR.img('res-' + r); return `<img class="ri" src="${im ? im.src : RSVG[r]}" alt="${RNAME[r]}" data-tip="res:${r}">`; };
+const costHtml = (c, res) => Object.keys(c).filter(r => c[r]).map(r => `<span class="cst${res && res[r] < c[r] ? ' no' : ''}">${ri(r)}${RNAME[r]} ${fmt(c[r])}</span>`).join('<i class="sep">·</i>');
 const owner = id => st().emp[id];
 const counts = (o, ships) => { const c = S.counts(st(), o, ships); return Object.keys(c).map(k => c[k] + ' ' + k).join(' · ') || 'none'; };
 function act(a, quiet) { const r = S.act(st(), ME, a); if (!r.ok && !quiet) toast('⚠ ' + r.err); refresh(true); return r; }
@@ -18,8 +29,9 @@ function act(a, quiet) { const r = S.act(st(), ME, a); if (!r.ok && !quiet) toas
 // ---------- HUD ----------
 function hud() {
   const e = owner(ME), pr = S.production(st(), ME);
-  $('res').innerHTML = D.RES.map(r => `<span class="r" style="color:${RCOL[r]}" title="${r} ${Math.floor(e.res[r])} (+${pr[r]}/s)"><i>${ICON[r]}</i>${fmtC(e.res[r])}<small>+${fmtC(pr[r])}</small></span>`).join('');
-  $('spd').textContent = ui.G.speed + '×';
+  const rh = D.RES.map(r => `<span class="r" style="color:${RCOL[r]}" data-tip="res:${r}">${ri(r)}${fmtC(e.res[r])}<small>+${fmtC(pr[r])}</small></span>`).join('');
+  if (rh !== ui.resHtml) { ui.resHtml = rh; $('res').innerHTML = rh; } // only touch the DOM when a chip changes (keeps taps/hover stable)
+  const sp = ui.G.speed + '×'; if ($('spd').textContent !== sp) $('spd').textContent = sp;
   for (const l of st().log) if (!seen.has(l)) { seen.add(l); if (l.who === ME && ui.toasts) toast(l.msg, l.ref); }
 }
 function toast(msg, ref) {
@@ -59,21 +71,21 @@ function card() {
   else if (o.id[0] === 'f') {
     const e = owner(o.owner), p = S.pos(G, o);
     h = `<h3><span style="color:${e.color}">●</span>${esc(o.name || 'Fleet')} <span class="muted">${esc(e.name)}</span><button class="ib x" data-x>✕</button></h3>
-      <div>${counts(o.owner, o.ships)}</div><div class="muted">${fleetLine(o)} · speed ${S.fleetSpeed(G, o).toFixed(1)} · command ${S.cmdOf(G, o.owner, o.ships)}${o.owner === ME ? '/' + S.cmdCap(G, ME) : ''} · power ${S.power(G, o.owner, o.ships).toFixed(1)}</div>`;
+      <div>${counts(o.owner, o.ships)}</div><div class="muted">${fleetLine(o)} · <span class="info" data-tip="stat:speed">speed ${S.fleetSpeed(G, o).toFixed(1)}</span> · <span class="info" data-tip="stat:cmd">command ${S.cmdOf(G, o.owner, o.ships)}${o.owner === ME ? '/' + S.cmdCap(G, ME) : ''}</span> · <span class="info" data-tip="stat:power">power ${S.power(G, o.owner, o.ships).toFixed(1)}</span>${o.owner === ME ? ` · <span class="info ${o.supply ? 'good' : 'warn'}" data-tip="stat:supply">${o.supply ? 'in supply' : 'no supply'}</span>` : ''}</div>`;
     if (o.owner === ME) {
       const deb = [!o.supply && 'out of supply (−20%)', o.dmgUntil > G.tick && 'warp-damaged (−25%) ' + secs(o.dmgUntil - G.tick)].filter(Boolean).join(', ');
-      const cargo = Object.keys(o.cargo).filter(r => o.cargo[r] >= 1).map(r => ICON[r] + fmt(o.cargo[r])).join(' ');
+      const cargo = Object.keys(o.cargo).filter(r => o.cargo[r] >= 1).map(r => ri(r) + fmt(o.cargo[r])).join(' ');
       h += (deb ? `<div class="warn">${deb}</div>` : '') + (cargo || o.order.t === 'mine' ? `<div class="muted">⛏ Hold ${fmt(Object.values(o.cargo).reduce((a, b) => a + b, 0))}/${fmt(S.cmdOf(G, ME, o.ships) * 60)}${cargo ? ' · ' + cargo : ''}</div>` : '');
-      if (!S.civil(G, o)) h += `<div class="row">${['aggressive', 'defensive', 'passive'].map(s => `<button class="chip ${o.stance === s ? 'on' : ''}" data-a='${JSON.stringify({ type: 'stance', fleet: o.id, stance: s })}'>${s[0].toUpperCase() + s.slice(1)}</button>`).join('')}</div>`;
+      if (!S.civil(G, o)) h += `<div class="row">${['aggressive', 'defensive', 'passive'].map(s => `<button class="chip ${o.stance === s ? 'on' : ''}" data-tip="stance:${s}" data-a='${JSON.stringify({ type: 'stance', fleet: o.id, stance: s })}'>${s[0].toUpperCase() + s.slice(1)}</button>`).join('')}</div>`;
       const warpOk = owner(ME).research.warp, cd = o.warpCd > G.tick ? ' ' + secs(o.warpCd - G.tick) : '';
       h += `<div class="row"><button class="b alt" data-a='${JSON.stringify({ type: 'stop', fleet: o.id })}'>■ Stop</button><button class="b alt" data-a='${JSON.stringify({ type: 'return', fleet: o.id })}'>⌂ Return</button>
-        ${warpOk ? `<button class="b red" data-a='${JSON.stringify({ type: 'warp', fleet: o.id })}'>⚡ Warp${cd}</button><button class="b sm ${o.autoWarp ? 'on' : 'alt'}" data-a='${JSON.stringify({ type: 'autoWarp', fleet: o.id, on: !o.autoWarp })}'>Auto-warp at 30%: ${o.autoWarp ? 'ON' : 'OFF'}</button>` : '<span class="muted">Warp Retreat: research it</span>'}</div>
+        ${warpOk ? `<button class="b red" data-tip="warp" data-a='${JSON.stringify({ type: 'warp', fleet: o.id })}'>⚡ Warp${cd}</button><button class="b sm ${o.autoWarp ? 'on' : 'alt'}" data-tip="autowarp" data-a='${JSON.stringify({ type: 'autoWarp', fleet: o.id, on: !o.autoWarp })}'>Auto-warp at 30%: ${o.autoWarp ? 'ON' : 'OFF'}</button>` : '<span class="muted info" data-tip="warp">Warp Retreat: research it</span>'}</div>
         <div class="muted" style="margin-top:6px">Tap the map to move (redirect anytime) · tap enemies to attack · asteroids to mine</div>`;
     } else h += `<div class="row">${withF('⚔ Attack', { type: 'chase', target: o.id })}</div>`;
   } else if (o.id[0] === 'p') {
     const e = o.owner && owner(o.owner), pt = D.PLANET[o.type];
     h = `<h3>${o.kind === 'home' ? '👑' : o.kind === 'colony' ? '🏙' : '🪐'} ${o.kind === 'home' ? 'Home world' : o.kind === 'colony' ? 'Colony · ' + pt.name : pt.name}${e ? ` <span style="color:${e.color}">${esc(e.name)}</span>` : ''}<button class="ib x" data-x>✕</button></h3>
-      <div class="muted">${o.kind === 'home' ? 'Home world · fixed in place, cannot be captured (only raided)' : o.kind === 'colony' ? 'Colony · produces ' + ICON[pt.res] + ' ' + pt.res + ' +5/s · can be captured' : 'Unclaimed · would produce ' + ICON[pt.res] + ' ' + pt.res}</div>`;
+      <div class="muted">${o.kind === 'home' ? 'Home world · fixed in place, cannot be captured (only raided)' : o.kind === 'colony' ? 'Colony · produces ' + ri(pt.res) + ' ' + RNAME[pt.res] + ' +5/s · can be captured' : 'Unclaimed · would produce ' + ri(pt.res) + ' ' + RNAME[pt.res]}</div>`;
     if (o.owner === ME) {
       h += `<div class="muted">Garrison: ${counts(ME, o.garrison)}</div><div class="row">${o.kind === 'home' ? '<button class="b" data-sheet="home">Open planet</button>' : `<button class="b" data-col="${o.id}">Open planet</button>`}<button class="b alt" data-sheet="fleets">🚀 Launch fleet</button></div>`;
     } else if (!o.owner) {
@@ -84,11 +96,11 @@ function card() {
     const e = owner(o.owner), core = S.stat(G, o.owner, 'sbcore');
     h = `<h3>🛰 Star Base <span style="color:${e.color}">${esc(e.name)}</span><button class="ib x" data-x>✕</button></h3>
       <div class="muted">Hull ${Math.round(o.hp)}/${core.hp} · armor ${Math.round(o.ar)}/${core.armor}${o.jammer ? ' · Warp Jammer' : ''} · destroyed (not captured) if defeated</div>`;
-    if (o.owner === ME) h += `<div class="muted">Supplies: ${D.RES.map(r => ICON[r] + fmt(o.store[r])).join(' ')} · garrison: ${counts(ME, o.garrison)}</div>
+    if (o.owner === ME) h += `<div class="muted">Supplies: ${D.RES.map(r => ri(r) + fmt(o.store[r])).join(' ')} · garrison: ${counts(ME, o.garrison)}</div>
       <div class="row"><button class="b alt" data-a='${JSON.stringify({ type: 'deposit', base: o.id, amount: 200 })}'>Send 200 each to depot</button><button class="b alt" data-a='{"view":"sbtrain","base":"${o.id}"}'>Train ships here</button><button class="b alt" data-sheet="fleets">🚀 Launch</button></div>`;
     else h += `<div class="row">${withF('⚔ Attack', { type: 'attack', target: o.id })}</div>`;
   } else if (o.id[0] === 'a') {
-    h = `<h3>☄ Asteroid field <span class="muted">${ICON[o.res]} ${o.res}</span><button class="ib x" data-x>✕</button></h3><div class="muted">${fmt(o.amount)} left · send a fleet to mine; it returns when the hold is full</div>
+    h = `<h3>☄ Asteroid field <span class="muted">${ri(o.res)} ${RNAME[o.res]}</span><button class="ib x" data-x>✕</button></h3><div class="muted">${fmt(o.amount)} left · send a fleet to mine; it returns when the hold is full</div>
       <div class="row">${withF('⛏ Mine', { type: 'mine', target: o.id })}</div>`;
   }
   if (h !== ui.cardHtml) { ui.cardHtml = h; c.innerHTML = h; } c.classList.remove('hidden');
@@ -121,7 +133,7 @@ const SHEETS = {
     const G = st(), p = ui.col && S.byId(G, ui.col);
     if (!p || p.owner !== ME) { setTimeout(closeSheet); return ['🏙 Colony', '<div class="muted">This colony is no longer yours.</div>']; }
     const pt = D.PLANET[p.type];
-    return ['🏙 Colony · ' + pt.name, `<div id="surf-slot" class="surf-slot"></div><div class="it"><div class="t">${ICON[pt.res]} Produces ${pt.res} +5/s</div>
+    return ['🏙 Colony · ' + pt.name, `<div id="surf-slot" class="surf-slot"></div><div class="it"><div class="t">${ri(pt.res)} Produces ${RNAME[pt.res]} +5/s</div>
       <div class="muted">Colonies have no buildings yet: they produce their planet's resource and can be captured. Keep a garrison here.</div>
       <div class="muted" style="margin-top:4px">Garrison: ${counts(ME, p.garrison)}</div><div class="row"><button class="b alt" data-a='{"focus":"${p.id}"}'>Show on map</button><button class="b alt" data-sheet="fleets">🚀 Launch fleet</button></div></div>`];
   },
@@ -169,7 +181,7 @@ const SHEETS = {
       <h4>How to play</h4><div class="muted" style="line-height:1.5">• Drag to pan, pinch or scroll to zoom, tap to select.<br>• Your home planet never moves and can't be captured, only raided. Upgrade mines for income.<br>• Build a Colony Ship, then tap a free planet → Colonize. Colonies produce their planet's resource and can be captured.<br>• Construction Ship → tap empty space → Star Base: a military depot with turrets, repairs and supply range.<br>• Outside supply range fleets lose 20% speed and attack.<br>• Select a fleet, then tap anywhere to move — redirect any time. Tap an enemy to attack or chase.<br>• Design ships: lasers beat armor, railguns beat shields, torpedoes skip shields but get shot down by point defense. Mix hull classes for a formation bonus.</div>
       <p class="muted">${D.TITLE} v${ui.G.version} · game time ${clock(G.tick)} · seed ${G.seed}</p>`];
   },
-  sbtrain() { const sb = S.byId(st(), ui.view && ui.view.base); return ['🛰 Star Base shipyard', sb ? `<div class="muted">Paid from the depot's supplies: ${D.RES.map(r => ICON[r] + fmt(sb.store[r])).join(' ')}</div>` + shipyard(sb) : 'Star Base lost'];
+  sbtrain() { const sb = S.byId(st(), ui.view && ui.view.base); return ['🛰 Star Base shipyard', sb ? `<div class="muted">Paid from the depot's supplies: ${D.RES.map(r => ri(r) + fmt(sb.store[r])).join(' ')}</div>` + shipyard(sb) : 'Star Base lost'];
   },
 };
 // planet surface (city view): the canvas lives in surface.js; taps select a building, the card reuses the same upgrade action
@@ -182,7 +194,7 @@ function bldItem(e, b, isCard) {
     : `<button class="b sm" ${e.bq || !chk.ok ? 'disabled' : ''} data-a='${JSON.stringify({ type: 'upgrade', b })}'>${lv ? 'Upgrade' : 'Build'} · ${S.buildTime(e, b)}s</button>`;
   const out = B.res ? (lv ? ` Now +${S.bldOut(lv)}/s.` : ' Not producing yet.') : '';
   const why = !busy && chk.why.length && !chk.max ? `<div class="req">${chk.why.map(esc).join(' · ')}</div>` : '';
-  return `<div class="it${isCard ? ' bsel' : ui.bsel === b ? ' on' : ''}${chk.locked ? ' locked' : ''}"><div class="t">${B.name} <span class="muted">${lvTxt}</span><span class="sp"></span>${btn}${isCard ? '<button class="ib x sm" data-bsel="">✕</button>' : ''}</div>
+  return `<div class="it${isCard ? ' bsel' : ui.bsel === b ? ' on' : ''}${chk.locked ? ' locked' : ''}"><div class="t"><span class="info" data-tip="bld:${b}">${B.name}</span> <span class="muted">${lvTxt}</span><span class="sp"></span>${btn}${isCard ? '<button class="ib x sm" data-bsel="">✕</button>' : ''}</div>
     <div class="muted">${B.desc}${out}${isCard && e.bq && !busy ? ' Builders busy: ' + D.BUILD[e.bq.b].name + ' ' + secs(e.bq.end - G.tick) : ''}</div>${why}${busy ? prog(e.bq.end, e.bq.len) : chk.locked || chk.max ? '' : `<div class="cost">${costHtml(c, e.res)}</div>`}</div>`;
 }
 function bldCard(e) {
@@ -327,6 +339,66 @@ function refresh(force) {
   if (ui.sheet && ui.sheet !== 'design' && (force || (now - lastSheet > 1000 && now - ui.touchT > 600))) { lastSheet = now; renderSheet(); }
   else surf();
 }
+// ---------- tooltips: one table, data-tip="key[:arg]" anywhere ----------
+// desktop: hover; touch: tap an info target (non-button), or long-press (~400 ms) a button. Normal taps still act at once.
+const USES = { metal: 'every hull, most modules, all buildings and research', crystal: 'lasers, shields, sensors, HQ and most buildings, research',
+  gas: 'engines, railguns, torpedoes, artillery, HQ, Fusion Plant, Shipyard', energy: 'shields, reactors, fighters, Orbital Defense, warp/jammer research' };
+const BTIP = {
+  hq: e => `Each level: +4 fleet command, +1 colony slot every 2 levels, and raises the level cap of every other building.<br>Unlocks: ${Object.keys(D.BUILD).filter(b => D.BUILD[b].unlock).map(b => D.BUILD[b].name + ' at HQ ' + D.BUILD[b].unlock).join(', ')}.`,
+  res: (e, b) => `Each level: +2 ${RNAME[D.BUILD[b].res]}/s (Lv 1 gives +4/s). Now +${S.bldOut(e.bld[b])}/s, next +${S.bldOut(e.bld[b] + 1)}/s.`,
+  shipyard: e => `Each level after 1: ships build 8% faster. Now ${Math.round(100 * (1 - Math.pow(.92, Math.max(0, e.bld.shipyard - 1))))}% faster. Ships can be built without it, just slower.`,
+  lab: e => `Each level after 1: research 8% faster. Now ${Math.round(100 * (1 - Math.pow(.92, Math.max(0, e.bld.lab - 1))))}% faster.`,
+  defense: e => `Each level: one more defense platform fights for your home planet in every battle there. Now ${e.bld.defense}.`,
+};
+const TIPS = {
+  res: r => { const G = st(), e = owner(ME), cols = G.planets.filter(p => p.owner === ME && p.kind === 'colony' && D.PLANET[p.type].res === r).length;
+    return `<b>${ri(r)} ${RNAME[r]}</b>: ${fmt(e.res[r])} (+${S.production(G, ME)[r]}/s)<br>From: ${D.BUILD[r].name} Lv ${e.bld[r]} (+${S.bldOut(e.bld[r])}/s)${cols ? `, ${cols} ${cols > 1 ? 'colonies' : 'colony'} (+${5 * cols}/s)` : ''}, mining fleets returning cargo, raids.<br>Used for: ${USES[r]}.`; },
+  speed: () => 'Game speed. Tap to cycle 1× → 2× → 4× → 8×. Everything (timers, fleets, AI) runs faster.',
+  nav: k => ({ home: 'Home planet: city view, buildings and the home shipyard.', fleets: 'Your fleets in space and the garrisons at each base. Launch ships from here.',
+    design: 'Ship designer: pick a hull and modules. Lasers beat armor, railguns beat shields, torpedoes skip shields.', research: 'Research: unlock bigger hulls, better weapons, more colonies, warp and jammers.',
+    reports: 'Battle reports, round by round.', menu: 'Game speed, save, new game and how to play.' })[k],
+  stance: k => ({ aggressive: '<b>Aggressive</b>: when idle or moving, chases any enemy that enters sensor range.', defensive: "<b>Defensive</b>: holds its order and doesn't chase. It still fights when attacked.",
+    passive: '<b>Passive</b>: avoids fights. Flees to the nearest base when an enemy targets it.' })[k],
+  warp: () => `<b>Warp Retreat</b>: instantly jump back to the nearest base. The fleet loses ${Math.round(D.CFG.warpLoss * 100)}% of its ships, is damaged (−25%) for ${D.CFG.warpDamaged}s, and the drive cools down for ${D.CFG.warpCooldown}s. Blocked near enemy jammers. Needs the Warp research.`,
+  autowarp: () => `<b>Auto-warp</b>: during a battle, warp out automatically when the fleet drops below ${Math.round(D.CFG.warpThreshold * 100)}% strength (if the drive is ready).`,
+  stat: k => ({ speed: 'Map units per second. Set by the slowest ship and engines. −20% outside supply, −25% while warp-damaged.',
+    cmd: 'Command points used by these ships / your fleet cap. Bigger hulls cost more. HQ levels and Logistics raise the cap.',
+    power: 'Rough strength: command points weighted by remaining hull and armor. Compare it with enemies before attacking.',
+    supply: `Inside ${D.CFG.supplyPlanet} units of your planets (${D.CFG.supplyBase} of Star Bases) a fleet is supplied. Outside, it gets −20% speed and attack.` })[k],
+  bld: b => { const e = owner(ME), f = BTIP[b] || (D.BUILD[b].res ? BTIP.res : null), chk = S.bldCheck(e, b);
+    return `<b>${D.BUILD[b].name}</b>: ${f ? f(e, b) : D.BUILD[b].desc}${chk.why.length && !chk.max ? `<br><span class="req">${chk.why.map(esc).join(' · ')}</span>` : ''}`; },
+};
+const tipEl = document.createElement('div'); tipEl.id = 'tip'; tipEl.className = 'tip hidden'; document.body.appendChild(tipEl);
+let tipHide = 0, tipHover = 0, lp = 0, lpAt = null, eatClick = false;
+function tipText(key) { const i = key.indexOf(':'), k = i < 0 ? key : key.slice(0, i), a = i < 0 ? '' : key.slice(i + 1), f = TIPS[k]; try { return f ? f(a) : ''; } catch (e) { return ''; } }
+function showTip(el, ms) {
+  const html = tipText(el.dataset.tip); if (!html) return;
+  tipEl.innerHTML = html; tipEl.classList.remove('hidden');
+  const r = el.getBoundingClientRect(), tw = tipEl.offsetWidth, th = tipEl.offsetHeight, W = innerWidth, H = innerHeight;
+  let x = Math.max(6, Math.min(W - tw - 6, r.left + r.width / 2 - tw / 2)), y = r.bottom + 8;
+  if (y + th > H - 6) y = Math.max(6, r.top - th - 8);
+  tipEl.style.left = x + 'px'; tipEl.style.top = y + 'px';
+  clearTimeout(tipHide); if (ms) tipHide = setTimeout(hideTip, ms);
+}
+function hideTip() { clearTimeout(tipHide); tipEl.classList.add('hidden'); }
+const actionable = el => el.closest('button,a,[data-a],[data-sheet],[data-col],[data-bsel]');
+document.addEventListener('pointerover', e => { if (e.pointerType !== 'mouse') return; const t = e.target.closest('[data-tip]'); clearTimeout(tipHover); if (t) tipHover = setTimeout(() => showTip(t), 350); });
+document.addEventListener('pointerout', e => { if (e.pointerType !== 'mouse') return; const t = e.target.closest('[data-tip]'); if (t && !t.contains(e.relatedTarget)) { clearTimeout(tipHover); hideTip(); } });
+document.addEventListener('pointerdown', e => {
+  if (e.target.closest('#tip')) return;
+  hideTip(); clearTimeout(lp); eatClick = false;
+  if (e.pointerType === 'mouse') return;
+  const t = e.target.closest('[data-tip]'); if (!t || !actionable(t)) return;
+  lpAt = { x: e.clientX, y: e.clientY }; lp = setTimeout(() => { eatClick = true; showTip(t, 2500); }, 400);
+}, true);
+document.addEventListener('pointermove', e => { if (lpAt && Math.hypot(e.clientX - lpAt.x, e.clientY - lpAt.y) > 10) { clearTimeout(lp); lpAt = null; } }, true);
+document.addEventListener('pointerup', () => { clearTimeout(lp); lpAt = null; }, true);
+document.addEventListener('pointercancel', () => { clearTimeout(lp); lpAt = null; }, true);
+document.addEventListener('contextmenu', e => { if (e.target.closest('[data-tip]')) e.preventDefault(); });
+document.addEventListener('click', e => {
+  if (eatClick) { eatClick = false; e.preventDefault(); e.stopPropagation(); return; } // the long-press showed a tip: don't also act
+  const t = e.target.closest('[data-tip]'); if (t && !actionable(t)) showTip(t, 2500); // info targets: tap / click shows the tip
+}, true);
 function markSeen(showLast) { const L = st().log; L.forEach((l, i) => { if (!(showLast && i === L.length - 1)) seen.add(l); }); ui.toasts = true; }
 self.NTUI = { ui, markSeen, init(G) { ui.G = G; bindMap($('map')); }, refresh, select, openSheet, closeSheet, showReport, toast, tap, card };
 })();
