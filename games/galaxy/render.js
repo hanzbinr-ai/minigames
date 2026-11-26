@@ -52,6 +52,7 @@ function draw(st, ui, t, alpha) {
     if (!onScreen(x, y, 60) && f.id !== ui.sel) continue;
     const col = st.emp[f.owner].color, mine = f.owner === me;
     if (f.order.t !== 'idle' && (mine || f.id === ui.sel)) { const [tx, ty] = toScreen(f.x1, f.y1); g.strokeStyle = col + '99'; g.setLineDash([4, 5]); g.lineWidth = 1.5; g.beginPath(); g.moveTo(x, y); g.lineTo(tx, ty); g.stroke(); g.setLineDash([]); }
+    if (f.order.t === 'mine' && p.done) { drawMiner(st, f, x, y, u, col, f.id === ui.sel, t); continue; }
     const hull = fleetHull(st, f), size = Math.max(6, Math.min(18, (hull ? hull.size : 1) * .9 * u + 4));
     const ang = Math.atan2(f.y1 - f.y0, f.x1 - f.x0) || -Math.PI / 2;
     g.fillStyle = col + '33'; g.strokeStyle = col; g.lineWidth = 1.5; g.beginPath(); g.arc(x, y, size * 1.25, 0, 7); g.fill(); g.stroke();
@@ -64,6 +65,16 @@ function draw(st, ui, t, alpha) {
   const sel = ui.sel && S.byId(st, ui.sel);
   if (sel && sel.id[0] !== 'f') { const p = S.objPos(st, sel), [x, y] = toScreen(p.x, p.y), r = ((sel.r || 2.5) + 2) * u; g.strokeStyle = '#fff'; g.lineWidth = 2; g.setLineDash([5, 4]); g.beginPath(); g.arc(x, y, r, 0, 7); g.stroke(); g.setLineDash([]); }
   if (ui.mark) { const [x, y] = toScreen(ui.mark.x, ui.mark.y); g.strokeStyle = '#ffffffcc'; g.lineWidth = 2; g.beginPath(); g.moveTo(x - 8, y); g.lineTo(x + 8, y); g.moveTo(x, y - 8); g.lineTo(x, y + 8); g.stroke(); }
+}
+// RoK-style gatherer: the fleet sits inside the field; the field gets the owner's ring, a hold-progress arc and a flag badge
+function drawMiner(st, f, x, y, u, col, sel, t) {
+  const r = 2.2 * u * 1.25 + 4, cap = S.cmdOf(st, f.owner, f.ships) * 60, have = Object.values(f.cargo).reduce((a, b) => a + b, 0), k = cap ? Math.min(1, have / cap) : 0;
+  g.lineWidth = 3; g.strokeStyle = '#0008'; g.beginPath(); g.arc(x, y, r, 0, 7); g.stroke();
+  g.strokeStyle = col; g.beginPath(); g.arc(x, y, r, -Math.PI / 2, -Math.PI / 2 + k * 6.283); g.stroke();
+  const bx = x, by = y - r - 9; g.fillStyle = col; g.beginPath(); g.arc(bx, by, 8, 0, 7); g.fill(); g.strokeStyle = '#000a'; g.lineWidth = 1.5; g.stroke();
+  g.beginPath(); g.moveTo(bx, by + 8); g.lineTo(bx, by + 13); g.strokeStyle = col; g.lineWidth = 2; g.stroke();
+  label('⛏', bx, by + 4, '#fff'); label(f.ships.length + '', x + r + 2, y + r, col, 'left');
+  if (sel) { g.strokeStyle = '#fff'; g.lineWidth = 2; g.beginPath(); g.arc(x, y, r + 5 + Math.sin(t * 5) * 1.5, 0, 7); g.stroke(); }
 }
 function label(txt, x, y, col, align) { g.font = '600 11px system-ui,sans-serif'; g.textAlign = align || 'center'; g.lineWidth = 3; g.strokeStyle = '#000a'; g.strokeText(txt, x, y); g.fillStyle = col; g.fillText(txt, x, y); }
 // hit test in world units with a finger-sized tolerance
