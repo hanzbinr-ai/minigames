@@ -1,0 +1,28 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Blackhole Throne · Mini Game</title><meta name="theme-color" content="#05060d">
+<link rel="manifest" href="../../manifest.webmanifest"><link id="favicon" rel="icon" href="../../icons/icon-192.png">
+<link rel="stylesheet" href="style.css">
+</head><body>
+<canvas id="map"></canvas>
+<header id="top"><a class="ib" id="back" href="../../" title="Portal">◀</a><div id="res"></div><button class="ib" id="spd" title="Game speed">1×</button></header>
+<div id="toasts"></div>
+<div id="card" class="hidden"></div>
+<nav id="bar">
+  <button data-sheet="home">🪐<span>Home</span></button>
+  <button data-sheet="fleets">🚀<span>Fleets</span></button>
+  <button data-sheet="design">🛠<span>Design</span></button>
+  <button data-sheet="research">🔬<span>Research</span></button>
+  <button data-sheet="reports">📜<span>Reports</span></button>
+  <button data-sheet="menu">☰<span>Menu</span></button>
+</nav>
+<section id="sheet" class="hidden"><div class="sh-head"><button id="sh-back" class="ib hidden">‹</button><b id="sh-title"></b><button id="sh-x" class="ib">✕</button></div><div id="sh-body"></div></section>
+<div id="title">
+  <div class="logo"><img id="logo" alt="" hidden><h1 id="title-text"></h1></div>
+  <p class="sub">Galaxy strategy · build, colonize, design ships, conquer</p>
+  <div class="tbtns"><button class="big" id="t-continue" hidden>▶ Continue</button><button class="big" id="t-new">✦ New Game</button><a class="big alt" href="../../">◀ Portal</a></div>
+  <p class="ver" id="ver"></p>
+</div>
+<script src="data.js"></script><script src="battle.js"></script><script src="ai.js"></script><script src="sim.js"></script>
+<script src="sprites.js"></script><script src="render.js"></script><script src="ui.js"></script><script src="main.js"></script>
+</body></html>

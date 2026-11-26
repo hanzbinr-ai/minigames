@@ -1,5 +1,15 @@
 [
   {
+    "id": "galaxy",
+    "title": "Blackhole Throne",
+    "desc": "Galaxy strategy: fixed home world, colonies, star bases, ship designer and 6-round fleet battles vs AI empires and pirates.",
+    "version": "0.1.0",
+    "added": "2026-11-26",
+    "updated": "2026-11-26",
+    "path": "games/galaxy/",
+    "icon": "🚀"
+  },
+  {
     "id": "miniheroes",
     "title": "Mini Heroes",
     "desc": "Heroes-style strategy: 7 factions with 7 upgradeable tiers, faction research and tech trees, plan-then-resolve battles.",
