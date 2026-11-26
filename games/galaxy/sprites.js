@@ -20,10 +20,11 @@ const ALIAS = {
   'logo-icon': ['logo-icon'],
 };
 for (const h of ['corvette', 'frigate', 'destroyer', 'cruiser', 'battleship', 'carrier', 'colony', 'constructor']) ALIAS['ship-' + h] = ['ship-' + h];
-const IMG = {}, PENDING = {};
+const IMG = {}, PENDING = {}, XALIAS = {}; // XALIAS: lazily probed ids (not preloaded), e.g. planet-surface art
+function define(id, names) { if (!ALIAS[id]) XALIAS[id] = names; }
 const tryLoad = src => new Promise(res => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = src; });
 async function resolve(id) {
-  for (const a of ALIAS[id] || [id]) for (const d of DIRS) for (const e of EXT) { const i = await tryLoad(d + a + e); if (i) return (IMG[id] = i); }
+  for (const a of ALIAS[id] || XALIAS[id] || [id]) for (const d of DIRS) for (const e of EXT) { const i = await tryLoad(d + a + e); if (i) return (IMG[id] = i); }
   return (IMG[id] = null);
 }
 function img(id) { if (!(id in IMG) && !PENDING[id]) PENDING[id] = resolve(id); return IMG[id] || null; }
@@ -142,5 +143,5 @@ function drawAsteroids(g, x, y, r, res, v) {
   else { g.fillStyle = '#607d8b'; for (let i = 0; i < 7; i++) { g.beginPath(); g.arc(x + Math.cos(i * 2.4) * r * .6 * (i % 3 + 1) / 3, y + Math.sin(i * 2.4) * r * .6 * (i % 3 + 1) / 3, r * (.18 + (i % 2) * .1), 0, 7); g.fill(); } }
   g.fillStyle = tint; g.beginPath(); g.arc(x, y, r * .2, 0, 7); g.fill();
 }
-self.SPR = { ALIAS, img, ready, preload, drawBackground, drawColonyDome, drawShip, drawMonster, drawPlanet, drawBlackhole, drawStarbase, drawAsteroids, HULL_PATH };
+self.SPR = { ALIAS, define, img, ready, preload, drawBackground, drawColonyDome, drawShip, drawMonster, drawPlanet, drawBlackhole, drawStarbase, drawAsteroids, HULL_PATH };
 })();

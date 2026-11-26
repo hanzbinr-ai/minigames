@@ -7,6 +7,7 @@ const ui = { toasts: false, sel: null, fleet: null, mark: null, sheet: null, vie
 const st = () => ui.G.st;
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const fmt = n => n >= 1e4 ? (n / 1e3).toFixed(1) + 'k' : Math.floor(n) + '';
+const fmtC = n => n >= 1e6 ? (n / 1e6).toFixed(n < 1e7 ? 1 : 0) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(n < 1e4 ? 1 : 0) + 'k' : Math.floor(n) + ''; // HUD chips
 const clock = t => { const s = Math.floor(t / S.TPS); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
 const secs = ticks => Math.max(0, Math.ceil(ticks / S.TPS)) + 's';
 const costHtml = (c, res) => Object.keys(c).filter(r => c[r]).map(r => `<span class="${res && res[r] < c[r] ? 'no' : ''}">${ICON[r]}${fmt(c[r])}</span>`).join(' ');
@@ -17,7 +18,7 @@ function act(a, quiet) { const r = S.act(st(), ME, a); if (!r.ok && !quiet) toas
 // ---------- HUD ----------
 function hud() {
   const e = owner(ME), pr = S.production(st(), ME);
-  $('res').innerHTML = D.RES.map(r => `<span class="r" style="color:${RCOL[r]}"><i>${ICON[r]}</i>${fmt(e.res[r])}<small>+${pr[r]}/s</small></span>`).join('');
+  $('res').innerHTML = D.RES.map(r => `<span class="r" style="color:${RCOL[r]}" title="${r} ${Math.floor(e.res[r])} (+${pr[r]}/s)"><i>${ICON[r]}</i>${fmtC(e.res[r])}<small>+${fmtC(pr[r])}</small></span>`).join('');
   $('spd').textContent = ui.G.speed + '×';
   for (const l of st().log) if (!seen.has(l)) { seen.add(l); if (l.who === ME && ui.toasts) toast(l.msg, l.ref); }
 }
@@ -68,7 +69,7 @@ function card() {
     h = `<h3>${o.kind === 'home' ? '👑' : o.kind === 'colony' ? '🏙' : '🪐'} ${o.kind === 'home' ? 'Home world' : o.kind === 'colony' ? 'Colony · ' + pt.name : pt.name}${e ? ` <span style="color:${e.color}">${esc(e.name)}</span>` : ''}<button class="ib x" data-x>✕</button></h3>
       <div class="muted">${o.kind === 'home' ? 'Home world · fixed in place, cannot be captured (only raided)' : o.kind === 'colony' ? 'Colony · produces ' + ICON[pt.res] + ' ' + pt.res + ' +5/s · can be captured' : 'Unclaimed · would produce ' + ICON[pt.res] + ' ' + pt.res}</div>`;
     if (o.owner === ME) {
-      h += `<div class="muted">Garrison: ${counts(ME, o.garrison)}</div><div class="row">${o.kind === 'home' ? '<button class="b" data-sheet="home">Open planet</button>' : ''}<button class="b alt" data-sheet="fleets">🚀 Launch fleet</button></div>`;
+      h += `<div class="muted">Garrison: ${counts(ME, o.garrison)}</div><div class="row">${o.kind === 'home' ? '<button class="b" data-sheet="home">Open planet</button>' : `<button class="b" data-col="${o.id}">Open planet</button>`}<button class="b alt" data-sheet="fleets">🚀 Launch fleet</button></div>`;
     } else if (!o.owner) {
       const n = S.colonies(G, ME), cap = S.colonyCap(G, ME), ships = S.bases(G, ME).reduce((a, b) => a + b.garrison.filter(u => S.stat(G, ME, u.d).civ === 'colony').length, 0);
       h += `<div class="muted">Colonies ${n}/${cap} · colony ships ready: ${ships}</div><div class="row"><button class="b" data-a='${JSON.stringify({ type: 'colonize', planet: o.id })}'>🏙 Colonize</button>${myF ? `<button class="b alt" data-a='${JSON.stringify({ type: 'move', fleet: myF.id, x: o.x, y: o.y + o.r + 2 })}'>Move ${fName} here</button>` : ''}</div>`;
@@ -96,20 +97,29 @@ function renderSheet() {
   const body = $('sh-body'), top = body.scrollTop, f = SHEETS[ui.sheet];
   const [title, html] = f(); $('sh-title').textContent = title;
   if (html !== ui.lastHtml) { ui.lastHtml = html; body.innerHTML = html; body.scrollTop = top; }
+  SF.mount($('surf-slot')); surf();
   $('sh-back').classList.toggle('hidden', !ui.view);
 }
 const prog = (end, len) => `<div class="bar2"><i style="width:${Math.round(100 * (1 - (end - st().tick) / len))}%"></i></div>`;
 const SHEETS = {
   home() {
     const G = st(), e = owner(ME), home = S.byId(G, e.home);
-    let h = `<div class="muted">HQ ${e.bld.hq} · colonies ${S.colonies(G, ME)}/${S.colonyCap(G, ME)} · fleet command cap ${S.cmdCap(G, ME)} · Star Bases ${G.starbases.filter(s => s.owner === ME).length}/${D.CFG.starbaseCap}</div><h4>Buildings</h4>`;
+    let h = `<div id="surf-slot" class="surf-slot"></div>${bldCard(e)}<div class="muted">HQ ${e.bld.hq} · colonies ${S.colonies(G, ME)}/${S.colonyCap(G, ME)} · fleet command cap ${S.cmdCap(G, ME)} · Star Bases ${G.starbases.filter(s => s.owner === ME).length}/${D.CFG.starbaseCap}</div><h4>Buildings</h4>`;
     for (const b in D.BUILD) {
       const B = D.BUILD[b], busy = e.bq && e.bq.b === b, c = S.buildCost(e, b);
-      h += `<div class="it"><div class="t">${B.name} <span class="muted">Lv ${e.bld[b]}</span><span class="sp"></span>${busy ? secs(e.bq.end - G.tick) : `<button class="b sm" ${e.bq ? 'disabled' : ''} data-a='${JSON.stringify({ type: 'upgrade', b })}'>Upgrade · ${S.buildTime(e, b)}s</button>`}</div>
+      h += `<div class="it${ui.bsel === b ? ' on' : ''}"><div class="t">${B.name} <span class="muted">Lv ${e.bld[b]}</span><span class="sp"></span>${busy ? secs(e.bq.end - G.tick) : `<button class="b sm" ${e.bq ? 'disabled' : ''} data-a='${JSON.stringify({ type: 'upgrade', b })}'>Upgrade · ${S.buildTime(e, b)}s</button>`}</div>
         <div class="muted">${B.desc}${B.res ? ` Now +${2 + 2 * e.bld[b]}/s.` : ''}</div>${busy ? prog(e.bq.end, e.bq.len) : `<div class="cost">${costHtml(c, e.res)}</div>`}</div>`;
     }
     h += shipyard(home);
     return ['🪐 Home planet', h];
+  },
+  colony() {
+    const G = st(), p = ui.col && S.byId(G, ui.col);
+    if (!p || p.owner !== ME) { setTimeout(closeSheet); return ['🏙 Colony', '<div class="muted">This colony is no longer yours.</div>']; }
+    const pt = D.PLANET[p.type];
+    return ['🏙 Colony · ' + pt.name, `<div id="surf-slot" class="surf-slot"></div><div class="it"><div class="t">${ICON[pt.res]} Produces ${pt.res} +5/s</div>
+      <div class="muted">Colonies have no buildings yet: they produce their planet's resource and can be captured. Keep a garrison here.</div>
+      <div class="muted" style="margin-top:4px">Garrison: ${counts(ME, p.garrison)}</div><div class="row"><button class="b alt" data-a='{"focus":"${p.id}"}'>Show on map</button><button class="b alt" data-sheet="fleets">🚀 Launch fleet</button></div></div>`];
   },
   fleets() {
     const G = st(); let h = '<h4>Fleets in space</h4>';
@@ -158,6 +168,22 @@ const SHEETS = {
   sbtrain() { const sb = S.byId(st(), ui.view && ui.view.base); return ['🛰 Star Base shipyard', sb ? `<div class="muted">Paid from the depot's supplies: ${D.RES.map(r => ICON[r] + fmt(sb.store[r])).join(' ')}</div>` + shipyard(sb) : 'Star Base lost'];
   },
 };
+// planet surface (city view): the canvas lives in surface.js; taps select a building, the card reuses the same upgrade action
+const SF = self.NTSurf;
+function bldCard(e) {
+  const b = ui.bsel, G = st();
+  if (!b) return '<div class="muted surf-hint">Tap a building to upgrade it.</div>';
+  const B = D.BUILD[b], busy = e.bq && e.bq.b === b, c = S.buildCost(e, b);
+  return `<div class="it bsel"><div class="t">${B.name} <span class="muted">Lv ${e.bld[b]}</span><span class="sp"></span>${busy ? secs(e.bq.end - G.tick) : `<button class="b sm" ${e.bq ? 'disabled' : ''} data-a='${JSON.stringify({ type: 'upgrade', b })}'>Upgrade · ${S.buildTime(e, b)}s</button>`}<button class="ib x sm" data-bsel="">✕</button></div>
+    <div class="muted">${B.desc}${B.res ? ` Now +${2 + 2 * e.bld[b]}/s.` : ''}${e.bq && !busy ? ' Builders busy: ' + D.BUILD[e.bq.b].name + ' ' + secs(e.bq.end - G.tick) : ''}</div>${busy ? prog(e.bq.end, e.bq.len) : `<div class="cost">${costHtml(c, e.res)}</div>`}</div>`;
+}
+function surf() {
+  if (ui.sheet !== 'home' && ui.sheet !== 'colony') return;
+  const G = st(), e = owner(ME);
+  if (ui.sheet === 'home') SF.update({ key: 'home', blds: e.bld, bq: e.bq, tick: G.tick, tps: S.TPS, sel: ui.bsel });
+  else { const p = S.byId(G, ui.col); if (p) SF.update({ key: SF.surfKey(p.kind, p.type), blds: null, bq: null, tick: G.tick, tps: S.TPS, sel: null }); }
+}
+SF.view.onTap = b => { ui.bsel = b; ui.touchT = 0; ui.lastHtml = null; renderSheet(); };
 function shipyard(base) {
   const G = st(), e = owner(ME), wallet = base.id[0] === 's' ? base.store : e.res;
   let h = '<h4>Shipyard</h4>';
@@ -210,9 +236,11 @@ function showReport(id) { ui.view = { rep: id }; renderSheet(); $('sh-body').scr
 
 // ---------- clicks (event delegation) ----------
 document.addEventListener('click', ev => {
-  const t = ev.target.closest('[data-a],[data-sheet],[data-x],[data-cmd],[data-speed],[data-hull],[data-load],[data-pick],[data-rep]'); if (!t) return;
+  const t = ev.target.closest('[data-a],[data-sheet],[data-x],[data-cmd],[data-speed],[data-hull],[data-load],[data-pick],[data-rep],[data-col],[data-bsel]'); if (!t) return;
   const ds = t.dataset;
   if (ds.sheet !== undefined) { ui.sheet === ds.sheet ? closeSheet() : openSheet(ds.sheet); return; }
+  if (ds.col) { ui.col = ds.col; ui.sheet = null; openSheet('colony'); return; }
+  if (ds.bsel !== undefined) { ui.bsel = ds.bsel || null; ui.lastHtml = null; renderSheet(); return; }
   if (ds.x !== undefined) { ui.sel = null; ui.mark = null; card(); return; }
   if (ds.rep) { showReport(ds.rep); return; }
   if (ds.speed) { ui.G.speed = +ds.speed; renderSheet(); hud(); return; }
@@ -282,6 +310,7 @@ function refresh(force) {
   const now = performance.now();
   if (ui.sel && (force || now - ui.touchT > 600)) card();
   if (ui.sheet && ui.sheet !== 'design' && (force || (now - lastSheet > 1000 && now - ui.touchT > 600))) { lastSheet = now; renderSheet(); }
+  else surf();
 }
 function markSeen(showLast) { const L = st().log; L.forEach((l, i) => { if (!(showLast && i === L.length - 1)) seen.add(l); }); ui.toasts = true; }
 self.NTUI = { ui, markSeen, init(G) { ui.G = G; bindMap($('map')); }, refresh, select, openSheet, closeSheet, showReport, toast, tap, card };

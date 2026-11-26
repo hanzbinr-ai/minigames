@@ -5,9 +5,10 @@ button,select,a.big{font:inherit;color:inherit}
 .ib{color:inherit;background:#0e1726d9;border:1px solid #2b3d57;border-radius:10px;min-width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;text-decoration:none;cursor:pointer;padding:0 8px}
 #top{position:fixed;top:0;left:0;right:0;display:flex;gap:6px;align-items:center;padding:calc(6px + env(safe-area-inset-top)) 8px 6px;background:linear-gradient(#05060df2,#05060d00);pointer-events:none;z-index:5}
 #top>*{pointer-events:auto}
-#res{flex:1;display:flex;gap:4px;justify-content:center;flex-wrap:wrap}
-.r{background:#0e1726d9;border:1px solid #22324a;border-radius:9px;padding:3px 7px;font-size:12px;font-weight:600;white-space:nowrap}
-.r i{font-style:normal;margin-right:3px}.r small{color:#8fb3d9;font-weight:500;margin-left:3px}
+#res{flex:1;min-width:0;display:flex;gap:3px;justify-content:center;flex-wrap:nowrap;overflow:hidden}
+.r{background:#0e1726d9;border:1px solid #22324a;border-radius:9px;padding:3px 6px;font-size:12px;font-weight:600;white-space:nowrap;flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:clip}
+.r i{font-style:normal;margin-right:2px}.r small{color:#8fb3d9;font-weight:500;margin-left:3px;font-size:10px}
+@media (max-width:480px){#top{gap:4px;padding-left:6px;padding-right:6px}.r{font-size:11px;padding:2px 4px}.r small{margin-left:2px}}
 #bar{position:fixed;left:0;right:0;bottom:0;display:flex;justify-content:space-around;padding:4px 4px calc(4px + env(safe-area-inset-bottom));background:#070b14f0;border-top:1px solid #1c2a40;z-index:6}
 #bar button{background:none;border:0;display:flex;flex-direction:column;align-items:center;font-size:20px;padding:2px 6px;cursor:pointer;border-radius:10px;min-width:48px}
 #bar button span{font-size:10px;color:#9fb3c8;margin-top:1px}#bar button.on{background:#17304f}
@@ -48,3 +49,6 @@ table{border-collapse:collapse;width:100%;font-size:12px}td,th{padding:4px 5px;b
   body.sheet-open #card{display:none!important}body.sheet-open #res{justify-content:flex-start}
 }
 @media (orientation:landscape) and (max-height:500px){#card{max-height:62vh;width:min(340px,calc(100vw - 90px));padding:8px 10px;font-size:12.5px}#card .row{margin-top:5px}#card .b{padding:5px 9px}#card .chip{padding:3px 8px}#bar button{font-size:17px;min-width:44px;padding:1px}#bar button span{font-size:9px}#title{flex-direction:row;flex-wrap:wrap}#title .logo img{max-height:46vh}.tbtns{width:220px}}
+/* planet surface (city view) */
+.surf-slot{margin:0 -4px 8px}.surf{display:block;width:100%;aspect-ratio:3/4;max-height:max(48vh,240px);border-radius:12px;background:#0d1828;cursor:pointer;touch-action:manipulation}
+.surf-hint{text-align:center;margin:-2px 0 8px}.it.on{border-color:#4fc3f7}.it.bsel{border-color:#4fc3f7;background:#10223a}.it .t .ib.sm{min-width:28px;height:28px;padding:0 6px}
