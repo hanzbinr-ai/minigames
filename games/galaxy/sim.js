@@ -293,7 +293,10 @@ function fleetTick(st, f) {
     A.amount -= take; f.cargo[A.res] = (f.cargo[A.res] || 0) + take; return;
   }
   if (p.done && (o.t === 'return' || o.t === 'colonize' || o.t === 'starbase')) return arrive(st, f);
-  if (p.done && o.t === 'move') f.order = { t: 'idle' };
+  if (p.done && o.t === 'move') { // a move that ends on an asteroid field starts mining instead of idling there
+    const A = !civil(st, f) && st.asteroids.find(a => a.amount > 0 && Math.hypot(a.x - p.x, a.y - p.y) < 3);
+    f.order = A ? { t: 'mine', target: A.id } : { t: 'idle' }; if (A) return;
+  }
   // stances
   if (t % 2 || f.noEngage > t || civil(st, f)) return;
   const sens = fleetSensor(st, f);

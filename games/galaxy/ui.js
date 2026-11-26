@@ -36,12 +36,18 @@ function select(id, center) {
   if (o && center) { const p = S.objPos(st(), o); R.cam.x = p.x; R.cam.y = p.y; }
   card();
 }
-function fleetLine(f) { const o = f.order, T = o.target && S.byId(st(), o.target); return { idle: 'Holding position', move: 'Moving', return: 'Returning to base', chase: 'Chasing ' + (T ? owner(T.owner).name : 'target'), attack: 'Attacking ' + (T ? owner(T.owner).name : 'target'), mine: 'Mining asteroids', colonize: 'Flying to colonize', starbase: 'Flying to build a Star Base' }[o.t] || o.t; }
+function fleetLine(f) { const o = f.order, T = o.target && S.byId(st(), o.target), on = T && T.owner && owner(T.owner); return { idle: 'Holding position', move: 'Moving', return: 'Returning to base', chase: 'Chasing ' + (on ? on.name : 'target'), attack: 'Attacking ' + (on ? on.name : 'target'), mine: 'Mining asteroids', colonize: 'Flying to colonize', starbase: 'Flying to build a Star Base' }[o.t] || o.t; }
 function card() {
   const c = $('card'), G = st(), o = ui.sel && S.byId(G, ui.sel);
   if (!ui.sel) { c.classList.add('hidden'); return; }
   const myF = ui.fleet && S.byId(G, ui.fleet), fName = myF ? esc(myF.name) : '';
-  const withF = (label, a) => myF && myF.id !== ui.sel && !S.civil(G, myF) ? `<button class="b" data-a='${JSON.stringify(Object.assign({ fleet: myF.id }, a))}'>${label} (${fName})</button>` : '';
+  // action buttons for the selected fleet; with none selected, offer every combat fleet I have (or a way to launch one)
+  const btnF = (label, a, f) => `<button class="b" data-a='${JSON.stringify(Object.assign({ fleet: f.id }, a))}'>${label} (${esc(f.name)})</button>`;
+  const withF = (label, a) => {
+    if (myF && myF.id !== ui.sel && !S.civil(G, myF)) return btnF(label, a, myF);
+    const mine = G.fleets.filter(f => f.owner === ME && f.id !== ui.sel && !S.civil(G, f));
+    return mine.length ? mine.slice(0, 4).map(f => btnF(label, a, f)).join('') : '<button class="b alt" data-sheet="fleets">🚀 Launch a fleet first</button>';
+  };
   let h = '';
   if (ui.sel === 'space') {
     const m = ui.mark;
@@ -57,7 +63,7 @@ function card() {
     if (o.owner === ME) {
       const deb = [!o.supply && 'out of supply (−20%)', o.dmgUntil > G.tick && 'warp-damaged (−25%) ' + secs(o.dmgUntil - G.tick)].filter(Boolean).join(', ');
       const cargo = Object.keys(o.cargo).filter(r => o.cargo[r] >= 1).map(r => ICON[r] + fmt(o.cargo[r])).join(' ');
-      h += (deb ? `<div class="warn">${deb}</div>` : '') + (cargo ? `<div class="muted">Cargo ${cargo}</div>` : '');
+      h += (deb ? `<div class="warn">${deb}</div>` : '') + (cargo || o.order.t === 'mine' ? `<div class="muted">⛏ Hold ${fmt(Object.values(o.cargo).reduce((a, b) => a + b, 0))}/${fmt(S.cmdOf(G, ME, o.ships) * 60)}${cargo ? ' · ' + cargo : ''}</div>` : '');
       if (!S.civil(G, o)) h += `<div class="row">${['aggressive', 'defensive', 'passive'].map(s => `<button class="chip ${o.stance === s ? 'on' : ''}" data-a='${JSON.stringify({ type: 'stance', fleet: o.id, stance: s })}'>${s[0].toUpperCase() + s.slice(1)}</button>`).join('')}</div>`;
       const warpOk = owner(ME).research.warp, cd = o.warpCd > G.tick ? ' ' + secs(o.warpCd - G.tick) : '';
       h += `<div class="row"><button class="b alt" data-a='${JSON.stringify({ type: 'stop', fleet: o.id })}'>■ Stop</button><button class="b alt" data-a='${JSON.stringify({ type: 'return', fleet: o.id })}'>⌂ Return</button>
@@ -280,6 +286,8 @@ for (const id of ['sheet', 'card']) $(id).addEventListener('pointerdown', () => 
 // ---------- map input: drag pan, pinch/wheel zoom, tap select ----------
 function tap(sx, sy) {
   const G = st(), { obj, wx, wy } = R.pick(G, sx, sy), myF = ui.fleet && S.byId(G, ui.fleet), selIsMyFleet = myF && ui.sel === myF.id;
+  if (obj && obj.id[0] === 'a' && obj.amount > 0 && selIsMyFleet && !S.civil(G, myF)) { // RoK-style: tap a field with a fleet selected = gather
+    const r = act({ type: 'mine', fleet: myF.id, target: obj.id }); if (r.ok) { select(myF.id); toast('⛏ Mining: returns home when the hold is full'); } return; }
   if (obj) { select(obj.id); return; }
   ui.mark = { x: Math.max(2, Math.min(198, wx)), y: Math.max(2, Math.min(198, wy)) };
   if (selIsMyFleet && !S.civil(G, myF)) { act({ type: 'move', fleet: myF.id, x: ui.mark.x, y: ui.mark.y }); card(); return; }
