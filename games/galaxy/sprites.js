@@ -1,7 +1,7 @@
 // Blackhole Throne: single sprite lookup. Painted art (Broz) is optional: each id lists file-name aliases and the
 // first file that loads wins; anything missing falls back to procedural canvas art. Ship art faces up (nose = -y).
 (function () {
-const DIRS = ['art/', 'art-src/'], EXT = ['.png', '.webp', '.jpg'];
+const DIRS = ['art/', 'art-src/'], EXT = ['.webp', '.png', '.jpg'];
 const ALIAS = {
   'planet-rocky': ['planet-terran', 'terran', 'planet-jungle', 'jungle', 'planet-forest', 'forest'],
   'planet-ice': ['planet-arctic', 'arctic', 'planet-ice', 'ice'],
